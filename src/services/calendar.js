@@ -1,0 +1,233 @@
+'use strict';
+
+const { google } = require('googleapis');
+const usersRepo = require('../db/users');
+const calendarCache = require('../db/calendarEvents');
+const googleAuth = require('../auth/googleAuth');
+
+/**
+ * Build a Google Calendar API client for a user.
+ */
+function calendarFor(user) {
+  const auth = googleAuth.getAuthorizedClient(user);
+  return google.calendar({ version: 'v3', auth });
+}
+
+function loadUser(userId) {
+  const user = usersRepo.getById(userId);
+  if (!user) throw new Error('USER_NOT_FOUND');
+  return user;
+}
+
+/**
+ * Resolve a named range ("today" | "tomorrow" | "week") OR an explicit
+ * {from, to} object into ISO start/end bounds, in the user's timezone.
+ *
+ * @param {Object} user
+ * @param {string|{from:string,to:string}} range
+ * @returns {{timeMin:string, timeMax:string, label:string}}
+ */
+function resolveRange(user, range) {
+  const tz = user.timezone || 'Asia/Dubai';
+
+  if (range && typeof range === 'object' && range.from && range.to) {
+    return { timeMin: range.from, timeMax: range.to, label: 'that period' };
+  }
+
+  // Compute "now" in the user's timezone, then derive day boundaries.
+  const now = new Date();
+  // Get the date parts in the user's tz
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(now).reduce((a, p) => (a[p.type] = p.value, a), {});
+  const baseDay = `${parts.year}-${parts.month}-${parts.day}`;
+
+  const dayStart = (dateStr) => new Date(`${dateStr}T00:00:00`);
+  const addDays = (d, n) => { const c = new Date(d); c.setDate(c.getDate() + n); return c; };
+  const iso = (d) => d.toISOString();
+
+  let start = dayStart(baseDay);
+  let end = addDays(start, 1);
+  let label = 'today';
+
+  switch ((range || 'today').toString().toLowerCase()) {
+    case 'tomorrow':
+      start = addDays(start, 1);
+      end = addDays(start, 1);
+      label = 'tomorrow';
+      break;
+    case 'week':
+    case 'this week':
+      end = addDays(start, 7);
+      label = 'this week';
+      break;
+    case 'today':
+    default:
+      label = 'today';
+  }
+
+  return { timeMin: iso(start), timeMax: iso(end), label };
+}
+
+/**
+ * Map a Google event resource into our normalized shape.
+ */
+function normalize(ev) {
+  const startTime = ev.start && (ev.start.dateTime || ev.start.date);
+  const endTime = ev.end && (ev.end.dateTime || ev.end.date);
+  return {
+    gcalEventId: ev.id,
+    title: ev.summary || '(no title)',
+    description: ev.description || '',
+    location: ev.location || '',
+    startTime,
+    endTime,
+    allDay: !!(ev.start && ev.start.date && !ev.start.dateTime),
+    attendees: (ev.attendees || []).map((a) => a.email),
+    status: ev.status,
+  };
+}
+
+/**
+ * Fetch events for a range from Google, cache them locally, and return them.
+ *
+ * @param {string} userId
+ * @param {string|{from,to}} dateRange  'today' | 'tomorrow' | 'week' | {from,to}
+ * @returns {Promise<{label:string, events:Array}>}
+ */
+async function getEvents(userId, dateRange = 'today') {
+  const user = loadUser(userId);
+  const cal = calendarFor(user);
+  const { timeMin, timeMax, label } = resolveRange(user, dateRange);
+
+  const res = await cal.events.list({
+    calendarId: 'primary',
+    timeMin,
+    timeMax,
+    singleEvents: true,
+    orderBy: 'startTime',
+    maxResults: 50,
+  });
+
+  const events = (res.data.items || []).map(normalize);
+  calendarCache.cacheEvents(userId, events);
+  return { label, events, timeMin, timeMax };
+}
+
+/**
+ * Create a calendar event.
+ *
+ * @param {string} userId
+ * @param {Object} opts {title, startTime, endTime, description, location, timeZone}
+ * @returns {Promise<Object>} normalized created event
+ */
+async function createEvent(userId, { title, startTime, endTime, description = '', location = '', timeZone } = {}) {
+  const user = loadUser(userId);
+  const cal = calendarFor(user);
+  const tz = timeZone || user.timezone || 'Asia/Dubai';
+
+  const res = await cal.events.insert({
+    calendarId: 'primary',
+    requestBody: {
+      summary: title,
+      description,
+      location,
+      start: { dateTime: startTime, timeZone: tz },
+      end: { dateTime: endTime, timeZone: tz },
+    },
+  });
+
+  const ev = normalize(res.data);
+  calendarCache.upsert(userId, ev);
+  return ev;
+}
+
+/**
+ * Update / reschedule an event.
+ *
+ * @param {string} userId
+ * @param {string} eventId  Google event id
+ * @param {Object} updates  {title, startTime, endTime, description, location}
+ */
+async function updateEvent(userId, eventId, updates = {}) {
+  const user = loadUser(userId);
+  const cal = calendarFor(user);
+  const tz = user.timezone || 'Asia/Dubai';
+
+  const requestBody = {};
+  if (updates.title !== undefined) requestBody.summary = updates.title;
+  if (updates.description !== undefined) requestBody.description = updates.description;
+  if (updates.location !== undefined) requestBody.location = updates.location;
+  if (updates.startTime) requestBody.start = { dateTime: updates.startTime, timeZone: tz };
+  if (updates.endTime) requestBody.end = { dateTime: updates.endTime, timeZone: tz };
+
+  const res = await cal.events.patch({
+    calendarId: 'primary',
+    eventId,
+    requestBody,
+  });
+
+  const ev = normalize(res.data);
+  calendarCache.upsert(userId, ev);
+  return ev;
+}
+
+/**
+ * Cancel / delete an event.
+ */
+async function deleteEvent(userId, eventId) {
+  const user = loadUser(userId);
+  const cal = calendarFor(user);
+  await cal.events.delete({ calendarId: 'primary', eventId });
+  calendarCache.removeByGcalId(userId, eventId);
+  return { deleted: true, eventId };
+}
+
+/**
+ * Check whether a [startTime, endTime] slot conflicts with existing events.
+ *
+ * @returns {Promise<{free:boolean, conflicts:Array}>}
+ */
+async function checkConflicts(userId, startTime, endTime) {
+  const user = loadUser(userId);
+  const cal = calendarFor(user);
+
+  const res = await cal.freebusy.query({
+    requestBody: {
+      timeMin: startTime,
+      timeMax: endTime,
+      items: [{ id: 'primary' }],
+    },
+  });
+
+  const busy = (res.data.calendars &&
+    res.data.calendars.primary &&
+    res.data.calendars.primary.busy) || [];
+
+  return { free: busy.length === 0, conflicts: busy };
+}
+
+/**
+ * Find events matching a rough time/title hint within a day (helper for
+ * "move my 3pm meeting"). Returns normalized events from Google.
+ */
+async function findEvents(userId, { dateRange = 'today', query } = {}) {
+  const { events } = await getEvents(userId, dateRange);
+  if (!query) return events;
+  const q = query.toLowerCase();
+  return events.filter((e) =>
+    (e.title || '').toLowerCase().includes(q) ||
+    (e.startTime || '').includes(q)
+  );
+}
+
+module.exports = {
+  getEvents,
+  createEvent,
+  updateEvent,
+  deleteEvent,
+  checkConflicts,
+  findEvents,
+  resolveRange,
+  normalize,
+};

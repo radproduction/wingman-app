@@ -1,0 +1,191 @@
+'use strict';
+
+const express = require('express');
+const cors = require('cors');
+const config = require('./config');
+const { initSchema } = require('./db');
+const conversations = require('./db/conversations');
+const wa = require('./whatsapp/client');
+const authRoutes = require('./auth/routes');
+const otpAuthRoutes = require('./api/authRoutes');
+const { attachUserOptional } = require('./api/middleware/auth');
+const dashboardApi = require('./api/dashboard');
+const adminQr = require('./admin/qr');
+const fs = require('fs');
+const path = require('path');
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+// Google OAuth routes (/auth/google, /auth/google/callback)
+app.use('/', authRoutes);
+
+// Phone + OTP auth (unauthenticated: request/verify OTP, logout, me)
+app.use('/api/auth', otpAuthRoutes);
+
+// Soft auth: attach req.user when a valid session token is present, but let
+// unauthenticated requests through so the rich mock dataset still serves
+// investor screenshots in dev. Handlers scope to req.user when available.
+app.use('/api', attachUserOptional);
+
+// Dashboard JSON API for the mobile PWA (/api/*)
+app.use('/api', dashboardApi);
+
+// Browser-based WhatsApp pairing (/admin/qr, /admin/qr.json)
+app.use('/admin', adminQr);
+
+// ─── Health / status ────────────────────────────────────────────────
+const hasClientBuild = fs.existsSync(path.join(config.clientDist, 'index.html'));
+
+function statusPayload() {
+  return {
+    name: 'Wingman',
+    status: 'running',
+    whatsappReady: wa.ready(),
+    messagesLogged: conversations.countAll(),
+  };
+}
+
+app.get('/health', (req, res) => {
+  res.json({ ok: true, whatsappReady: wa.ready() });
+});
+
+// JSON status is always available at /api/status; when there is no built
+// dashboard, the root URL also returns JSON status (dev/API-only mode).
+app.get('/api/status', (req, res) => res.json(statusPayload()));
+if (!hasClientBuild) {
+  app.get('/', (req, res) => res.json(statusPayload()));
+}
+
+// ─── Serve the built dashboard (production) ─────────────────────────
+//   In production the Vite build is emitted to client/dist and served by
+//   this same Express process, so one URL hosts API + dashboard + /admin/qr.
+if (hasClientBuild) {
+  app.use(express.static(config.clientDist));
+  console.log('[server] Serving built dashboard from', config.clientDist);
+} else {
+  console.log('[server] No client build found (client/dist). Dashboard served by Vite in dev.');
+}
+
+// ─── Recent conversation log (debug) ────────────────────────────────
+app.get('/conversations', (req, res) => {
+  const limit = parseInt(req.query.limit, 10) || 50;
+  res.json(conversations.recent(limit));
+});
+
+// ─── Send a WhatsApp message via API (utility) ──────────────────────
+//   POST /send  { "to": "9715xxxxxxx", "text": "Hello from Wingman" }
+app.post('/send', async (req, res) => {
+  const { to, text } = req.body || {};
+  if (!to || !text) {
+    return res.status(400).json({ error: 'Both "to" and "text" are required' });
+  }
+  try {
+    await wa.sendMessage(to, text);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── Manual proactive triggers (testing) ──────────────────────────
+//   POST /trigger/:job/:userId  where job = morning|wrap|bills|deliveries|followups|taskreminder|travel|meetingprep
+app.post('/trigger/:job/:userId', async (req, res) => {
+  const { job, userId } = req.params;
+  try {
+    let out;
+    switch (job) {
+      case 'morning': out = await require('./services/morningBriefing').sendForUser(userId); break;
+      case 'wrap': out = await require('./services/endOfDayWrap').sendForUser(userId); break;
+      case 'bills': out = await require('./services/billAlerts').alertForUser(userId); break;
+      case 'deliveries': out = await require('./services/deliveryAlerts').returnWindowCheck(userId); break;
+      case 'followups': out = await require('./services/followupTracker').checkOverdue(userId); break;
+      case 'taskreminder': out = await require('./engine/taskIntents').sendDailyReminder(userId); break;
+      case 'travel': out = await require('./services/travelAssistant').alertForUser(userId); break;
+      case 'meetingprep': out = await require('./services/meetingPrep').prepForUser(userId); break;
+      default: return res.status(400).json({ error: 'unknown job' });
+    }
+    res.json({ ok: true, job, out });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Recent briefings for a user (debug)
+app.get('/briefings/:userId', (req, res) => {
+  res.json(require('./db/briefings').listForUser(req.params.userId));
+});
+
+// ─── SPA fallback (production) ───────────────────────────────
+//   Any GET that is not an API / admin / auth / static-asset route serves
+//   the dashboard shell so client-side routing (e.g. /tasks) works on reload.
+//   Registered LAST, and written as middleware to stay Express-5 compatible.
+if (hasClientBuild) {
+  app.use((req, res, next) => {
+    if (req.method !== 'GET') return next();
+    const p = req.path;
+    if (
+      p.startsWith('/api') ||
+      p.startsWith('/admin') ||
+      p.startsWith('/auth') ||
+      p === '/health' ||
+      p.startsWith('/conversations') ||
+      p.startsWith('/send') ||
+      p.startsWith('/trigger') ||
+      p.startsWith('/briefings') ||
+      p.startsWith('/assets') ||
+      p.includes('.') // static files (js/css/svg/png/webmanifest…)
+    ) {
+      return next();
+    }
+    res.sendFile(path.join(config.clientDist, 'index.html'));
+  });
+}
+
+// ─── Crash guards ───────────────────────────────────────────────────
+//   whatsapp-web.js / LocalAuth can throw async errors on LOGOUT (e.g. an
+//   EBUSY file lock while cleaning the session on Windows). Those must not
+//   take down the whole server (API + dashboard + schedulers).
+process.on('unhandledRejection', (reason) => {
+  console.error('[server] unhandledRejection (ignored):', reason && reason.message ? reason.message : reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[server] uncaughtException (ignored):', err && err.message ? err.message : err);
+});
+
+// ─── Bootstrap ──────────────────────────────────────────────────────
+function start() {
+  // 1) Initialize database schema
+  initSchema();
+
+  // 2) Initialize WhatsApp client (prints QR to terminal + serves it at /admin/qr)
+  if (config.disableWhatsapp) {
+    console.log('[server] DISABLE_WHATSAPP=1 — skipping WhatsApp init (API/dashboard only).');
+  } else {
+    wa.initWhatsApp();
+  }
+
+  // 2b) Start the email scanner cron (every 15 minutes)
+  try {
+    require('./services/emailScanner').startCron();
+  } catch (e) {
+    console.warn('[server] could not start email scanner cron:', e.message);
+  }
+
+  // 2c) Start the central proactive scheduler (briefings, wraps, alerts)
+  try {
+    require('./services/scheduler').init();
+  } catch (e) {
+    console.warn('[server] could not start scheduler:', e.message);
+  }
+
+  // 3) Start HTTP server
+  app.listen(config.port, () => {
+    console.log(`[server] Wingman HTTP API listening on port ${config.port}`);
+  });
+}
+
+start();
+
+module.exports = app;

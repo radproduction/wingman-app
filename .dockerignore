@@ -1,0 +1,15 @@
+node_modules
+client/node_modules
+client/dist
+.wwebjs_auth
+.wwebjs_cache
+data/*.db
+data/*.db-*
+npm-debug.log
+.git
+.env
+shots
+client/shot*.cjs
+client/qa_mobile.cjs
+client/mobile_qa_notes.md
+*.zip
