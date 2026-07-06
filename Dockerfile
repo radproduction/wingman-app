@@ -28,7 +28,9 @@ RUN npm install --omit=dev
 
 # ── Build the dashboard (client) ──────────────────────────────────────
 COPY client/package*.json ./client/
-RUN cd client && npm install
+# --include=dev is required because NODE_ENV=production (set above) otherwise
+# makes npm skip devDependencies — but tsc + vite (needed by the build) live there.
+RUN cd client && npm install --include=dev
 COPY client ./client
 RUN cd client && npm run build
 
