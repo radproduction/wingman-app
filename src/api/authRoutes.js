@@ -65,8 +65,13 @@ router.post('/request-otp', async (req, res) => {
 
     const payload = { sent: true, delivered };
 
-    // Dev fallback: surface the code so the app is testable without WhatsApp.
-    if (!delivered && config.auth.exposeOtpInDev) {
+    // Surface the code on-screen whenever dev exposure is enabled. We show it
+    // even when the WhatsApp send "succeeded", because business-initiated OTP
+    // over the Cloud API only delivers to users inside the 24h window (or via
+    // an approved authentication template) — so a plain send can report success
+    // yet never arrive. Showing the code keeps login testable until an OTP
+    // template is approved. Turn EXPOSE_OTP_IN_DEV off for production.
+    if (config.auth.exposeOtpInDev) {
       console.log(`[auth] DEV OTP for ${phone}: ${otp.code}`);
       payload.dev_code = otp.code;
     }
