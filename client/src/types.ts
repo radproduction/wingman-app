@@ -23,6 +23,8 @@ export interface Me {
   health_connected: boolean;
   gmail_connected: boolean;
   calendar_connected: boolean;
+  /** Wingman's own WhatsApp number users message (from WINGMAN_NUMBER env). */
+  wingman_number?: string;
   mock?: boolean;
 }
 

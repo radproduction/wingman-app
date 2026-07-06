@@ -15,6 +15,7 @@ const router = express.Router();
 
 const mock = require('./mockData');
 const usersRepo = require('../db/users');
+const config = require('../config');
 
 // ── helpers ──────────────────────────────────────────────────────────
 function resolveUser(req) {
@@ -51,7 +52,7 @@ function requireRepo(name) {
 // ── /api/me ──────────────────────────────────────────────────────────
 router.get('/me', (req, res) => {
   const u = resolveUser(req);
-  if (!u) return res.json({ ...mock.user, mock: true });
+  if (!u) return res.json({ ...mock.user, wingman_number: config.wingmanNumber || null, mock: true });
   res.json({
     id: u.id,
     phone: u.phone,
@@ -70,6 +71,7 @@ router.get('/me', (req, res) => {
     health_connected: !!u.health_connected,
     gmail_connected: !!u.gmail_token,
     calendar_connected: !!u.calendar_token,
+    wingman_number: config.wingmanNumber || null,
     mock: false,
   });
 });

@@ -18,6 +18,10 @@ export default function Home() {
   if (loading || !data) return <Loading />;
 
   const isMock = me?.mock ?? true;
+  const waNumber = (me?.wingman_number || '').replace(/[^0-9]/g, '');
+  const waLink = waNumber
+    ? `https://wa.me/${waNumber}?text=${encodeURIComponent('Hi Wingman 👋')}`
+    : null;
 
   return (
     <PullToRefresh onRefresh={refresh}>
@@ -46,6 +50,25 @@ export default function Home() {
             )}
           </p>
         </div>
+
+        {/* Connect on WhatsApp — the one place users find Wingman's number */}
+        {waLink && (
+          <a
+            href={waLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded-card flex items-center gap-3 p-4 mb-3 bg-[#25D366]/15 border border-[#25D366]/35 active:opacity-80 transition-opacity"
+          >
+            <div className="w-11 h-11 rounded-xl bg-[#25D366] flex items-center justify-center shrink-0 text-white text-xl">
+              💬
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-body text-white font-semibold">Chat with Wingman on WhatsApp</p>
+              <p className="text-caption text-gray-light truncate">Tap to open · +{waNumber}</p>
+            </div>
+            <ChevronRight className="w-4 h-4 text-gray shrink-0" />
+          </a>
+        )}
 
         <div className="flex flex-col gap-3">
           {/* Calendar */}
