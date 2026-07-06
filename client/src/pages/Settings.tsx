@@ -140,8 +140,8 @@ export default function Settings() {
         {/* Connections */}
         <Section title="Connections" />
         <div className="flex flex-col gap-2.5">
-          <ConnRow icon={<CalendarIcon className="w-5 h-5" />} label="Google Calendar" connected={user.calendar_connected} href="/auth/google" />
-          <ConnRow icon={<MailIcon className="w-5 h-5" />} label="Gmail" connected={user.gmail_connected} href="/auth/google" />
+          <ConnRow icon={<CalendarIcon className="w-5 h-5" />} label="Google Calendar" connected={user.calendar_connected} href={`/auth/google?phone=${encodeURIComponent(user.phone)}`} />
+          <ConnRow icon={<MailIcon className="w-5 h-5" />} label="Gmail" connected={user.gmail_connected} href={`/auth/google?phone=${encodeURIComponent(user.phone)}`} />
           <ConnRow icon={<HeartIcon className="w-5 h-5" />} label="Health data" connected={user.health_connected} />
         </div>
 
