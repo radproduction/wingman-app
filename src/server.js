@@ -6,6 +6,8 @@ const config = require('./config');
 const { initSchema } = require('./db');
 const conversations = require('./db/conversations');
 const wa = require('./whatsapp/client');
+const cloudApi = require('./whatsapp/cloudApi');
+const engine = require('./engine/conversation');
 const authRoutes = require('./auth/routes');
 const otpAuthRoutes = require('./api/authRoutes');
 const { attachUserOptional } = require('./api/middleware/auth');
@@ -49,6 +51,56 @@ function statusPayload() {
 
 app.get('/health', (req, res) => {
   res.json({ ok: true, whatsappReady: wa.ready() });
+});
+
+// ─── WhatsApp Cloud API webhook ─────────────────────────────────────
+//   GET  → Meta verification handshake (hub.challenge)
+//   POST → incoming messages: parse, run the engine, reply via Cloud API.
+//   Meta requires a fast 200; we ack immediately and process async.
+app.get('/webhook', (req, res) => {
+  const mode = req.query['hub.mode'];
+  const token = req.query['hub.verify_token'];
+  const challenge = req.query['hub.challenge'];
+  if (mode === 'subscribe' && token === config.whatsappCloud.verifyToken) {
+    console.log('[webhook] verified by Meta');
+    return res.status(200).send(challenge);
+  }
+  return res.sendStatus(403);
+});
+
+app.post('/webhook', (req, res) => {
+  res.sendStatus(200); // ack immediately (Meta retries on non-200)
+  (async () => {
+    try {
+      const messages = cloudApi.parseIncoming(req.body);
+      for (const m of messages) {
+        const phoneNumber = String(m.from || '').replace(/[^0-9]/g, '');
+        if (!phoneNumber) continue;
+
+        if (m.type !== 'text' || !m.text) {
+          // Non-text: only reply to registered users; ignore others silently.
+          continue;
+        }
+
+        console.log(`[webhook] << (${phoneNumber}): ${m.text}`);
+        const { reply, ignored } = await engine.handleMessage({
+          text: m.text,
+          phoneNumber,
+          meta: { waMessageId: m.id, provider: 'cloud', name: m.name },
+        });
+
+        // Stay silent to unregistered/unknown senders (no auto-reply spam).
+        if (ignored || !reply) {
+          console.log(`[webhook] -- (${phoneNumber}) [ignored, silent]`);
+          continue;
+        }
+        await cloudApi.sendText(phoneNumber, reply);
+        console.log(`[webhook] >> (${phoneNumber}): ${reply}`);
+      }
+    } catch (err) {
+      console.error('[webhook] processing error:', err.message);
+    }
+  })();
 });
 
 // JSON status is always available at /api/status; when there is no built
@@ -134,6 +186,7 @@ if (hasClientBuild) {
       p.startsWith('/send') ||
       p.startsWith('/trigger') ||
       p.startsWith('/briefings') ||
+      p.startsWith('/webhook') ||
       p.startsWith('/assets') ||
       p.includes('.') // static files (js/css/svg/png/webmanifest…)
     ) {

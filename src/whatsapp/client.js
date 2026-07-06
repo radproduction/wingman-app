@@ -6,6 +6,7 @@ const config = require('../config');
 const conversations = require('../db/conversations');
 const users = require('../db/users');
 const engine = require('../engine/conversation');
+const cloudApi = require('./cloudApi');
 
 let client = null;
 let isReady = false;
@@ -34,6 +35,14 @@ function toChatId(phoneNumber) {
  * @returns {import('whatsapp-web.js').Client}
  */
 function initWhatsApp() {
+  // When the official Cloud API is configured, we do NOT launch Chromium at
+  // all — incoming messages arrive via the /webhook endpoint and outgoing
+  // messages go through the Graph API. This is the reliable cloud path.
+  if (cloudApi.ready()) {
+    console.log('[whatsapp] Using WhatsApp Cloud API (Graph API) — Chromium disabled.');
+    return null;
+  }
+
   if (client) return client;
 
   client = new Client({
@@ -177,6 +186,21 @@ function initWhatsApp() {
  * @returns {Promise<Object>} the sent message
  */
 async function sendMessage(phoneNumber, text) {
+  // Cloud API path (official Graph API) — used in production.
+  if (cloudApi.ready()) {
+    const digits = String(phoneNumber).replace(/[^0-9]/g, '');
+    const sent = await cloudApi.sendText(digits, text);
+    conversations.logOutbound({
+      waMessageId: sent && sent.messages && sent.messages[0] ? sent.messages[0].id : null,
+      chatId: `${digits}@c.us`,
+      phoneNumber: digits,
+      content: text,
+      mediaType: 'text',
+    });
+    console.log(`[whatsapp:cloud] >> (${digits}): ${text}`);
+    return sent;
+  }
+
   if (!client) throw new Error('WhatsApp client not initialized');
   if (!isReady) throw new Error('WhatsApp client not ready yet');
 
@@ -201,6 +225,9 @@ async function sendMessage(phoneNumber, text) {
  * the outbound message itself.
  */
 async function sendRaw(phoneNumber, text) {
+  if (cloudApi.ready()) {
+    return cloudApi.sendText(String(phoneNumber).replace(/[^0-9]/g, ''), text);
+  }
   if (!client) throw new Error('WhatsApp client not initialized');
   if (!isReady) throw new Error('WhatsApp client not ready yet');
   const chatId = toChatId(phoneNumber);
@@ -226,6 +253,8 @@ function getClient() {
 }
 
 function ready() {
+  // Cloud API is always "ready" once configured (no pairing needed).
+  if (cloudApi.ready()) return true;
   return isReady;
 }
 
@@ -236,11 +265,15 @@ function getLatestQr() {
 
 /** Connection status snapshot for the admin page. */
 function status() {
+  if (cloudApi.ready()) {
+    return { ready: true, hasQr: false, lastQrAt: null, disabled: false, provider: 'cloud' };
+  }
   return {
     ready: isReady,
     hasQr: !!latestQr,
     lastQrAt,
     disabled: process.env.DISABLE_WHATSAPP === '1',
+    provider: 'web',
   };
 }
 

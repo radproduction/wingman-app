@@ -51,6 +51,21 @@ const config = {
   // Purely informational (shown in the UI); pairing is done via /admin/qr.
   wingmanNumber: process.env.WINGMAN_NUMBER || '',
 
+  // WhatsApp Business Cloud API (official Meta API). When token + phoneNumberId
+  // are set, Wingman uses this instead of whatsapp-web.js (no Chromium, real
+  // phone numbers in webhooks, reliable on cloud hosts like Railway).
+  whatsappCloud: {
+    token: process.env.WHATSAPP_TOKEN || '',
+    phoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID || '',
+    // Shared secret we choose; must match the value entered in the Meta
+    // webhook config so Meta's verification GET succeeds.
+    verifyToken: process.env.WHATSAPP_VERIFY_TOKEN || 'wingman_verify',
+    apiVersion: process.env.WHATSAPP_API_VERSION || 'v25.0',
+    get enabled() {
+      return !!(process.env.WHATSAPP_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID);
+    },
+  },
+
   weather: {
     apiKey: process.env.WEATHER_API_KEY || '',
     defaultCity: process.env.WEATHER_DEFAULT_CITY || 'Dubai',
