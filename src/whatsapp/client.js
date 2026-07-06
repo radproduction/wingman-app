@@ -57,7 +57,10 @@ function initWhatsApp() {
         '--disable-accelerated-2d-canvas',
         '--no-first-run',
         '--no-zygote',
+        '--single-process',            // launch Chromium in one process (low-memory containers)
         '--disable-gpu',
+        '--disable-software-rasterizer',
+        '--disable-extensions',
       ],
     },
   });
