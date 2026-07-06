@@ -27,21 +27,25 @@ function resolveUser(req) {
     const u = usersRepo.getById(userId);
     if (u) return u;
   }
-  // 3) Dev/demo fallback: first user, else null → pure mock dataset. This
-  //    keeps investor screenshots working for unauthenticated dev access.
-  const all = usersRepo.listAll();
-  if (all && all.length) return all[0];
-  return null; // no users → pure mock
+  // 3) No authenticated user → null. We intentionally do NOT fall back to the
+  //    first user (that would leak one user's data to anonymous requests).
+  //    Unauthenticated requests get the mock dataset instead.
+  return null;
 }
 
-function safe(fn, fallback) {
+/**
+ * Resolve a repo read to { data, mock }.
+ * `allowMock` is true only for UNauthenticated requests — a real logged-in user
+ * always sees their own live data (empty arrays included), never dummy data.
+ */
+function safe(fn, fallback, allowMock) {
   try {
     const v = fn();
-    if (v == null) return { data: fallback, mock: true };
-    if (Array.isArray(v) && v.length === 0) return { data: fallback, mock: true };
+    if (v == null) return allowMock ? { data: fallback, mock: true } : { data: Array.isArray(fallback) ? [] : null, mock: false };
+    if (Array.isArray(v) && v.length === 0) return allowMock ? { data: fallback, mock: true } : { data: [], mock: false };
     return { data: v, mock: false };
   } catch (_) {
-    return { data: fallback, mock: true };
+    return allowMock ? { data: fallback, mock: true } : { data: Array.isArray(fallback) ? [] : null, mock: false };
   }
 }
 
@@ -56,8 +60,8 @@ router.get('/me', (req, res) => {
   res.json({
     id: u.id,
     phone: u.phone,
-    name: u.name || mock.user.name,
-    timezone: u.timezone || mock.user.timezone,
+    name: u.name || null,
+    timezone: u.timezone || 'Asia/Karachi',
     work_hours_start: u.work_hours_start,
     work_hours_end: u.work_hours_end,
     language: u.language,
@@ -83,7 +87,7 @@ router.get('/calendar', (req, res) => {
   const { data, mock: isMock } = safe(() => {
     if (!u || !repo || !repo.listForUser) return null;
     return repo.listForUser(u.id);
-  }, mock.calendar);
+  }, mock.calendar, !u);
   const norm = data.map((e) => ({
     id: e.id,
     title: e.title,
@@ -105,7 +109,7 @@ router.get('/emails', (req, res) => {
   const { data, mock: isMock } = safe(() => {
     if (!u || !repo || !repo.listForUser) return null;
     return repo.listForUser(u.id, 100);
-  }, mock.emails);
+  }, mock.emails, !u);
   const norm = data.map((e) => ({
     id: e.id,
     sender: e.sender,
@@ -128,7 +132,7 @@ router.get('/tasks', (req, res) => {
   const { data, mock: isMock } = safe(() => {
     if (!u || !repo || !repo.listForUser) return null;
     return repo.listForUser(u.id, { includeCompleted: true, limit: 200 });
-  }, mock.tasks);
+  }, mock.tasks, !u);
   const norm = data.map((t) => ({
     id: t.id,
     title: t.title,
@@ -148,7 +152,7 @@ router.get('/bills', (req, res) => {
   const { data, mock: isMock } = safe(() => {
     if (!u || !repo || !repo.listForUser) return null;
     return repo.listForUser(u.id);
-  }, mock.bills);
+  }, mock.bills, !u);
   const norm = data.map((b) => ({
     id: b.id, name: b.name, amount: b.amount, currency: b.currency || 'PKR',
     due_date: b.due_date, status: b.status || 'pending', recurring: !!b.recurring,
@@ -163,7 +167,7 @@ router.get('/deliveries', (req, res) => {
   const { data, mock: isMock } = safe(() => {
     if (!u || !repo || !repo.listForUser) return null;
     return repo.listForUser(u.id);
-  }, mock.deliveries);
+  }, mock.deliveries, !u);
   const norm = data.map((d) => ({
     id: d.id, item_name: d.item_name, merchant: d.merchant, carrier: d.carrier,
     tracking_number: d.tracking_number, status: d.status || 'in_transit',
@@ -180,7 +184,7 @@ router.get('/travel', (req, res) => {
   const { data, mock: isMock } = safe(() => {
     if (!u || !repo || !repo.listForUser) return null;
     return repo.listForUser(u.id);
-  }, mock.travel);
+  }, mock.travel, !u);
   const norm = data.map((t) => ({
     id: t.id, trip_name: t.trip_name, type: t.type, provider: t.provider,
     confirmation_code: t.confirmation_code, origin: t.origin, destination: t.destination,
@@ -193,9 +197,11 @@ router.get('/travel', (req, res) => {
 
 // ── /api/health ─────────────────────────────────────────────────────
 router.get(['/health-data', '/health'], (req, res) => {
-  // Health metrics are stored as rows; for the prototype we serve the mock
-  // summary (the live health ingestion is a later sprint).
-  res.json({ health: mock.health, mock: true });
+  const u = resolveUser(req);
+  // Live health ingestion is a later sprint. Logged-in users see an empty
+  // (not connected) state; only unauthenticated demo requests see the sample.
+  if (!u) return res.json({ health: mock.health, mock: true });
+  res.json({ health: { sleep_hours: null, hrv: null, steps: null }, mock: false });
 });
 
 // ── /api/contacts ───────────────────────────────────────────────────
@@ -205,7 +211,7 @@ router.get('/contacts', (req, res) => {
   const { data, mock: isMock } = safe(() => {
     if (!u || !repo || !repo.listForUser) return null;
     return repo.listForUser(u.id);
-  }, mock.contacts);
+  }, mock.contacts, !u);
   const norm = data.map((c) => ({
     id: c.id, name: c.name, email: c.email, company: c.company || null,
     relationship: c.relationship || null, interaction_count: c.interaction_count || 0,
@@ -222,7 +228,7 @@ router.get('/followups', (req, res) => {
   const { data, mock: isMock } = safe(() => {
     if (!u || !repo || !repo.listForUser) return null;
     return repo.listForUser(u.id);
-  }, mock.followups);
+  }, mock.followups, !u);
   res.json({ followups: data, mock: isMock });
 });
 
@@ -233,7 +239,7 @@ router.get('/briefings', (req, res) => {
   const { data, mock: isMock } = safe(() => {
     if (!u || !repo || !repo.listForUser) return null;
     return repo.listForUser(u.id);
-  }, mock.briefings);
+  }, mock.briefings, !u);
   res.json({ briefings: data, mock: isMock });
 });
 
@@ -247,7 +253,7 @@ router.get('/dashboard', (req, res) => {
       if (!u || !repo || !repo.listForUser) return null;
       const args = name === 'emailItems' ? [u.id, 100] : [u.id];
       return repo.listForUser(...args);
-    }, fallback);
+    }, fallback, !u);
     return data;
   }
 
@@ -288,14 +294,14 @@ router.get('/dashboard', (req, res) => {
     .sort((a, b) => new Date(a.depart_time) - new Date(b.depart_time))[0] || null;
 
   res.json({
-    user: { name: (u && u.name) || mock.user.name, timezone: (u && u.timezone) || mock.user.timezone },
+    user: { name: u ? (u.name || null) : mock.user.name, timezone: u ? (u.timezone || 'Asia/Karachi') : mock.user.timezone },
     calendar: { count: todaysEvents.length, next: nextEvent ? { title: nextEvent.title, start_time: nextEvent.start_time } : null },
     email: { urgent: urgentCount, need_reply: needReplyCount, total_unread: emails.length },
     tasks: { due: tasksDue.length, done: tasksDone, total: tasks.length },
     bills: { next: nextBill, count: pendingBills.length },
     deliveries: { count: activeDeliveries.length, next: activeDeliveries[0] || null },
     travel: { next: nextTrip },
-    health: { sleep_hours: mock.health.sleep_hours, hrv: mock.health.hrv, steps: mock.health.steps },
+    health: u ? { sleep_hours: null, hrv: null, steps: null } : { sleep_hours: mock.health.sleep_hours, hrv: mock.health.hrv, steps: mock.health.steps },
   });
 });
 

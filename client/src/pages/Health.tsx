@@ -9,6 +9,25 @@ export default function HealthPage() {
   if (loading || !data) return <Loading />;
   const h = data.health;
 
+  // No live health source connected yet → show an honest empty state instead
+  // of sample data.
+  if (h == null || h.sleep_hours == null) {
+    return (
+      <PullToRefresh onRefresh={refresh}>
+        <PageHeader title="Health" subtitle="Not connected" />
+        <div className="px-4">
+          <div className="card text-center py-12">
+            <div className="w-12 h-12 rounded-2xl bg-accent/15 text-accent flex items-center justify-center mx-auto mb-3">
+              <HeartIcon className="w-6 h-6" />
+            </div>
+            <p className="text-body text-white">Health tracking isn’t connected yet</p>
+            <p className="text-caption text-gray mt-1">Sleep, HRV and steps will show here once a health source is linked.</p>
+          </div>
+        </div>
+      </PullToRefresh>
+    );
+  }
+
   return (
     <PullToRefresh onRefresh={refresh}>
       <PageHeader title="Health" subtitle="Today's readings" right={<DemoBadge show={data.mock} />} />

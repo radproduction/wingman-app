@@ -184,5 +184,5 @@ export interface DashboardSummary {
   bills: { next: Bill | null; count: number };
   deliveries: { count: number; next: Delivery | null };
   travel: { next: Trip | null };
-  health: { sleep_hours: number; hrv: number; steps: number };
+  health: { sleep_hours: number | null; hrv: number | null; steps: number | null };
 }

@@ -119,9 +119,11 @@ export default function Home() {
 
           {/* Health */}
           <DashCard icon={<HeartIcon className="w-5 h-5" />} title="HEALTH" onTap={() => navigate('/health')}>
-            <p className="text-body text-gray-light">
-              Sleep {data.health.sleep_hours}h · HRV {data.health.hrv} · {(data.health.steps / 1000).toFixed(1)}K steps
-            </p>
+            {data.health.sleep_hours != null
+              ? <p className="text-body text-gray-light">
+                  Sleep {data.health.sleep_hours}h · HRV {data.health.hrv} · {((data.health.steps ?? 0) / 1000).toFixed(1)}K steps
+                </p>
+              : <p className="text-body text-gray">Not connected yet</p>}
           </DashCard>
         </div>
         <div className="h-4" />
