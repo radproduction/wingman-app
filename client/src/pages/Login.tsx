@@ -50,7 +50,7 @@ export default function Login() {
     <AuthShell>
       <div className="flex-1 flex flex-col justify-center py-10">
         <div className="flex items-center gap-3 mb-8">
-          <img src="/wingman.svg" alt="Wingman" className="w-11 h-11 rounded-xl" />
+          <img src="/wingman.png" alt="Wingman" className="w-11 h-11 rounded-xl" />
           <div>
             <p className="text-title text-white leading-none">Wingman</p>
             <p className="text-caption text-gray mt-1">Your AI chief of staff on WhatsApp</p>

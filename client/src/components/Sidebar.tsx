@@ -22,7 +22,7 @@ export default function Sidebar() {
   return (
     <aside className="hidden lg:flex flex-col w-64 shrink-0 h-screen sticky top-0 border-r border-white/10 bg-card/40 px-3 py-5">
       <div className="flex items-center gap-2 px-3 mb-6">
-        <img src="/wingman.svg" alt="Wingman" className="w-8 h-8 rounded-lg" />
+        <img src="/wingman.png" alt="Wingman" className="w-8 h-8 rounded-lg" />
         <span className="text-cardtitle text-white font-bold">Wingman</span>
       </div>
       <nav className="flex flex-col gap-1">
