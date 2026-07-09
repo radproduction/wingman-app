@@ -63,8 +63,17 @@ export default function Home() {
               💬
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-body text-white font-semibold">Chat with Wingman on WhatsApp</p>
-              <p className="text-caption text-gray-light truncate">Tap to open · +{waNumber}</p>
+              <div className="flex items-center gap-2">
+                <p className="text-body text-white font-semibold">Chat with Wingman on WhatsApp</p>
+                {me?.whatsapp_connected && (
+                  <span className="inline-flex items-center gap-1 shrink-0 rounded-full bg-[#25D366]/20 text-[#128C3E] px-2 py-0.5 text-caption font-semibold">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#25D366]" /> Connected
+                  </span>
+                )}
+              </div>
+              <p className="text-caption text-gray-light truncate">
+                {me?.whatsapp_connected ? `Linked · +${waNumber}` : `Tap to open · +${waNumber}`}
+              </p>
             </div>
             <ChevronRight className="w-4 h-4 text-gray shrink-0" />
           </a>

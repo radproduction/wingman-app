@@ -25,6 +25,8 @@ export interface Me {
   calendar_connected: boolean;
   /** Wingman's own WhatsApp number users message (from WINGMAN_NUMBER env). */
   wingman_number?: string;
+  /** True once the user has exchanged a message with Wingman on WhatsApp. */
+  whatsapp_connected?: boolean;
   mock?: boolean;
 }
 

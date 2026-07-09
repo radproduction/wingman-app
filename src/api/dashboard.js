@@ -56,7 +56,11 @@ function requireRepo(name) {
 // ── /api/me ──────────────────────────────────────────────────────────
 router.get('/me', (req, res) => {
   const u = resolveUser(req);
-  if (!u) return res.json({ ...mock.user, wingman_number: config.wingmanNumber || null, mock: true });
+  if (!u) return res.json({ ...mock.user, wingman_number: config.wingmanNumber || null, whatsapp_connected: false, mock: true });
+  // "Connected" = the user has actually exchanged a message with Wingman on
+  // WhatsApp (so the card reassures them the link is live).
+  const convo = requireRepo('conversations');
+  const whatsappConnected = !!(convo && convo.historyForUser(u.id, 1).length);
   res.json({
     id: u.id,
     phone: u.phone,
@@ -76,6 +80,7 @@ router.get('/me', (req, res) => {
     gmail_connected: !!u.gmail_token,
     calendar_connected: !!u.calendar_token,
     wingman_number: config.wingmanNumber || null,
+    whatsapp_connected: whatsappConnected,
     mock: false,
   });
 });
