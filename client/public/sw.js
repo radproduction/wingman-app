@@ -1,5 +1,5 @@
 // Wingman PWA service worker — minimal app-shell cache for installability + offline shell.
-const CACHE = 'wingman-shell-v4';
+const CACHE = 'wingman-shell-v5';
 const SHELL = ['/', '/index.html', '/manifest.json', '/wingman.png', '/icon-192.png', '/icon-512.png'];
 
 self.addEventListener('install', (event) => {
