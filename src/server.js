@@ -72,6 +72,22 @@ app.post('/webhook', (req, res) => {
   res.sendStatus(200); // ack immediately (Meta retries on non-200)
   (async () => {
     try {
+      // Log delivery statuses (sent/delivered/read/failed) so we can see WHY a
+      // template/OTP message does or doesn't arrive at the recipient.
+      const entries = Array.isArray(req.body && req.body.entry) ? req.body.entry : [];
+      for (const e of entries) {
+        for (const ch of (e.changes || [])) {
+          for (const s of ((ch.value && ch.value.statuses) || [])) {
+            const err = (s.errors && s.errors[0]) || null;
+            const detail = err && err.error_data && err.error_data.details ? ` / ${err.error_data.details}` : '';
+            console.log(
+              `[webhook:status] ${s.status} -> ${s.recipient_id}` +
+              (err ? ` — ERROR ${err.code}: ${err.title || err.message}${detail}` : '')
+            );
+          }
+        }
+      }
+
       const messages = cloudApi.parseIncoming(req.body);
       for (const m of messages) {
         const phoneNumber = String(m.from || '').replace(/[^0-9]/g, '');
