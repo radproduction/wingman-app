@@ -220,6 +220,39 @@ async function sendMessage(phoneNumber, text) {
 }
 
 /**
+ * Deliver a login OTP. Over the Cloud API a plain text message only reaches
+ * users inside the 24h window, so brand-new users would never get their code.
+ * We therefore send it through the approved AUTHENTICATION template (works for
+ * any user, any time). Falls back to plain text when the Cloud API isn't used.
+ *
+ * @param {string} phoneNumber  recipient digits (E.164 without '+')
+ * @param {string} code         the 6-digit OTP
+ * @returns {Promise<boolean>}  true if the send was accepted
+ */
+async function sendOtp(phoneNumber, code) {
+  const digits = String(phoneNumber).replace(/[^0-9]/g, '');
+  if (cloudApi.ready()) {
+    // COPY_CODE authentication template: the code goes in BOTH the body and the
+    // one-tap copy button (button sub_type 'url', index '0').
+    const components = [
+      { type: 'body', parameters: [{ type: 'text', text: code }] },
+      { type: 'button', sub_type: 'url', index: '0', parameters: [{ type: 'text', text: code }] },
+    ];
+    await cloudApi.sendTemplate(
+      digits,
+      config.whatsappCloud.otpTemplate,
+      config.whatsappCloud.otpTemplateLang,
+      components,
+    );
+    console.log(`[whatsapp:cloud] >> OTP template to ${digits}`);
+    return true;
+  }
+  // whatsapp-web.js path (dev): plain text is fine.
+  await sendMessage(digits, `Your Wingman verification code is ${code}. It expires in 5 minutes.`);
+  return true;
+}
+
+/**
  * Send a WhatsApp message WITHOUT logging it to the conversations table.
  * Used when the caller (e.g. the conversation engine) has already logged
  * the outbound message itself.
@@ -278,6 +311,6 @@ function status() {
 }
 
 module.exports = {
-  initWhatsApp, sendMessage, sendRaw, getClient, ready, toChatId,
+  initWhatsApp, sendMessage, sendRaw, sendOtp, getClient, ready, toChatId,
   getLatestQr, status, requestPairingCode,
 };

@@ -48,15 +48,14 @@ router.post('/request-otp', async (req, res) => {
       ttlSeconds: config.auth.otpTtlSeconds,
     });
 
-    const message =
-      `Your Wingman verification code is ${otp.code}. ` +
-      `It expires in ${Math.round(config.auth.otpTtlSeconds / 60)} minutes.`;
-
-    // Best-effort delivery via Wingman's own WhatsApp number.
+    // Deliver via Wingman's own WhatsApp number using the approved OTP
+    // authentication template, which reaches new users too (no 24h window
+    // restriction, unlike plain text). sendOtp falls back to plain text on the
+    // dev whatsapp-web.js path.
     let delivered = false;
     try {
       if (wa.ready()) {
-        await wa.sendMessage(phone, message);
+        await wa.sendOtp(phone, otp.code);
         delivered = true;
       }
     } catch (waErr) {
@@ -65,13 +64,10 @@ router.post('/request-otp', async (req, res) => {
 
     const payload = { sent: true, delivered };
 
-    // Surface the code on-screen whenever dev exposure is enabled. We show it
-    // even when the WhatsApp send "succeeded", because business-initiated OTP
-    // over the Cloud API only delivers to users inside the 24h window (or via
-    // an approved authentication template) — so a plain send can report success
-    // yet never arrive. Showing the code keeps login testable until an OTP
-    // template is approved. Turn EXPOSE_OTP_IN_DEV off for production.
-    if (config.auth.exposeOtpInDev) {
+    // Only surface the code on-screen when dev exposure is explicitly enabled
+    // AND WhatsApp delivery did not succeed — so a real, delivered OTP is never
+    // leaked into the UI in front of a client. EXPOSE_OTP_IN_DEV=0 in production.
+    if (config.auth.exposeOtpInDev && !delivered) {
       console.log(`[auth] DEV OTP for ${phone}: ${otp.code}`);
       payload.dev_code = otp.code;
     }

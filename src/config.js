@@ -61,6 +61,10 @@ const config = {
     // webhook config so Meta's verification GET succeeds.
     verifyToken: process.env.WHATSAPP_VERIFY_TOKEN || 'wingman_verify',
     apiVersion: process.env.WHATSAPP_API_VERSION || 'v25.0',
+    // Approved AUTHENTICATION template used to deliver login OTPs to users who
+    // are outside the 24h customer-service window (i.e. brand-new users).
+    otpTemplate: process.env.OTP_TEMPLATE_NAME || 'wingman_login_otp',
+    otpTemplateLang: process.env.OTP_TEMPLATE_LANG || 'en_US',
     get enabled() {
       return !!(process.env.WHATSAPP_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID);
     },
