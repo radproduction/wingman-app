@@ -185,6 +185,76 @@ app.get('/briefings/:userId', (req, res) => {
   res.json(require('./db/briefings').listForUser(req.params.userId));
 });
 
+// ─── Privacy Policy (required to publish the Meta app / Google OAuth) ──
+//   Served as plain server-rendered HTML so Meta/Google crawlers can read it
+//   without running JS. Registered before the SPA fallback.
+app.get(['/privacy', '/privacy-policy'], (req, res) => {
+  res.type('html').send(`<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wingman — Privacy Policy</title>
+<style>
+  body{margin:0;background:#020633;color:#e8e9f3;font:16px/1.7 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:760px;margin:0 auto;padding:40px 22px 80px}
+  h1{font-size:28px;margin:0 0 4px}h2{font-size:20px;margin:34px 0 10px;color:#b7baff}
+  a{color:#8b8fff}.muted{color:#9aa0c7;font-size:14px}
+  ul{padding-left:20px}li{margin:6px 0}
+  .card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:18px 20px;margin-top:18px}
+</style></head><body><div class="wrap">
+<h1>Wingman — Privacy Policy</h1>
+<p class="muted">Last updated: 9 July 2026</p>
+
+<p>Wingman is a personal AI assistant ("Wingman", "we", "us") that you interact with over WhatsApp and a companion web app. This policy explains what information we collect, how we use it, and the choices you have.</p>
+
+<h2>1. Information We Collect</h2>
+<ul>
+  <li><b>Account details</b> — your name, WhatsApp phone number, timezone and working hours you provide during sign-up.</li>
+  <li><b>Messages</b> — the WhatsApp messages you exchange with Wingman, so the assistant can understand and respond.</li>
+  <li><b>Google data (only if you connect it)</b> — with your explicit consent, we access your Google <b>Gmail</b> and <b>Google Calendar</b> to read, summarise, draft, send email and manage events on your behalf.</li>
+  <li><b>Usage data</b> — basic technical logs needed to operate and secure the service.</li>
+</ul>
+
+<h2>2. How We Use Your Information</h2>
+<ul>
+  <li>To provide the assistant's features: calendar, email, tasks, reminders, bills, deliveries, travel and briefings.</li>
+  <li>To send you your login verification codes and the notifications you ask for.</li>
+  <li>To operate, maintain and improve the reliability and security of the service.</li>
+</ul>
+<p>We do <b>not</b> sell your personal data, and we do <b>not</b> use your Google data for advertising.</p>
+
+<h2>3. Google User Data</h2>
+<p>Wingman's use of information received from Google APIs adheres to the
+<a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener">Google API Services User Data Policy</a>, including the Limited Use requirements. Google data is used only to provide user-facing features you request, is never sold, and is not used for advertising or transferred to others except as needed to provide the service, comply with law, or with your consent. You can disconnect Google access at any time from Settings.</p>
+
+<h2>4. Third-Party Services</h2>
+<ul>
+  <li><b>Meta / WhatsApp</b> — message delivery over the WhatsApp Business Platform.</li>
+  <li><b>Google</b> — Gmail and Calendar access when you connect your account.</li>
+  <li><b>Anthropic (Claude)</b> — to generate the assistant's responses. Message content is processed to produce replies and is not used to train models.</li>
+</ul>
+
+<h2>5. Data Retention &amp; Deletion</h2>
+<p>We keep your data only as long as your account is active or as needed to provide the service. You can request deletion of your account and associated data at any time by contacting us (below) or by messaging "delete my data" to Wingman on WhatsApp. Disconnecting Google removes our stored Google tokens.</p>
+
+<h2>6. Security</h2>
+<p>We use industry-standard measures to protect your data in transit and at rest. Access tokens are stored securely and are never shared publicly.</p>
+
+<h2>7. Children</h2>
+<p>Wingman is not intended for anyone under 16. We do not knowingly collect data from children.</p>
+
+<h2>8. Changes</h2>
+<p>We may update this policy from time to time. Material changes will be reflected by the "Last updated" date above.</p>
+
+<div class="card">
+<h2 style="margin-top:0">9. Contact</h2>
+<p>Questions or data requests? Reach us at:<br>
+<b>Email:</b> <a href="mailto:${config.privacyContactEmail}">${config.privacyContactEmail}</a><br>
+<b>WhatsApp:</b> +${(config.wingmanNumber || '').replace(/[^0-9]/g, '')}</p>
+</div>
+
+</div></body></html>`);
+});
+
 // ─── SPA fallback (production) ───────────────────────────────
 //   Any GET that is not an API / admin / auth / static-asset route serves
 //   the dashboard shell so client-side routing (e.g. /tasks) works on reload.

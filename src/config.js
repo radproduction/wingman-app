@@ -51,6 +51,9 @@ const config = {
   // Purely informational (shown in the UI); pairing is done via /admin/qr.
   wingmanNumber: process.env.WINGMAN_NUMBER || '',
 
+  // Contact email shown on the public Privacy Policy page (/privacy).
+  privacyContactEmail: process.env.PRIVACY_CONTACT_EMAIL || 'wehearyou.studio@gmail.com',
+
   // WhatsApp Business Cloud API (official Meta API). When token + phoneNumberId
   // are set, Wingman uses this instead of whatsapp-web.js (no Chromium, real
   // phone numbers in webhooks, reliable on cloud hosts like Railway).
