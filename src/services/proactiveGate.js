@@ -27,7 +27,8 @@ const usersRepo = require('../db/users');
 const JOB_RULES = {
   morning:      { minLevel: 'moderate' },
   wrap:         { minLevel: 'moderate' },
-  meetingprep:  { minLevel: 'high' },
+  meetingprep:  { minLevel: 'moderate' },
+  meetingcomplete: { minLevel: 'moderate' },
   taskreminder: { minLevel: 'high' },
   bills:        { minLevel: 'moderate', skill: 'bill_tracker' },
   deliveries:   { minLevel: 'high', skill: 'delivery_tracker' },

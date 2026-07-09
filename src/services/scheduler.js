@@ -10,6 +10,8 @@ const deliveryAlerts = require('./deliveryAlerts');
 const followupTracker = require('./followupTracker');
 const travelAssistant = require('./travelAssistant');
 const meetingPrep = require('./meetingPrep');
+const meetingComplete = require('./meetingComplete');
+const calendarSync = require('./calendarSync');
 
 const jobs = [];
 
@@ -41,14 +43,17 @@ async function runHourlyTick(now = new Date()) {
 }
 
 /**
- * Meeting-prep tick — runs every 30 minutes and notifies about events starting
- * in the next 30–45 minutes.
+ * Meeting tick — runs every 15 minutes. First syncs each connected user's
+ * Google Calendar (so the cache is fresh), then sends prep reminders for events
+ * about to start and "just wrapped up" notes for events that recently ended.
  */
 async function runMeetingPrepTick(now = new Date()) {
   try {
-    await meetingPrep.runAllUsers({ now });
+    await calendarSync.syncAllUsers({ now });   // refresh cache from Google first
+    await meetingPrep.runAllUsers({ now });      // reminders before meetings
+    await meetingComplete.runAllUsers({ now });  // "that wrapped up" after meetings
   } catch (err) {
-    console.warn('[scheduler] meeting-prep tick error:', err.message);
+    console.warn('[scheduler] meeting tick error:', err.message);
   }
 }
 
@@ -59,10 +64,10 @@ function init() {
   const hourly = cron.schedule('0 * * * *', () => runHourlyTick(new Date()));
   jobs.push(hourly);
 
-  const prep = cron.schedule('*/30 * * * *', () => runMeetingPrepTick(new Date()));
+  const prep = cron.schedule('*/15 * * * *', () => runMeetingPrepTick(new Date()));
   jobs.push(prep);
 
-  console.log('[scheduler] registered hourly proactive tick (briefing 07:00, alerts 09:00, wrap 20:00, travel alerts hourly) + meeting-prep every 30 min, per-user TZ');
+  console.log('[scheduler] registered hourly proactive tick (briefing 07:00, alerts 09:00, wrap 20:00, travel alerts hourly) + calendar-sync/meeting-prep/meeting-complete every 15 min, per-user TZ');
   return jobs;
 }
 

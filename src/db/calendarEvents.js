@@ -94,4 +94,14 @@ function listStartingBetween(userId, fromIso, toIso) {
   `).all(userId, fromIso, toIso);
 }
 
-module.exports = { upsert, cacheEvents, removeByGcalId, listCached, listStartingBetween, listForUser };
+/** Events whose end_time falls within [fromIso, toIso] — for "just wrapped up". */
+function listEndingBetween(userId, fromIso, toIso) {
+  return db.prepare(`
+    SELECT * FROM calendar_events
+    WHERE user_id = ?
+      AND end_time IS NOT NULL AND end_time >= ? AND end_time <= ?
+    ORDER BY end_time ASC
+  `).all(userId, fromIso, toIso);
+}
+
+module.exports = { upsert, cacheEvents, removeByGcalId, listCached, listStartingBetween, listForUser, listEndingBetween };
