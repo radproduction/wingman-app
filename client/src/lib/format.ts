@@ -52,21 +52,25 @@ export function sameDay(iso: string | null | undefined, ref: Date): boolean {
 
 const CURRENCY_SYMBOL: Record<string, string> = { PKR: '₨', AED: 'AED ', USD: '$' };
 
-export function fmtMoney(amount: number, currency = 'PKR'): string {
+export function fmtMoney(amount: number | null | undefined, currency = 'PKR'): string {
   const sym = CURRENCY_SYMBOL[currency] ?? `${currency} `;
+  const n = Number(amount);
+  if (amount == null || Number.isNaN(n)) return `${sym}0`;
   // Compact large numbers: 340000 -> 340K
   let val: string;
-  if (Math.abs(amount) >= 1000) {
-    val = `${(amount / 1000).toLocaleString('en-US', { maximumFractionDigits: 1 })}K`;
+  if (Math.abs(n) >= 1000) {
+    val = `${(n / 1000).toLocaleString('en-US', { maximumFractionDigits: 1 })}K`;
   } else {
-    val = amount.toLocaleString('en-US');
+    val = n.toLocaleString('en-US');
   }
   return `${sym}${val}`;
 }
 
-export function fmtMoneyFull(amount: number, currency = 'PKR'): string {
+export function fmtMoneyFull(amount: number | null | undefined, currency = 'PKR'): string {
   const sym = CURRENCY_SYMBOL[currency] ?? `${currency} `;
-  return `${sym}${amount.toLocaleString('en-US')}`;
+  const n = Number(amount);
+  if (amount == null || Number.isNaN(n)) return `${sym}0`;
+  return `${sym}${n.toLocaleString('en-US')}`;
 }
 
 export function greeting(): string {

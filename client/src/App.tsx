@@ -3,6 +3,7 @@ import Sidebar from './components/Sidebar';
 import BottomNav from './components/BottomNav';
 import { useAuth } from './lib/auth';
 import { Loading } from './components/ui';
+import ErrorBoundary from './components/ErrorBoundary';
 import Login from './pages/Login';
 import Onboarding from './pages/Onboarding';
 import Home from './pages/Home';
@@ -18,6 +19,7 @@ import Settings from './pages/Settings';
 
 /** The authenticated app shell (sidebar + bottom nav + routed pages). */
 function AppShell() {
+  const location = useLocation();
   return (
     <div className="min-h-screen flex bg-bg">
       <Sidebar />
@@ -26,19 +28,22 @@ function AppShell() {
           className="w-full max-w-mobile lg:max-w-3xl min-h-screen lg:pb-8 relative"
           style={{ paddingBottom: 'calc(72px + env(safe-area-inset-bottom, 0px))' }}
         >
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/calendar" element={<Calendar />} />
-            <Route path="/email" element={<Email />} />
-            <Route path="/tasks" element={<Tasks />} />
-            <Route path="/bills" element={<Bills />} />
-            <Route path="/deliveries" element={<Deliveries />} />
-            <Route path="/travel" element={<Travel />} />
-            <Route path="/health" element={<HealthPage />} />
-            <Route path="/people" element={<People />} />
-            <Route path="/settings" element={<Settings />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
+          {/* Keyed by route so a crash on one page clears when navigating away. */}
+          <ErrorBoundary key={location.pathname}>
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/calendar" element={<Calendar />} />
+              <Route path="/email" element={<Email />} />
+              <Route path="/tasks" element={<Tasks />} />
+              <Route path="/bills" element={<Bills />} />
+              <Route path="/deliveries" element={<Deliveries />} />
+              <Route path="/travel" element={<Travel />} />
+              <Route path="/health" element={<HealthPage />} />
+              <Route path="/people" element={<People />} />
+              <Route path="/settings" element={<Settings />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </ErrorBoundary>
         </main>
       </div>
       <BottomNav />
