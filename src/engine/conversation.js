@@ -8,6 +8,8 @@ const { buildSystemPrompt } = require('./systemPrompt');
 const { extractTask } = require('./taskExtractor');
 const { calendarTools } = require('./calendarTools');
 const { executeCalendarTool } = require('./calendarExecutor');
+const { gmailTools, gmailToolNames } = require('./gmailTools');
+const { executeGmailTool } = require('./gmailExecutor');
 const googleAuth = require('../auth/googleAuth');
 const config = require('../config');
 const emailDigest = require('../services/emailDigest');
@@ -264,7 +266,7 @@ async function runToolLoop(user, messages, system, maxRounds = 4) {
   for (let round = 0; round < maxRounds; round++) {
     const response = await claude.chatWithTools(convo, {
       system,
-      tools: calendarTools,
+      tools: [...calendarTools, ...gmailTools],
       maxTokens: 1024,
     });
 
@@ -276,7 +278,9 @@ async function runToolLoop(user, messages, system, maxRounds = 4) {
       const toolResults = [];
       for (const block of response.content) {
         if (block.type !== 'tool_use') continue;
-        const result = await executeCalendarTool(user, { name: block.name, input: block.input });
+        const result = gmailToolNames.has(block.name)
+          ? await executeGmailTool(user, { name: block.name, input: block.input })
+          : await executeCalendarTool(user, { name: block.name, input: block.input });
         toolResults.push({
           type: 'tool_result',
           tool_use_id: block.id,
