@@ -236,24 +236,26 @@ async function sendOtp(phoneNumber, code) {
     `It expires in 5 minutes. Do not share it with anyone.`;
 
   if (cloudApi.ready()) {
-    // NOTE: the approved AUTHENTICATION template (config.whatsappCloud.otpTemplate)
-    // is *accepted* by the API but delivery is unreliable while the Meta app is
-    // unpublished (business-initiated template messages are suppressed). Plain
-    // text delivers reliably to any user inside the 24h window, which is the
-    // real login case. Switch back to the template once the app is Live.
+    // Primary: approved AUTHENTICATION template. With the app Live + billing
+    // configured it delivers to ANY user, in or out of the 24h window — the
+    // real new-user login case. Plain text (below) only reaches in-window users.
     if (config.whatsappCloud.otpUseTemplate) {
-      const components = [
-        { type: 'body', parameters: [{ type: 'text', text: code }] },
-        { type: 'button', sub_type: 'url', index: '0', parameters: [{ type: 'text', text: code }] },
-      ];
-      await cloudApi.sendTemplate(
-        digits,
-        config.whatsappCloud.otpTemplate,
-        config.whatsappCloud.otpTemplateLang,
-        components,
-      );
-      console.log(`[whatsapp:cloud] >> OTP template to ${digits}`);
-      return true;
+      try {
+        const components = [
+          { type: 'body', parameters: [{ type: 'text', text: code }] },
+          { type: 'button', sub_type: 'url', index: '0', parameters: [{ type: 'text', text: code }] },
+        ];
+        await cloudApi.sendTemplate(
+          digits,
+          config.whatsappCloud.otpTemplate,
+          config.whatsappCloud.otpTemplateLang,
+          components,
+        );
+        console.log(`[whatsapp:cloud] >> OTP template to ${digits}`);
+        return true;
+      } catch (e) {
+        console.warn(`[whatsapp:cloud] OTP template failed (${e.message}); falling back to text`);
+      }
     }
     await cloudApi.sendText(digits, text);
     console.log(`[whatsapp:cloud] >> OTP text to ${digits}`);
