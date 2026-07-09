@@ -25,7 +25,7 @@ function AppShell() {
       <Sidebar />
       <div className="flex-1 min-w-0 flex justify-center lg:px-6">
         <main
-          className="w-full max-w-mobile lg:max-w-3xl min-h-screen relative pt-2 lg:pt-10"
+          className="w-full max-w-mobile lg:max-w-[100rem] min-h-screen relative pt-2 lg:pt-10"
           style={{ paddingBottom: 'calc(84px + env(safe-area-inset-bottom, 0px))' }}
         >
           {/* Keyed by route so a crash on one page clears when navigating away. */}
