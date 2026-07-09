@@ -231,24 +231,36 @@ async function sendMessage(phoneNumber, text) {
  */
 async function sendOtp(phoneNumber, code) {
   const digits = String(phoneNumber).replace(/[^0-9]/g, '');
+  const text =
+    `${code} is your Wingman verification code. ` +
+    `It expires in 5 minutes. Do not share it with anyone.`;
+
   if (cloudApi.ready()) {
-    // COPY_CODE authentication template: the code goes in BOTH the body and the
-    // one-tap copy button (button sub_type 'url', index '0').
-    const components = [
-      { type: 'body', parameters: [{ type: 'text', text: code }] },
-      { type: 'button', sub_type: 'url', index: '0', parameters: [{ type: 'text', text: code }] },
-    ];
-    await cloudApi.sendTemplate(
-      digits,
-      config.whatsappCloud.otpTemplate,
-      config.whatsappCloud.otpTemplateLang,
-      components,
-    );
-    console.log(`[whatsapp:cloud] >> OTP template to ${digits}`);
+    // NOTE: the approved AUTHENTICATION template (config.whatsappCloud.otpTemplate)
+    // is *accepted* by the API but delivery is unreliable while the Meta app is
+    // unpublished (business-initiated template messages are suppressed). Plain
+    // text delivers reliably to any user inside the 24h window, which is the
+    // real login case. Switch back to the template once the app is Live.
+    if (config.whatsappCloud.otpUseTemplate) {
+      const components = [
+        { type: 'body', parameters: [{ type: 'text', text: code }] },
+        { type: 'button', sub_type: 'url', index: '0', parameters: [{ type: 'text', text: code }] },
+      ];
+      await cloudApi.sendTemplate(
+        digits,
+        config.whatsappCloud.otpTemplate,
+        config.whatsappCloud.otpTemplateLang,
+        components,
+      );
+      console.log(`[whatsapp:cloud] >> OTP template to ${digits}`);
+      return true;
+    }
+    await cloudApi.sendText(digits, text);
+    console.log(`[whatsapp:cloud] >> OTP text to ${digits}`);
     return true;
   }
   // whatsapp-web.js path (dev): plain text is fine.
-  await sendMessage(digits, `Your Wingman verification code is ${code}. It expires in 5 minutes.`);
+  await sendMessage(digits, text);
   return true;
 }
 

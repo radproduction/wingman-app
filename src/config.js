@@ -65,6 +65,10 @@ const config = {
     // are outside the 24h customer-service window (i.e. brand-new users).
     otpTemplate: process.env.OTP_TEMPLATE_NAME || 'wingman_login_otp',
     otpTemplateLang: process.env.OTP_TEMPLATE_LANG || 'en_US',
+    // Use the AUTHENTICATION template for OTP delivery. Off by default because
+    // template messages don't deliver while the app is unpublished; plain text
+    // works inside the 24h window. Set OTP_USE_TEMPLATE=1 once the app is Live.
+    otpUseTemplate: process.env.OTP_USE_TEMPLATE === '1',
     get enabled() {
       return !!(process.env.WHATSAPP_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID);
     },
