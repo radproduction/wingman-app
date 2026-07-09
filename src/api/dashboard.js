@@ -86,9 +86,20 @@ router.get('/me', (req, res) => {
 });
 
 // ── /api/calendar?range=today|tomorrow|week ─────────────────────────
-router.get('/calendar', (req, res) => {
+router.get('/calendar', async (req, res) => {
   const u = resolveUser(req);
   const repo = requireRepo('calendarEvents');
+  // Best-effort live sync from Google over a broad window so the dashboard
+  // reflects real events — including ones just created via WhatsApp. Falls
+  // back to whatever is cached if Google is unreachable / not connected.
+  if (u && u.calendar_token) {
+    try {
+      const calSvc = require('../services/calendar');
+      const from = new Date(Date.now() - 7 * 86400000).toISOString();
+      const to = new Date(Date.now() + 45 * 86400000).toISOString();
+      await calSvc.getEvents(u.id, { from, to });
+    } catch (_) { /* keep cached events */ }
+  }
   const { data, mock: isMock } = safe(() => {
     if (!u || !repo || !repo.listForUser) return null;
     return repo.listForUser(u.id);

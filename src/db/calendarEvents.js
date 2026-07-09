@@ -73,6 +73,17 @@ function listCached(userId, fromIso, toIso) {
   `).all(userId, toIso, fromIso);
 }
 
+/** All cached events for a user, across dates — used by the dashboard calendar
+ *  (which filters to the selected day client-side). Skips rows with no start. */
+function listForUser(userId, limit = 500) {
+  return db.prepare(`
+    SELECT * FROM calendar_events
+    WHERE user_id = ? AND start_time IS NOT NULL
+    ORDER BY start_time ASC
+    LIMIT ?
+  `).all(userId, limit);
+}
+
 /** Events whose start_time falls within [fromIso, toIso). */
 function listStartingBetween(userId, fromIso, toIso) {
   return db.prepare(`
@@ -83,4 +94,4 @@ function listStartingBetween(userId, fromIso, toIso) {
   `).all(userId, fromIso, toIso);
 }
 
-module.exports = { upsert, cacheEvents, removeByGcalId, listCached, listStartingBetween };
+module.exports = { upsert, cacheEvents, removeByGcalId, listCached, listStartingBetween, listForUser };

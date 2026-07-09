@@ -50,6 +50,13 @@ function resolveRange(user, range) {
   let end = addDays(start, 1);
   let label = 'today';
 
+  // Explicit {from, to} window (used by the dashboard to sync a broad range).
+  if (range && typeof range === 'object' && (range.from || range.to)) {
+    const from = range.from ? new Date(range.from) : start;
+    const to = range.to ? new Date(range.to) : addDays(from, 7);
+    return { timeMin: iso(from), timeMax: iso(to), label: 'range' };
+  }
+
   switch ((range || 'today').toString().toLowerCase()) {
     case 'tomorrow':
       start = addDays(start, 1);
