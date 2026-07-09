@@ -25,7 +25,7 @@ export function BigButton({
     'w-full h-13 min-h-[52px] rounded-2xl text-cardtitle font-semibold transition-all active:scale-[0.98] disabled:opacity-40 disabled:active:scale-100';
   const styles =
     variant === 'primary'
-      ? 'bg-accent text-bg shadow-[0_8px_24px_-8px_rgba(139,143,255,0.6)]'
+      ? 'brand-gradient text-[#fff] shadow-[0_10px_28px_-10px_rgba(79,86,232,0.55)]'
       : 'bg-white/8 text-white';
   return (
     <button type={type} onClick={onClick} disabled={disabled} className={`${base} ${styles}`}>
@@ -136,7 +136,7 @@ export function ToggleRow({
           }`}
         >
           <span
-            className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all ${
+            className={`absolute top-0.5 w-5 h-5 rounded-full bg-[#fff] shadow-sm transition-all ${
               on ? 'left-[22px]' : 'left-0.5'
             }`}
           />

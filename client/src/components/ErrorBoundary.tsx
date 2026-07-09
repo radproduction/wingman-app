@@ -32,7 +32,7 @@ export default class ErrorBoundary extends Component<Props, State> {
             <p className="text-caption text-gray mt-1 break-words">{this.state.message}</p>
             <button
               onClick={() => window.location.reload()}
-              className="mt-5 w-full rounded-xl bg-accent text-white py-2.5 text-body font-semibold active:opacity-80"
+              className="mt-5 w-full rounded-xl brand-gradient text-[#fff] py-2.5 text-body font-semibold active:opacity-80"
             >
               Reload
             </button>

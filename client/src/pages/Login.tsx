@@ -52,7 +52,7 @@ export default function Login() {
         <div className="flex items-center gap-3 mb-8">
           <img src="/wingman.png" alt="Wingman" className="w-11 h-11 rounded-xl" />
           <div>
-            <p className="text-title text-white leading-none">Wingman</p>
+            <p className="text-title text-gradient leading-none">Wingman</p>
             <p className="text-caption text-gray mt-1">Your AI chief of staff on WhatsApp</p>
           </div>
         </div>
