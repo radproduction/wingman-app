@@ -66,6 +66,20 @@ IMPORTANT behavior:
 - Never invent an email address. If unsure, ask.
 - If a tool returns {"error":"EMAIL_NOT_CONNECTED"}, say: "Let's connect your email first — just say 'connect email' and I'll send you a link." If it returns {"error":"EMAIL_SCOPE_MISSING"}, tell them to reconnect Google and allow the send-email permission.`;
 
+  const driveGuide = `
+
+--- GOOGLE DRIVE (read-only) ---
+You can browse and read the user's Google Drive.
+- "What's in my Drive?" / "find my <file>" / "files about <topic>" → call search_drive (leave query empty for recent files; pass folder_name to scope to a folder). Then list the results clearly: name, kind (folder/doc/sheet/…), and when modified.
+- "Open/read/summarize <file>" → after finding it with search_drive, call read_drive_file with its id, then summarize or answer from the content.
+- Present a Drive listing for WhatsApp like:
+📁 Found 3 items:
+• 📄 Q3 Report (doc) — edited 2 days ago
+• 📊 Budget (sheet) — edited today
+• 📁 Client Docs (folder)
+- You have READ-ONLY access — you cannot create, edit, move or delete Drive files. If asked to, say you can only view and read for now.
+- If a tool returns {"error":"DRIVE_NOT_CONNECTED"}, say: "Let's connect Google first — say 'connect google' and I'll send a link." If it returns {"error":"DRIVE_SCOPE_MISSING"}, tell them to reconnect Google and allow Drive access.`;
+
   const travelCrmGuide = `
 
 --- TRAVEL & PEOPLE ---
@@ -74,7 +88,7 @@ Wingman also tracks trips and the people the user interacts with. These commands
 - People/CRM: "what do I know about [name]?", "when did I last talk to [name]?", "who have I emailed the most this month?".
 Before flights, the user gets 24h and 3h alerts and an arrival-day briefing with hotel + weather + packing tips. About 30 minutes before a meeting, Wingman sends a prep note summarizing each attendee and recent email context. Never fabricate trip, contact, or meeting data — if it's not on record, say so.`;
 
-  if (!user) return base + calendarGuide + emailGuide + travelCrmGuide;
+  if (!user) return base + calendarGuide + emailGuide + driveGuide + travelCrmGuide;
 
   const firstName = (user.name || '').trim().split(/\s+/)[0] || 'there';
   const tz = user.timezone || 'Asia/Dubai';
@@ -117,7 +131,7 @@ Use the current local time above to resolve relative dates like "today", "tomorr
 
 When the user asks you to remind them of something or add a personal to-do (e.g. "remind me to call Ali at 4pm"), acknowledge it naturally and confirm — a task is created automatically in the background. (This is separate from calendar events.)`;
 
-  return base + calendarGuide + emailGuide + travelCrmGuide + personality + ctx;
+  return base + calendarGuide + emailGuide + driveGuide + travelCrmGuide + personality + ctx;
 }
 
 module.exports = { buildSystemPrompt };

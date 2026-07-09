@@ -17,10 +17,15 @@ const GMAIL_SCOPES = [
   'https://www.googleapis.com/auth/gmail.modify',
 ];
 
-// We request all scopes together so a single consent connects both
-// Calendar and Gmail. Tokens are stored in BOTH users.calendar_token and
+// Drive scope (read-only: browse folders/files + read their contents).
+const DRIVE_SCOPES = [
+  'https://www.googleapis.com/auth/drive.readonly',
+];
+
+// We request all scopes together so a single consent connects Calendar, Gmail
+// and Drive. The same combined token is stored in BOTH users.calendar_token and
 // users.gmail_token so each subsystem can check its own connection flag.
-const SCOPES = [...CALENDAR_SCOPES, ...GMAIL_SCOPES];
+const SCOPES = [...CALENDAR_SCOPES, ...GMAIL_SCOPES, ...DRIVE_SCOPES];
 
 /**
  * Create a fresh OAuth2 client (not yet authorized).
@@ -159,6 +164,7 @@ module.exports = {
   SCOPES,
   CALENDAR_SCOPES,
   GMAIL_SCOPES,
+  DRIVE_SCOPES,
   createOAuthClient,
   getAuthUrl,
   handleCallback,

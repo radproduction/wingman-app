@@ -10,6 +10,8 @@ const { calendarTools } = require('./calendarTools');
 const { executeCalendarTool } = require('./calendarExecutor');
 const { gmailTools, gmailToolNames } = require('./gmailTools');
 const { executeGmailTool } = require('./gmailExecutor');
+const { driveTools, driveToolNames } = require('./driveTools');
+const { executeDriveTool } = require('./driveExecutor');
 const googleAuth = require('../auth/googleAuth');
 const config = require('../config');
 const emailDigest = require('../services/emailDigest');
@@ -64,7 +66,9 @@ async function handleMessage({ text, phoneNumber, meta = {} }) {
 
   const has = (skill) => usersRepo.hasSkill(user, skill);
 
-  if (isConnectCalendarIntent(text)) {
+  if (isConnectGoogleIntent(text)) {
+    reply = buildConnectGoogleReply(user, phoneNumber);
+  } else if (isConnectCalendarIntent(text)) {
     reply = buildConnectCalendarReply(user, phoneNumber);
   } else if (isConnectEmailIntent(text)) {
     reply = buildConnectEmailReply(user, phoneNumber);
@@ -105,6 +109,18 @@ async function handleMessage({ text, phoneNumber, meta = {} }) {
   });
 
   return { reply, user };
+}
+
+/** Detect a "connect google / drive" request → combined consent (incl. Drive). */
+function isConnectGoogleIntent(text) {
+  const t = (text || '').toLowerCase().trim();
+  return /\b(connect|reconnect|link)\b/.test(t) && /\b(google|drive)\b/.test(t);
+}
+
+/** Build the WhatsApp reply with the combined Google OAuth link (incl. Drive). */
+function buildConnectGoogleReply(user, phoneNumber) {
+  const url = `${config.publicBaseUrl}/auth/google?phone=${encodeURIComponent(phoneNumber)}`;
+  return `Tap this to connect Google — Calendar, Gmail & Drive: ${url}`;
 }
 
 /** Detect an explicit "connect calendar" request (deterministic, no LLM). */
@@ -266,7 +282,7 @@ async function runToolLoop(user, messages, system, maxRounds = 4) {
   for (let round = 0; round < maxRounds; round++) {
     const response = await claude.chatWithTools(convo, {
       system,
-      tools: [...calendarTools, ...gmailTools],
+      tools: [...calendarTools, ...gmailTools, ...driveTools],
       maxTokens: 1024,
     });
 
@@ -278,9 +294,14 @@ async function runToolLoop(user, messages, system, maxRounds = 4) {
       const toolResults = [];
       for (const block of response.content) {
         if (block.type !== 'tool_use') continue;
-        const result = gmailToolNames.has(block.name)
-          ? await executeGmailTool(user, { name: block.name, input: block.input })
-          : await executeCalendarTool(user, { name: block.name, input: block.input });
+        let result;
+        if (gmailToolNames.has(block.name)) {
+          result = await executeGmailTool(user, { name: block.name, input: block.input });
+        } else if (driveToolNames.has(block.name)) {
+          result = await executeDriveTool(user, { name: block.name, input: block.input });
+        } else {
+          result = await executeCalendarTool(user, { name: block.name, input: block.input });
+        }
         toolResults.push({
           type: 'tool_result',
           tool_use_id: block.id,
