@@ -31,6 +31,23 @@ async function executeDriveTool(user, toolUse) {
         return file;
       }
 
+      case 'create_drive_file': {
+        const file = await drive.createDoc(user, {
+          name: input.name,
+          content: input.content || '',
+          folderName: input.folder_name,
+        });
+        return { created: true, ...file };
+      }
+
+      case 'create_drive_folder': {
+        const folder = await drive.createFolder(user, {
+          name: input.name,
+          folderName: input.folder_name,
+        });
+        return { created: true, kind: 'folder', ...folder };
+      }
+
       default:
         return { error: `Unknown tool: ${name}` };
     }

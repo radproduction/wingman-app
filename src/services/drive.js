@@ -108,4 +108,40 @@ async function readFile(user, fileId) {
   return { name, kind: kindOf(mimeType), link: webViewLink, content: null, note: 'Binary file — open the link to view.' };
 }
 
-module.exports = { search, readFile };
+/** Resolve a folder id by (partial) name, or null if not found. */
+async function resolveFolderId(drive, folderName) {
+  if (!folderName || !folderName.trim()) return null;
+  const res = await drive.files.list({
+    q: `mimeType = '${FOLDER_MIME}' and name contains '${escapeQ(folderName.trim())}' and trashed = false`,
+    fields: 'files(id,name)',
+    pageSize: 1,
+  });
+  const f = (res.data.files || [])[0];
+  return f ? f.id : null;
+}
+
+/** Create a Google Doc with the given text content (optionally inside a folder). */
+async function createDoc(user, { name, content = '', folderName } = {}) {
+  const drive = driveFor(user);
+  const parentId = await resolveFolderId(drive, folderName);
+  const requestBody = { name: name || 'Untitled', mimeType: 'application/vnd.google-apps.document' };
+  if (parentId) requestBody.parents = [parentId];
+  const res = await drive.files.create({
+    requestBody,
+    media: content ? { mimeType: 'text/plain', body: content } : undefined,
+    fields: 'id,name,webViewLink',
+  });
+  return { id: res.data.id, name: res.data.name, link: res.data.webViewLink };
+}
+
+/** Create a folder (optionally inside a named parent folder). */
+async function createFolder(user, { name, folderName } = {}) {
+  const drive = driveFor(user);
+  const parentId = await resolveFolderId(drive, folderName);
+  const requestBody = { name: name || 'New folder', mimeType: FOLDER_MIME };
+  if (parentId) requestBody.parents = [parentId];
+  const res = await drive.files.create({ requestBody, fields: 'id,name,webViewLink' });
+  return { id: res.data.id, name: res.data.name, link: res.data.webViewLink };
+}
+
+module.exports = { search, readFile, createDoc, createFolder };

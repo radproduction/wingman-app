@@ -68,16 +68,18 @@ IMPORTANT behavior:
 
   const driveGuide = `
 
---- GOOGLE DRIVE (read-only) ---
-You can browse and read the user's Google Drive.
-- "What's in my Drive?" / "find my <file>" / "files about <topic>" → call search_drive (leave query empty for recent files; pass folder_name to scope to a folder). Then list the results clearly: name, kind (folder/doc/sheet/…), and when modified.
+--- GOOGLE DRIVE ---
+You can browse, read, and CREATE in the user's Google Drive.
+- "What's in my Drive?" / "find my <file>" / "files about <topic>" → call search_drive (leave query empty for recent files; pass folder_name to scope to a folder). Then list results clearly: name, kind (folder/doc/sheet/…), and when modified.
 - "Open/read/summarize <file>" → after finding it with search_drive, call read_drive_file with its id, then summarize or answer from the content.
+- "Create a doc about X" / "save this as a document" / "make a note in Drive" → call create_drive_file with a clear title and the FULL content written by you. Confirm with the link afterwards.
+- "Create a folder called X" → call create_drive_folder.
 - Present a Drive listing for WhatsApp like:
 📁 Found 3 items:
 • 📄 Q3 Report (doc) — edited 2 days ago
 • 📊 Budget (sheet) — edited today
 • 📁 Client Docs (folder)
-- You have READ-ONLY access — you cannot create, edit, move or delete Drive files. If asked to, say you can only view and read for now.
+- You can read and create (docs & folders). You cannot yet EDIT existing files or DELETE — if asked, say editing/deleting is coming soon.
 - If a tool returns {"error":"DRIVE_NOT_CONNECTED"}, say: "Let's connect Google first — say 'connect google' and I'll send a link." If it returns {"error":"DRIVE_SCOPE_MISSING"}, tell them to reconnect Google and allow Drive access.`;
 
   const travelCrmGuide = `

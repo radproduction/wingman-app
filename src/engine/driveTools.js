@@ -35,6 +35,34 @@ const driveTools = [
       required: ['file_id'],
     },
   },
+  {
+    name: 'create_drive_file',
+    description:
+      'Create a new Google Doc in the user\'s Drive with the given text content. ' +
+      'Use for "create a doc about X", "make a note in Drive", "save this as a document". ' +
+      'Write the full content yourself. Optionally place it inside a named folder.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Title of the document.' },
+        content: { type: 'string', description: 'The full text content to put in the document.' },
+        folder_name: { type: 'string', description: 'Optional: name of a folder to create it in.' },
+      },
+      required: ['name'],
+    },
+  },
+  {
+    name: 'create_drive_folder',
+    description: 'Create a new folder in the user\'s Drive. Optionally inside a named parent folder.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Folder name.' },
+        folder_name: { type: 'string', description: 'Optional: name of a parent folder to create it inside.' },
+      },
+      required: ['name'],
+    },
+  },
 ];
 
 const driveToolNames = new Set(driveTools.map((t) => t.name));

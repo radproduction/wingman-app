@@ -17,9 +17,9 @@ const GMAIL_SCOPES = [
   'https://www.googleapis.com/auth/gmail.modify',
 ];
 
-// Drive scope (read-only: browse folders/files + read their contents).
+// Drive scope (full: browse/read files AND create docs & folders).
 const DRIVE_SCOPES = [
-  'https://www.googleapis.com/auth/drive.readonly',
+  'https://www.googleapis.com/auth/drive',
 ];
 
 // We request all scopes together so a single consent connects Calendar, Gmail
