@@ -91,6 +91,18 @@ function daysBetween(aISO, bISO) {
   return Math.round((b - a) / (24 * 3600 * 1000));
 }
 
+/**
+ * Time-of-day greeting for a timezone — "Good morning" / "Good afternoon" /
+ * "Good evening". Briefings can be scheduled at ANY hour, so the greeting must
+ * follow the clock rather than the job's name.
+ */
+function greetingInTz(timeZone, now = new Date()) {
+  const h = hourInTz(timeZone, now);
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
 /** Minutes since local midnight in a timezone (0–1439). */
 function minutesInTz(timeZone, now = new Date()) {
   const p = partsInTz(now, timeZone);
@@ -128,5 +140,5 @@ function isDueAt(timeZone, hhmm, now = new Date(), windowMin = 15) {
 module.exports = {
   partsInTz, tzOffsetMinutes, offsetString,
   startOfDayISO, hourInTz, dayLabel, timeLabel, daysBetween,
-  minutesInTz, dateKeyInTz, parseHhMm, isDueAt,
+  minutesInTz, dateKeyInTz, parseHhMm, isDueAt, greetingInTz,
 };

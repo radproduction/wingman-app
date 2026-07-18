@@ -83,7 +83,9 @@ function format(user, agg) {
     lines.push(`\u2022 \ud83d\udcb0 ${b.name} due tomorrow (${b.currency} ${Number(b.amount || 0).toLocaleString('en-US')})`);
   }
   lines.push('');
-  lines.push('Good night! \ud83d\udca4');
+  // The wrap can be scheduled at any hour \u2014 only say "good night" if it is one.
+  const wrapHour = t.hourInTz(tz);
+  lines.push(wrapHour >= 20 || wrapHour < 5 ? 'Good night! \ud83d\udca4' : 'Enjoy the rest of your day! \ud83d\udc4b');
 
   return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }

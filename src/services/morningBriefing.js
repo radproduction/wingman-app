@@ -59,7 +59,10 @@ function format(user, agg) {
   const name = user.name || 'there';
   const tz = agg.tz;
   const lines = [];
-  lines.push(`Good morning, ${name}! \u2600\ufe0f`);
+  // The briefing can be scheduled at any hour, so greet by the actual clock.
+  const hour = t.hourInTz(tz);
+  const sunEmoji = hour < 12 ? '\u2600\ufe0f' : (hour < 17 ? '\ud83c\udf24\ufe0f' : '\ud83c\udf06');
+  lines.push(`${t.greetingInTz(tz)}, ${name}! ${sunEmoji}`);
   lines.push('');
   lines.push(`\ud83c\udf24 ${agg.weather.city}: ${agg.weather.temp}\u00b0C, ${agg.weather.condition}`);
   lines.push('');
@@ -115,7 +118,11 @@ function format(user, agg) {
     lines.push('');
   }
 
-  lines.push('Have a productive day! \ud83d\ude80');
+  lines.push(
+    hour < 12 ? 'Have a productive day! \ud83d\ude80'
+      : hour < 17 ? 'Have a productive afternoon! \ud83d\ude80'
+        : 'Have a good evening! \ud83c\udf19'
+  );
   return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
