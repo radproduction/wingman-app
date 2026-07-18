@@ -53,6 +53,8 @@ function applyMigrations() {
       ["enabled_skills", "TEXT DEFAULT '[\"travel_assistant\",\"bill_tracker\",\"delivery_tracker\",\"people_crm\",\"followup_tracker\"]'"],
       ["tone", "TEXT DEFAULT 'friendly'"],
       ["communication_style", "TEXT DEFAULT 'concise'"],
+      ['shopify_domain', 'TEXT'],
+      ['shopify_token', 'TEXT'],
     ],
   };
   for (const [table, cols] of Object.entries(additions)) {

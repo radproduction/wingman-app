@@ -20,6 +20,8 @@ CREATE TABLE IF NOT EXISTS users (
   language TEXT DEFAULT 'en',
   gmail_token TEXT,
   calendar_token TEXT,
+  shopify_domain TEXT,                           -- e.g. mystore.myshopify.com
+  shopify_token TEXT,                            -- Admin API access token
   health_connected INTEGER DEFAULT 0,
   preferences TEXT DEFAULT '{}',
   onboarding_complete INTEGER DEFAULT 0,

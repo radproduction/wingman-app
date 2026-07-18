@@ -378,6 +378,38 @@ router.post('/onboarding/complete', (req, res) => {
   res.json({ user: usersRepo.toPublic(updated) });
 });
 
+// ── POST /api/shopify/connect — link a store (auth required) ─────────
+//   Verifies the domain + Admin API token against Shopify before saving, so a
+//   bad credential is rejected up front rather than failing later in chat.
+router.post('/shopify/connect', async (req, res) => {
+  if (!req.user) return res.status(401).json({ error: 'Authentication required.' });
+  const body = req.body || {};
+  const domain = String(body.domain || '').trim();
+  const token = String(body.token || '').trim();
+  if (!domain || !token) {
+    return res.status(400).json({ error: 'Store domain and Admin API token are required.' });
+  }
+  try {
+    const shopify = require('../services/shopify');
+    const info = await shopify.testConnection(domain, token);
+    usersRepo.update(req.user.id, { shopify_domain: info.domain, shopify_token: token });
+    res.json({ connected: true, shop: info.shop, domain: info.domain, currency: info.currency });
+  } catch (err) {
+    const map = {
+      SHOPIFY_AUTH_FAILED: 'Could not connect — check the Admin API access token.',
+      SHOPIFY_NOT_FOUND: 'Store not found — check the domain (e.g. mystore.myshopify.com).',
+    };
+    res.status(400).json({ error: map[err.message] || 'Could not reach that store. Please check the details and try again.' });
+  }
+});
+
+// ── POST /api/shopify/disconnect ─────────────────────────────────────
+router.post('/shopify/disconnect', (req, res) => {
+  if (!req.user) return res.status(401).json({ error: 'Authentication required.' });
+  usersRepo.update(req.user.id, { shopify_domain: null, shopify_token: null });
+  res.json({ connected: false });
+});
+
 function safeParse(s, fallback) {
   try { return JSON.parse(s); } catch (_) { return fallback; }
 }

@@ -23,6 +23,9 @@ export interface Me {
   health_connected: boolean;
   gmail_connected: boolean;
   calendar_connected: boolean;
+  /** True once a Shopify store domain + Admin API token are stored. */
+  shopify_connected?: boolean;
+  shopify_domain?: string | null;
   /** Wingman's own WhatsApp number users message (from WINGMAN_NUMBER env). */
   wingman_number?: string;
   /** True once the user has exchanged a message with Wingman on WhatsApp. */

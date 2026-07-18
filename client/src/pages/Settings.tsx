@@ -142,6 +142,7 @@ export default function Settings() {
         <div className="flex flex-col gap-2.5">
           <ConnRow icon={<CalendarIcon className="w-5 h-5" />} label="Google Calendar" connected={user.calendar_connected} href={`/auth/google?phone=${encodeURIComponent(user.phone)}`} />
           <ConnRow icon={<MailIcon className="w-5 h-5" />} label="Gmail" connected={user.gmail_connected} href={`/auth/google?phone=${encodeURIComponent(user.phone)}`} />
+          <ShopifyRow user={user} />
           <ConnRow icon={<HeartIcon className="w-5 h-5" />} label="Health data" connected={user.health_connected} />
         </div>
 
@@ -167,6 +168,96 @@ function Section({ title, icon }: { title: string; icon?: React.ReactNode }) {
     <div className="flex items-center gap-2 mt-6 mb-2.5 px-1">
       {icon && <span className="text-gray">{icon}</span>}
       <h3 className="text-caption uppercase tracking-wide text-gray font-semibold">{title}</h3>
+    </div>
+  );
+}
+
+/**
+ * Shopify connects with a store domain + Admin API token (Shopify "custom app"),
+ * so unlike Google it needs an inline form rather than an OAuth redirect.
+ */
+function ShopifyRow({ user }: { user: Me }) {
+  const { updateUser } = useAuth();
+  const [open, setOpen] = useState(false);
+  const [domain, setDomain] = useState('');
+  const [token, setToken] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function connect() {
+    setBusy(true); setError(null);
+    try {
+      const r = await api.shopifyConnect(domain, token);
+      updateUser({ shopify_connected: true, shopify_domain: r.domain });
+      setOpen(false); setDomain(''); setToken('');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not connect.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function disconnect() {
+    setBusy(true); setError(null);
+    try {
+      await api.shopifyDisconnect();
+      updateUser({ shopify_connected: false, shopify_domain: null });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not disconnect.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="card">
+      <div className="flex items-center gap-3 min-h-[60px]">
+        <div className="w-10 h-10 rounded-xl bg-accent/15 text-accent flex items-center justify-center shrink-0">
+          <BoxIcon className="w-5 h-5" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-body text-white">Shopify</p>
+          {user.shopify_connected && user.shopify_domain && (
+            <p className="text-caption text-gray truncate">{user.shopify_domain}</p>
+          )}
+        </div>
+        {user.shopify_connected ? (
+          <div className="flex items-center gap-3 shrink-0">
+            <span className="flex items-center gap-1 text-success text-caption font-medium">
+              <CheckCircleIcon className="w-4 h-4" /> Connected
+            </span>
+            <button onClick={disconnect} disabled={busy} className="text-caption text-gray underline disabled:opacity-50">
+              Disconnect
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setOpen((o) => !o)}
+            className="h-9 px-3.5 rounded-full bg-accent text-bg text-body font-semibold shrink-0"
+          >
+            {open ? 'Cancel' : 'Connect'}
+          </button>
+        )}
+      </div>
+
+      {open && !user.shopify_connected && (
+        <div className="mt-4 flex flex-col gap-3">
+          <Field label="Store domain" value={domain} onChange={setDomain} placeholder="mystore.myshopify.com" />
+          <Field label="Admin API access token" value={token} onChange={setToken} placeholder="shpat_..." />
+          <p className="text-caption text-gray">
+            In Shopify: Settings → Apps and sales channels → Develop apps → create an app,
+            enable <b>read_orders</b>, <b>read_products</b> and <b>read_customers</b>, install it, then copy the Admin API access token.
+          </p>
+          {error && <p className="text-caption text-danger">{error}</p>}
+          <button
+            onClick={connect}
+            disabled={busy || !domain.trim() || !token.trim()}
+            className="h-11 rounded-xl brand-gradient text-[#fff] text-body font-semibold disabled:opacity-40"
+          >
+            {busy ? 'Connecting…' : 'Connect store'}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

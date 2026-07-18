@@ -12,6 +12,8 @@ const { gmailTools, gmailToolNames } = require('./gmailTools');
 const { executeGmailTool } = require('./gmailExecutor');
 const { driveTools, driveToolNames } = require('./driveTools');
 const { executeDriveTool } = require('./driveExecutor');
+const { shopifyTools, shopifyToolNames } = require('./shopifyTools');
+const { executeShopifyTool } = require('./shopifyExecutor');
 const googleAuth = require('../auth/googleAuth');
 const config = require('../config');
 const emailDigest = require('../services/emailDigest');
@@ -282,7 +284,7 @@ async function runToolLoop(user, messages, system, maxRounds = 4) {
   for (let round = 0; round < maxRounds; round++) {
     const response = await claude.chatWithTools(convo, {
       system,
-      tools: [...calendarTools, ...gmailTools, ...driveTools],
+      tools: [...calendarTools, ...gmailTools, ...driveTools, ...shopifyTools],
       maxTokens: 1024,
     });
 
@@ -299,6 +301,8 @@ async function runToolLoop(user, messages, system, maxRounds = 4) {
           result = await executeGmailTool(user, { name: block.name, input: block.input });
         } else if (driveToolNames.has(block.name)) {
           result = await executeDriveTool(user, { name: block.name, input: block.input });
+        } else if (shopifyToolNames.has(block.name)) {
+          result = await executeShopifyTool(user, { name: block.name, input: block.input });
         } else {
           result = await executeCalendarTool(user, { name: block.name, input: block.input });
         }

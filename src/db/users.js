@@ -43,6 +43,7 @@ function update(id, fields = {}) {
     'language', 'gmail_token', 'calendar_token', 'health_connected', 'preferences',
     'onboarding_complete', 'briefing_time', 'debrief_time', 'proactiveness_level',
     'enabled_skills', 'tone', 'communication_style',
+    'shopify_domain', 'shopify_token',
   ];
   const sets = [];
   const params = { id };
@@ -138,6 +139,9 @@ function toPublic(user) {
     gmail_connected: !!user.gmail_token,
     calendar_connected: !!user.calendar_token,
     health_connected: !!user.health_connected,
+    // Never expose the Shopify token — only whether it's linked, and the store.
+    shopify_connected: !!(user.shopify_domain && user.shopify_token),
+    shopify_domain: user.shopify_domain || null,
   };
 }
 

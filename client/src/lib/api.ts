@@ -67,6 +67,13 @@ export const api = {
   completeOnboarding: (patch: SettingsPatch) =>
     send<{ user: Me }>('POST', '/onboarding/complete', patch),
 
+  // ── Shopify ──
+  shopifyConnect: (domain: string, token: string) =>
+    send<{ connected: boolean; shop: string; domain: string; currency: string }>(
+      'POST', '/shopify/connect', { domain, token },
+    ),
+  shopifyDisconnect: () => send<{ connected: boolean }>('POST', '/shopify/disconnect'),
+
   // ── Data ──
   dashboard: () => get<DashboardSummary>('/dashboard'),
   calendar: () => get<{ events: CalendarEvent[]; mock: boolean }>('/calendar'),
