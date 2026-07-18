@@ -91,7 +91,42 @@ function daysBetween(aISO, bISO) {
   return Math.round((b - a) / (24 * 3600 * 1000));
 }
 
+/** Minutes since local midnight in a timezone (0–1439). */
+function minutesInTz(timeZone, now = new Date()) {
+  const p = partsInTz(now, timeZone);
+  return Number(p.hour) * 60 + Number(p.minute);
+}
+
+/** Local calendar date key "YYYY-MM-DD" in a timezone — used for per-day dedupe. */
+function dateKeyInTz(timeZone, now = new Date()) {
+  const p = partsInTz(now, timeZone);
+  return `${p.year}-${p.month}-${p.day}`;
+}
+
+/** Parse "HH:MM" into minutes since midnight, or null if malformed. */
+function parseHhMm(hhmm) {
+  const m = String(hhmm || '').trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return null;
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  if (h > 23 || min > 59) return null;
+  return h * 60 + min;
+}
+
+/**
+ * Is the user's local time inside [target, target + windowMin)?
+ * Called from a tick that runs every `windowMin` minutes, this fires exactly
+ * once per day for the user's configured time (e.g. "07:30").
+ */
+function isDueAt(timeZone, hhmm, now = new Date(), windowMin = 15) {
+  const target = parseHhMm(hhmm);
+  if (target == null) return false;
+  const diff = minutesInTz(timeZone, now) - target;
+  return diff >= 0 && diff < windowMin;
+}
+
 module.exports = {
   partsInTz, tzOffsetMinutes, offsetString,
   startOfDayISO, hourInTz, dayLabel, timeLabel, daysBetween,
+  minutesInTz, dateKeyInTz, parseHhMm, isDueAt,
 };

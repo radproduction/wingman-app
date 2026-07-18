@@ -30,15 +30,28 @@ const jobs = [];
  */
 async function runHourlyTick(now = new Date()) {
   try {
-    await morningBriefing.runDueUsers({ hour: 7, now });
     await taskIntents.runDailyReminders({ hour: 9, now });
     await billAlerts.runDueUsers({ hour: 9, now });
     await deliveryAlerts.runDueUsers({ hour: 9, now });
     await followupTracker.runDueUsers({ hour: 9, now });
-    await endOfDayWrap.runDueUsers({ hour: 20, now });
     await travelAssistant.runDueUsers({ now });
   } catch (err) {
     console.warn('[scheduler] hourly tick error:', err.message);
+  }
+}
+
+/**
+ * Briefing tick — every 15 minutes. The morning briefing and end-of-day wrap
+ * fire at each user's OWN configured briefing_time / debrief_time (in their
+ * timezone), so a 15-minute cadence is needed to honour half-hour settings like
+ * "07:30". Each service de-dupes to once per local day.
+ */
+async function runBriefingTick(now = new Date()) {
+  try {
+    await morningBriefing.runDueUsers({ now, windowMin: 15 });
+    await endOfDayWrap.runDueUsers({ now, windowMin: 15 });
+  } catch (err) {
+    console.warn('[scheduler] briefing tick error:', err.message);
   }
 }
 
@@ -67,7 +80,10 @@ function init() {
   const prep = cron.schedule('*/15 * * * *', () => runMeetingPrepTick(new Date()));
   jobs.push(prep);
 
-  console.log('[scheduler] registered hourly proactive tick (briefing 07:00, alerts 09:00, wrap 20:00, travel alerts hourly) + calendar-sync/meeting-prep/meeting-complete every 15 min, per-user TZ');
+  const brief = cron.schedule('*/15 * * * *', () => runBriefingTick(new Date()));
+  jobs.push(brief);
+
+  console.log('[scheduler] registered hourly tick (alerts 09:00, travel) + every 15 min: calendar-sync/meeting-prep/meeting-complete and briefing/debrief at each user\'s own set time, per-user TZ');
   return jobs;
 }
 
@@ -76,4 +92,4 @@ function stopAll() {
   jobs.length = 0;
 }
 
-module.exports = { init, runHourlyTick, runMeetingPrepTick, stopAll };
+module.exports = { init, runHourlyTick, runMeetingPrepTick, runBriefingTick, stopAll };

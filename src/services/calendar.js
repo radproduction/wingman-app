@@ -76,6 +76,22 @@ function resolveRange(user, range) {
   return { timeMin: iso(start), timeMax: iso(end), label };
 }
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * Map a list of emails (or {email} objects) into Google attendee entries,
+ * dropping anything that isn't a valid address.
+ */
+function toAttendees(list) {
+  if (!Array.isArray(list)) return [];
+  const seen = new Set();
+  return list
+    .map((a) => (typeof a === 'string' ? a : (a && a.email)))
+    .map((e) => String(e || '').trim().toLowerCase())
+    .filter((e) => EMAIL_RE.test(e) && !seen.has(e) && seen.add(e))
+    .map((email) => ({ email }));
+}
+
 /**
  * Map a Google event resource into our normalized shape.
  */
@@ -128,20 +144,26 @@ async function getEvents(userId, dateRange = 'today') {
  * @param {Object} opts {title, startTime, endTime, description, location, timeZone}
  * @returns {Promise<Object>} normalized created event
  */
-async function createEvent(userId, { title, startTime, endTime, description = '', location = '', timeZone } = {}) {
+async function createEvent(userId, { title, startTime, endTime, description = '', location = '', attendees = [], timeZone } = {}) {
   const user = loadUser(userId);
   const cal = calendarFor(user);
   const tz = timeZone || user.timezone || 'Asia/Dubai';
 
+  const guests = toAttendees(attendees);
+  const requestBody = {
+    summary: title,
+    description,
+    location,
+    start: { dateTime: startTime, timeZone: tz },
+    end: { dateTime: endTime, timeZone: tz },
+  };
+  if (guests.length) requestBody.attendees = guests;
+
   const res = await cal.events.insert({
     calendarId: 'primary',
-    requestBody: {
-      summary: title,
-      description,
-      location,
-      start: { dateTime: startTime, timeZone: tz },
-      end: { dateTime: endTime, timeZone: tz },
-    },
+    requestBody,
+    // 'all' makes Google email the invitation to every attendee.
+    sendUpdates: guests.length ? 'all' : 'none',
   });
 
   const ev = normalize(res.data);
@@ -167,11 +189,17 @@ async function updateEvent(userId, eventId, updates = {}) {
   if (updates.location !== undefined) requestBody.location = updates.location;
   if (updates.startTime) requestBody.start = { dateTime: updates.startTime, timeZone: tz };
   if (updates.endTime) requestBody.end = { dateTime: updates.endTime, timeZone: tz };
+  if (updates.attendees !== undefined) {
+    const guests = toAttendees(updates.attendees);
+    if (guests.length) requestBody.attendees = guests;
+  }
 
   const res = await cal.events.patch({
     calendarId: 'primary',
     eventId,
     requestBody,
+    // Notify guests about the reschedule / change by email.
+    sendUpdates: 'all',
   });
 
   const ev = normalize(res.data);
@@ -185,7 +213,8 @@ async function updateEvent(userId, eventId, updates = {}) {
 async function deleteEvent(userId, eventId) {
   const user = loadUser(userId);
   const cal = calendarFor(user);
-  await cal.events.delete({ calendarId: 'primary', eventId });
+  // Notify guests that the meeting was cancelled.
+  await cal.events.delete({ calendarId: 'primary', eventId, sendUpdates: 'all' });
   calendarCache.removeByGcalId(userId, eventId);
   return { deleted: true, eventId };
 }

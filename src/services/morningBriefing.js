@@ -166,16 +166,28 @@ async function sendForUser(userId, { now = new Date(), send = true } = {}) {
 /**
  * Run for all users whose local time is currently the target hour.
  */
-async function runDueUsers({ hour = 7, now = new Date() } = {}) {
+async function runDueUsers({ hour = 7, now = new Date(), windowMin = 15 } = {}) {
   const gate = require('./proactiveGate');
   const users = usersRepo.listOnboarded();
   const results = [];
   for (const u of users) {
     if (!gate.allows(u, 'morning')) continue;
     const tz = u.timezone || 'Asia/Karachi';
-    if (t.hourInTz(tz, now) === hour) {
-      results.push({ phone: u.phone, ...(await sendForUser(u.id, { now })) });
-    }
+    // Honour each user's own briefing_time (HH:MM); fall back to the legacy hour.
+    const target = u.briefing_time || `${String(hour).padStart(2, '0')}:00`;
+    if (!t.isDueAt(tz, target, now, windowMin)) continue;
+
+    // Send at most once per local day.
+    const dayKey = t.dateKeyInTz(tz, now);
+    if ((u.preferences || {}).lastBriefingDate === dayKey) continue;
+
+    results.push({ phone: u.phone, at: target, ...(await sendForUser(u.id, { now })) });
+
+    // Re-read so we don't clobber preference changes made while sending.
+    const fresh = usersRepo.getById(u.id) || u;
+    const prefs = fresh.preferences || {};
+    prefs.lastBriefingDate = dayKey;
+    usersRepo.update(u.id, { preferences: prefs });
   }
   if (results.length) console.log('[morningBriefing] sent to', results.length, 'user(s)');
   return results;

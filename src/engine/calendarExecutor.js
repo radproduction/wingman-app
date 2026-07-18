@@ -42,8 +42,18 @@ async function executeCalendarTool(user, toolUse) {
           endTime: input.end_time,
           description: input.description || '',
           location: input.location || '',
+          attendees: input.attendees || [],
         });
-        return { created: true, id: ev.gcalEventId, title: ev.title, start: ev.startTime, end: ev.endTime };
+        return {
+          created: true,
+          id: ev.gcalEventId,
+          title: ev.title,
+          start: ev.startTime,
+          end: ev.endTime,
+          description: ev.description || '',
+          attendees: ev.attendees || [],
+          invites_emailed: (ev.attendees || []).length > 0,
+        };
       }
 
       case 'update_event': {
@@ -53,13 +63,22 @@ async function executeCalendarTool(user, toolUse) {
           endTime: input.end_time,
           description: input.description,
           location: input.location,
+          attendees: input.attendees,
         });
-        return { updated: true, id: ev.gcalEventId, title: ev.title, start: ev.startTime, end: ev.endTime };
+        return {
+          updated: true,
+          id: ev.gcalEventId,
+          title: ev.title,
+          start: ev.startTime,
+          end: ev.endTime,
+          attendees: ev.attendees || [],
+          guests_notified: true,
+        };
       }
 
       case 'delete_event': {
         await calendarService.deleteEvent(user.id, input.event_id);
-        return { deleted: true, id: input.event_id };
+        return { deleted: true, id: input.event_id, guests_notified: true };
       }
 
       case 'check_conflicts': {
