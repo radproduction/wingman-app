@@ -77,6 +77,18 @@ const config = {
     },
   },
 
+  // Shopify OAuth app (Dev Dashboard). Merchants connect with one click;
+  // Shopify hands back a per-store Admin API token we then store on the user.
+  shopify: {
+    clientId: process.env.SHOPIFY_CLIENT_ID || '',
+    clientSecret: process.env.SHOPIFY_CLIENT_SECRET || '',
+    scopes: process.env.SHOPIFY_SCOPES || 'read_orders,read_products,read_customers',
+    apiVersion: process.env.SHOPIFY_API_VERSION || '2024-10',
+    get enabled() {
+      return !!(process.env.SHOPIFY_CLIENT_ID && process.env.SHOPIFY_CLIENT_SECRET);
+    },
+  },
+
   maps: {
     apiKey: process.env.MAPS_API_KEY || process.env.GOOGLE_MAPS_API_KEY || '',
     get enabled() { return !!(process.env.MAPS_API_KEY || process.env.GOOGLE_MAPS_API_KEY); },

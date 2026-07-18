@@ -81,4 +81,75 @@ router.get('/auth/google/callback', async (req, res) => {
   }
 });
 
+/**
+ * GET /auth/shopify?shop=mystore.myshopify.com&phone=9231XXXXXXX
+ * Sends the merchant to Shopify's consent screen.
+ */
+router.get('/auth/shopify', (req, res) => {
+  const config = require('../config');
+  const shopifyAuth = require('./shopifyAuth');
+
+  if (!config.shopify.enabled) {
+    return res.status(503).send('Shopify connect is not configured on this server yet.');
+  }
+  const shop = shopifyAuth.normalizeShop(req.query.shop);
+  const phone = (req.query.phone || '').toString();
+  if (!shopifyAuth.isValidShop(shop)) {
+    return res.status(400).send('Please provide a valid store domain, e.g. mystore.myshopify.com');
+  }
+  if (!phone) return res.status(400).send('Missing phone parameter.');
+
+  // The phone rides in `state` so the callback can attach the store to the
+  // right user (same pattern as the Google flow).
+  res.redirect(shopifyAuth.buildAuthUrl(shop, phone));
+});
+
+/**
+ * GET /auth/shopify/callback
+ * Verifies Shopify's signature, swaps the code for an access token, and stores it.
+ */
+router.get('/auth/shopify/callback', async (req, res) => {
+  const shopifyAuth = require('./shopifyAuth');
+  const usersRepo = require('../db/users');
+
+  const { code, shop: rawShop, state } = req.query;
+  const shop = shopifyAuth.normalizeShop(rawShop);
+  const phone = (state || '').toString();
+
+  if (!code || !shopifyAuth.isValidShop(shop)) {
+    return res.status(400).send('Invalid Shopify callback.');
+  }
+  // Reject forged callbacks — without this anyone could attach a store to a user.
+  if (!shopifyAuth.verifyHmac(req.query)) {
+    return res.status(400).send('Could not verify this request came from Shopify.');
+  }
+
+  try {
+    const { accessToken } = await shopifyAuth.exchangeCode(shop, code.toString());
+
+    const user = usersRepo.getByPhone(phone);
+    if (!user) return res.status(400).send('No Wingman account found for that number.');
+    usersRepo.update(user.id, { shopify_domain: shop, shopify_token: accessToken });
+
+    try {
+      if (wa.ready() && phone) {
+        await wa.sendMessage(phone, `Shopify connected ✅ (${shop})\n\nTry asking me: "how are sales today?"`);
+      }
+    } catch (waErr) {
+      console.warn('[auth] Shopify confirmation failed:', waErr.message);
+    }
+
+    res.send(`
+      <html><body style="font-family:sans-serif;text-align:center;padding:60px;">
+        <h2>✅ Shopify connected!</h2>
+        <p><b>${shop}</b> is now linked to Wingman.</p>
+        <p>You can close this tab — try asking “how are sales today?” on WhatsApp.</p>
+      </body></html>
+    `);
+  } catch (err) {
+    console.error('[auth] Shopify callback error:', err.message);
+    res.status(500).send('Could not complete the Shopify connection. Please try again.');
+  }
+});
+
 module.exports = router;

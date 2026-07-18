@@ -404,6 +404,7 @@ function ShopifyRow({ user }: { user: Me }) {
   const [domain, setDomain] = useState('');
   const [token, setToken] = useState('');
   const [busy, setBusy] = useState(false);
+  const [manual, setManual] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function connect() {
@@ -465,19 +466,39 @@ function ShopifyRow({ user }: { user: Me }) {
       {open && !user.shopify_connected && (
         <div className="mt-4 flex flex-col gap-3">
           <Field label="Store domain" value={domain} onChange={setDomain} placeholder="mystore.myshopify.com" />
-          <Field label="Admin API access token" value={token} onChange={setToken} placeholder="shpat_..." />
           <p className="text-caption text-gray">
-            In Shopify: Settings → Apps and sales channels → Develop apps → create an app,
-            enable <b>read_orders</b>, <b>read_products</b> and <b>read_customers</b>, install it, then copy the Admin API access token.
+            You’ll be sent to Shopify to approve access — no tokens to copy.
           </p>
           {error && <p className="text-caption text-danger">{error}</p>}
-          <button
-            onClick={connect}
-            disabled={busy || !domain.trim() || !token.trim()}
-            className="h-11 rounded-xl brand-gradient text-[#fff] text-body font-semibold disabled:opacity-40"
+          <a
+            href={`/auth/shopify?shop=${encodeURIComponent(domain.trim())}&phone=${encodeURIComponent(user.phone)}`}
+            onClick={(e) => { if (!domain.trim()) e.preventDefault(); }}
+            className={`h-11 rounded-xl brand-gradient text-[#fff] text-body font-semibold flex items-center justify-center ${
+              domain.trim() ? '' : 'opacity-40 pointer-events-none'
+            }`}
           >
-            {busy ? 'Connecting…' : 'Connect store'}
+            Connect with Shopify
+          </a>
+
+          {/* Fallback for stores still on a legacy custom app, which do hand out a token. */}
+          <button
+            onClick={() => setManual((m) => !m)}
+            className="text-caption text-gray underline self-start"
+          >
+            {manual ? 'Hide' : 'I have an Admin API token instead'}
           </button>
+          {manual && (
+            <>
+              <Field label="Admin API access token" value={token} onChange={setToken} placeholder="shpat_..." />
+              <button
+                onClick={connect}
+                disabled={busy || !domain.trim() || !token.trim()}
+                className="h-11 rounded-xl bg-white/5 text-accent text-body font-semibold disabled:opacity-40"
+              >
+                {busy ? 'Connecting…' : 'Connect with token'}
+              </button>
+            </>
+          )}
         </div>
       )}
     </div>
