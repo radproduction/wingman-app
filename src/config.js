@@ -89,6 +89,15 @@ const config = {
     },
   },
 
+  // Voice: OpenAI Whisper (speech->text) and TTS (text->speech).
+  voice: {
+    apiKey: process.env.OPENAI_API_KEY || '',
+    sttModel: process.env.VOICE_STT_MODEL || 'whisper-1',
+    ttsModel: process.env.VOICE_TTS_MODEL || 'gpt-4o-mini-tts',
+    ttsVoice: process.env.VOICE_TTS_VOICE || 'alloy',
+    get enabled() { return !!process.env.OPENAI_API_KEY; },
+  },
+
   maps: {
     apiKey: process.env.MAPS_API_KEY || process.env.GOOGLE_MAPS_API_KEY || '',
     get enabled() { return !!(process.env.MAPS_API_KEY || process.env.GOOGLE_MAPS_API_KEY); },

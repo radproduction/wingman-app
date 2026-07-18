@@ -8,7 +8,7 @@ import { OptionCards, ToggleRow, Field } from '../components/authUi';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import type {
-  Me, ProactivenessLevel, Skill, Tone, CommunicationStyle, SettingsPatch, GoogleAccount, NewsTopic,
+  Me, ProactivenessLevel, Skill, Tone, CommunicationStyle, SettingsPatch, GoogleAccount, NewsTopic, VoiceReplies,
 } from '../types';
 
 const NEWS_TOPICS: { value: NewsTopic; label: string }[] = [
@@ -149,6 +149,21 @@ export default function Settings() {
             { value: 'detailed', title: 'Detailed', desc: 'Full context & next steps' },
           ]}
         />
+
+        {/* Voice */}
+        <Section title="Voice replies" />
+        <OptionCards<VoiceReplies>
+          value={user.voice_replies ?? 'on_voice'}
+          onChange={(v) => save({ voice_replies: v }, { voice_replies: v })}
+          options={[
+            { value: 'off', title: 'Off', desc: 'Text replies only' },
+            { value: 'on_voice', title: 'When I send voice', desc: 'Voice note back if you spoke' },
+            { value: 'always', title: 'Always', desc: 'Every reply as voice too' },
+          ]}
+        />
+        <p className="text-caption text-gray mt-2 px-1">
+          You can send Wingman a voice note any time — it understands English and Roman Urdu.
+        </p>
 
         {/* Places */}
         <Section title="Your places" />

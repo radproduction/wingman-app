@@ -93,9 +93,37 @@ app.post('/webhook', (req, res) => {
         const phoneNumber = String(m.from || '').replace(/[^0-9]/g, '');
         if (!phoneNumber) continue;
 
+        // Voice notes: transcribe first, then treat exactly like a typed
+        // message — so every tool works by voice too.
+        let wasVoice = false;
+        if (m.type === 'audio' && m.audio && m.audio.id) {
+          const voice = require('./services/voice');
+          if (!voice.enabled()) {
+            await cloudApi.sendText(phoneNumber, "I can't listen to voice notes yet — please send that as text 🙏");
+            continue;
+          }
+          try {
+            const media = await cloudApi.downloadMedia(m.audio.id);
+            m.text = await voice.transcribe(media.buffer, { filename: 'voice.ogg' });
+            wasVoice = true;
+            console.log(`[webhook] 🎤 (${phoneNumber}) transcribed: ${m.text}`);
+          } catch (err) {
+            console.warn('[webhook] transcription failed:', err.message);
+            const note = err.message === 'VOICE_NO_CREDIT'
+              ? "I couldn't process that voice note — the speech service is out of credit."
+              : "Sorry, I couldn't make out that voice note. Could you try again or send it as text?";
+            await cloudApi.sendText(phoneNumber, note);
+            continue;
+          }
+          if (!m.text) {
+            await cloudApi.sendText(phoneNumber, "That voice note sounded empty — could you try again?");
+            continue;
+          }
+        }
+
         // Shared location pins carry text too (label + coordinates), so the
         // assistant can route to them. Anything else without text is ignored.
-        if (!m.text || (m.type !== 'text' && m.type !== 'interactive' && m.type !== 'location')) {
+        if (!m.text || (m.type !== 'text' && m.type !== 'interactive' && m.type !== 'location' && m.type !== 'audio')) {
           continue;
         }
 
@@ -113,6 +141,21 @@ app.post('/webhook', (req, res) => {
         }
         await cloudApi.sendText(phoneNumber, reply);
         console.log(`[webhook] >> (${phoneNumber}): ${reply}`);
+
+        // Speak the reply too, when the user's preference calls for it. Text is
+        // always sent first so a TTS failure never costs them the answer.
+        try {
+          const voice = require('./services/voice');
+          const usersRepo = require('./db/users');
+          const u = usersRepo.getByPhone(phoneNumber);
+          if (voice.shouldSpeak(u, wasVoice)) {
+            const audio = await voice.speak(reply);
+            await cloudApi.sendAudio(phoneNumber, audio);
+            console.log(`[webhook] 🔊 (${phoneNumber}) voice reply sent`);
+          }
+        } catch (err) {
+          console.warn('[webhook] voice reply failed:', err.message);
+        }
       }
     } catch (err) {
       console.error('[webhook] processing error:', err.message);

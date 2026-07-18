@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS users (
   onboarding_complete INTEGER DEFAULT 0,
   briefing_time TEXT DEFAULT '07:00',
   debrief_time TEXT DEFAULT '20:00',
+  voice_replies TEXT DEFAULT 'on_voice',          -- 'off' | 'on_voice' | 'always'
   webmail_address TEXT,                          -- business email (IMAP/SMTP)
   webmail_password_enc TEXT,                     -- AES-256-GCM encrypted, never plaintext
   webmail_imap_host TEXT,
