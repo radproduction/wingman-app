@@ -150,6 +150,10 @@ export default function Settings() {
           ]}
         />
 
+        {/* Places */}
+        <Section title="Your places" />
+        <PlacesCard user={user} />
+
         {/* News */}
         <Section title="News in your briefing" />
         <div className="card">
@@ -216,6 +220,65 @@ function Section({ title, icon }: { title: string; icon?: React.ReactNode }) {
     <div className="flex items-center gap-2 mt-6 mb-2.5 px-1">
       {icon && <span className="text-gray">{icon}</span>}
       <h3 className="text-caption uppercase tracking-wide text-gray font-semibold">{title}</h3>
+    </div>
+  );
+}
+
+/**
+ * Home and office are geocoded server-side (not just stored as text), because
+ * traffic and leave-by times need real coordinates.
+ */
+function PlacesCard({ user }: { user: Me }) {
+  const { updateUser } = useAuth();
+  const [home, setHome] = useState(user.home_address ?? '');
+  const [office, setOffice] = useState(user.office_address ?? '');
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [savedWhich, setSavedWhich] = useState<string | null>(null);
+
+  async function save(which: 'home' | 'office', address: string) {
+    if (!address.trim()) return;
+    setBusy(which); setError(null); setSavedWhich(null);
+    try {
+      const r = await api.savePlace(which, address.trim());
+      updateUser(which === 'home' ? { home_address: r.address } : { office_address: r.address });
+      if (which === 'home') setHome(r.address); else setOffice(r.address);
+      setSavedWhich(which);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not save that address.');
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <div className="card">
+      <p className="text-caption text-gray mb-3">
+        Used for traffic and “when should I leave?” — so Wingman can tell you when to set off.
+      </p>
+      <div className="flex flex-col gap-3">
+        <div>
+          <Field label="Home address" value={home} onChange={setHome} placeholder="e.g. DHA Phase 6, Karachi" />
+          <button
+            onClick={() => save('home', home)}
+            disabled={busy === 'home' || !home.trim() || home === user.home_address}
+            className="mt-2 h-9 px-4 rounded-full bg-accent/15 text-accent text-body font-semibold disabled:opacity-40"
+          >
+            {busy === 'home' ? 'Saving…' : savedWhich === 'home' ? 'Saved ✓' : 'Save home'}
+          </button>
+        </div>
+        <div>
+          <Field label="Office address" value={office} onChange={setOffice} placeholder="e.g. Shahrah-e-Faisal, Karachi" />
+          <button
+            onClick={() => save('office', office)}
+            disabled={busy === 'office' || !office.trim() || office === user.office_address}
+            className="mt-2 h-9 px-4 rounded-full bg-accent/15 text-accent text-body font-semibold disabled:opacity-40"
+          >
+            {busy === 'office' ? 'Saving…' : savedWhich === 'office' ? 'Saved ✓' : 'Save office'}
+          </button>
+        </div>
+      </div>
+      {error && <p className="text-caption text-danger mt-3">{error}</p>}
     </div>
   );
 }

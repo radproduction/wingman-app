@@ -30,6 +30,9 @@ export interface Me {
   /** True once a Shopify store domain + Admin API token are stored. */
   shopify_connected?: boolean;
   shopify_domain?: string | null;
+  /** Saved places used for traffic + leave-by times. */
+  home_address?: string | null;
+  office_address?: string | null;
   /** News topics the user follows, and the city used for local news. */
   news_topics?: NewsTopic[] | null;
   news_city?: string | null;

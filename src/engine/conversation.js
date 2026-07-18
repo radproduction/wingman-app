@@ -15,6 +15,8 @@ const { executeDriveTool } = require('./driveExecutor');
 const { shopifyTools, shopifyToolNames } = require('./shopifyTools');
 const { newsTools, newsToolNames } = require('./newsTools');
 const { memoryTools, memoryToolNames } = require('./memoryTools');
+const { mapsTools, mapsToolNames } = require('./mapsTools');
+const { executeMapsTool } = require('./mapsExecutor');
 const { executeMemoryTool } = require('./memoryExecutor');
 const { executeNewsTool } = require('./newsExecutor');
 const { executeShopifyTool } = require('./shopifyExecutor');
@@ -296,7 +298,7 @@ async function runToolLoop(user, messages, system, maxRounds = 4) {
   for (let round = 0; round < maxRounds; round++) {
     const response = await claude.chatWithTools(convo, {
       system,
-      tools: [...calendarTools, ...gmailTools, ...driveTools, ...shopifyTools, ...newsTools, ...memoryTools],
+      tools: [...calendarTools, ...gmailTools, ...driveTools, ...shopifyTools, ...newsTools, ...memoryTools, ...mapsTools],
       maxTokens: 1024,
     });
 
@@ -319,6 +321,8 @@ async function runToolLoop(user, messages, system, maxRounds = 4) {
           result = await executeNewsTool(user, { name: block.name, input: block.input });
         } else if (memoryToolNames.has(block.name)) {
           result = await executeMemoryTool(user, { name: block.name, input: block.input });
+        } else if (mapsToolNames.has(block.name)) {
+          result = await executeMapsTool(user, { name: block.name, input: block.input });
         } else {
           result = await executeCalendarTool(user, { name: block.name, input: block.input });
         }

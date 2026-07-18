@@ -74,6 +74,10 @@ export const api = {
   googleSetPrimary: (id: string) =>
     send<{ accounts: GoogleAccount[] }>('POST', `/google/accounts/${id}/primary`),
 
+  // ── Places (home / office for traffic) ──
+  savePlace: (which: 'home' | 'office', address: string) =>
+    send<{ saved: boolean; which: string; address: string }>('POST', '/places', { which, address }),
+
   // ── Shopify ──
   shopifyConnect: (domain: string, token: string) =>
     send<{ connected: boolean; shop: string; domain: string; currency: string }>(

@@ -45,6 +45,7 @@ function update(id, fields = {}) {
     'enabled_skills', 'tone', 'communication_style',
     'shopify_domain', 'shopify_token',
     'news_topics', 'news_city', 'news_country',
+    'home_address', 'home_lat', 'home_lng', 'office_address', 'office_lat', 'office_lng',
   ];
   const sets = [];
   const params = { id };
@@ -151,6 +152,8 @@ function toPublic(user) {
     news_topics: user.news_topics || null,
     news_city: user.news_city || null,
     news_country: user.news_country || null,
+    home_address: user.home_address || null,
+    office_address: user.office_address || null,
   };
 }
 

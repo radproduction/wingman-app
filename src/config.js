@@ -77,6 +77,11 @@ const config = {
     },
   },
 
+  maps: {
+    apiKey: process.env.MAPS_API_KEY || process.env.GOOGLE_MAPS_API_KEY || '',
+    get enabled() { return !!(process.env.MAPS_API_KEY || process.env.GOOGLE_MAPS_API_KEY); },
+  },
+
   weather: {
     apiKey: process.env.WEATHER_API_KEY || '',
     defaultCity: process.env.WEATHER_DEFAULT_CITY || 'Dubai',

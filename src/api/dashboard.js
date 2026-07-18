@@ -379,6 +379,32 @@ router.post('/onboarding/complete', (req, res) => {
   res.json({ user: usersRepo.toPublic(updated) });
 });
 
+// ── POST /api/places — save home / office (geocoded) ─────────────────
+//   Goes through Maps so we store real coordinates, which is what the traffic
+//   and leave-by calculations need. A bad address is rejected up front.
+router.post('/places', async (req, res) => {
+  if (!req.user) return res.status(401).json({ error: 'Authentication required.' });
+  const which = String((req.body || {}).which || '').toLowerCase();
+  const address = String((req.body || {}).address || '').trim();
+  if (which !== 'home' && which !== 'office') {
+    return res.status(400).json({ error: 'which must be "home" or "office".' });
+  }
+  if (!address) return res.status(400).json({ error: 'An address is required.' });
+
+  try {
+    const maps = require('../services/maps');
+    const geo = await maps.savePlace(req.user.id, which, address);
+    if (!geo) return res.status(400).json({ error: `Could not find "${address}" on the map.` });
+    res.json({ saved: true, which, address: geo.address });
+  } catch (err) {
+    const msg = err && err.message;
+    if (msg === 'MAPS_NOT_CONFIGURED') {
+      return res.status(503).json({ error: 'Traffic features are not switched on yet.' });
+    }
+    res.status(400).json({ error: 'Could not look up that address. Please try again.' });
+  }
+});
+
 // ── Google accounts (multi-account) ──────────────────────────────────
 //   The PRIMARY account is mirrored into the legacy users.*_token columns so
 //   every existing feature keeps working; this keeps that mirror correct after

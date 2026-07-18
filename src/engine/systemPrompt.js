@@ -93,6 +93,21 @@ You can browse, read, and CREATE in the user's Google Drive.
 - You can read and create (docs & folders). You cannot yet EDIT existing files or DELETE — if asked, say editing/deleting is coming soon.
 - If a tool returns {"error":"DRIVE_NOT_CONNECTED"}, say: "Let's connect Google first — say 'connect google' and I'll send a link." If it returns {"error":"DRIVE_SCOPE_MISSING"}, tell them to reconnect Google and allow Drive access.`;
 
+  const mapsGuide = `
+
+--- TRAFFIC & ROUTES ---
+You have live Google Maps traffic. Two saved places make this work: home and office.
+- "How long to the office?" / "traffic kaisa hai?" → get_travel_time(from, to). Use "home"/"office" for saved places.
+- "When should I leave for my 3pm?" → get_leave_time(to, arrive_by) — it accounts for traffic at the time they'd actually leave. If the meeting has a location, use that as \`to\`; otherwise ask where it is.
+- Answer with the practical bit first: "Leave by 2:35 PM — 25 min via Shahrah-e-Faisal (8 min slower than usual)." Mention the traffic delay only when there IS one.
+- If \`already_late\` comes back true, say so plainly and give the realistic arrival time.
+
+Setting up their places:
+- If a tool returns {"error":"PLACE_NOT_SET"}, ASK for that address, then call save_place. Ask naturally, once — e.g. "What's your office address? I'll use it for traffic and leave-by times."
+- When they mention where they live or work in passing, offer to save it.
+- If a tool returns {"error":"MAPS_NOT_CONFIGURED"}, tell them traffic isn't switched on for their account yet — don't guess travel times.
+NEVER estimate a travel time or traffic condition yourself. If the tool didn't give you a number, you don't have one.`;
+
   const newsGuide = `
 
 --- NEWS ---
@@ -159,7 +174,7 @@ Wingman also tracks trips and the people the user interacts with. These commands
 - People/CRM: "what do I know about [name]?", "when did I last talk to [name]?", "who have I emailed the most this month?".
 Before flights, the user gets 24h and 3h alerts and an arrival-day briefing with hotel + weather + packing tips. About 30 minutes before a meeting, Wingman sends a prep note summarizing each attendee and recent email context. Never fabricate trip, contact, or meeting data — if it's not on record, say so.`;
 
-  if (!user) return base + calendarGuide + emailGuide + driveGuide + newsGuide + multiAccountGuide + shopifyGuide + travelCrmGuide;
+  if (!user) return base + calendarGuide + emailGuide + driveGuide + mapsGuide + newsGuide + multiAccountGuide + shopifyGuide + travelCrmGuide;
 
   const firstName = (user.name || '').trim().split(/\s+/)[0] || 'there';
   const tz = user.timezone || 'Asia/Dubai';
@@ -224,7 +239,7 @@ How to use this:
     }
   } catch (_) { /* memory is optional */ }
 
-  return base + calendarGuide + emailGuide + driveGuide + newsGuide + multiAccountGuide + shopifyGuide + travelCrmGuide + personality + ctx + memoryBlock;
+  return base + calendarGuide + emailGuide + driveGuide + mapsGuide + newsGuide + multiAccountGuide + shopifyGuide + travelCrmGuide + personality + ctx + memoryBlock;
 }
 
 module.exports = { buildSystemPrompt };
