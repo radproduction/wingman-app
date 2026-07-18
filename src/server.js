@@ -93,8 +93,9 @@ app.post('/webhook', (req, res) => {
         const phoneNumber = String(m.from || '').replace(/[^0-9]/g, '');
         if (!phoneNumber) continue;
 
-        if (m.type !== 'text' || !m.text) {
-          // Non-text: only reply to registered users; ignore others silently.
+        // Shared location pins carry text too (label + coordinates), so the
+        // assistant can route to them. Anything else without text is ignored.
+        if (!m.text || (m.type !== 'text' && m.type !== 'interactive' && m.type !== 'location')) {
           continue;
         }
 

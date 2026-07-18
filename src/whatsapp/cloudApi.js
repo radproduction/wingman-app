@@ -111,6 +111,19 @@ function parseIncoming(body) {
           const title = (ir.button_reply && ir.button_reply.title) ||
                         (ir.list_reply && ir.list_reply.title) || '';
           out.push({ ...base, text: title });
+        } else if (m.type === 'location') {
+          // A shared location pin. Surface it as text (with the coordinates the
+          // maps tools need) so the assistant can route to it like any address.
+          const loc = m.location || {};
+          const label = [loc.name, loc.address].filter(Boolean).join(', ');
+          const coords = (loc.latitude != null && loc.longitude != null)
+            ? `${loc.latitude},${loc.longitude}`
+            : '';
+          out.push({
+            ...base,
+            location: { latitude: loc.latitude, longitude: loc.longitude, name: loc.name || null, address: loc.address || null },
+            text: `[Shared location]${label ? ` ${label}` : ''}${coords ? ` (coordinates: ${coords})` : ''}`,
+          });
         } else {
           out.push({ ...base, text: '' });
         }
