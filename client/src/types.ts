@@ -1,6 +1,10 @@
 export type ProactivenessLevel = 'low' | 'moderate' | 'high';
 export type Tone = 'professional' | 'casual' | 'friendly';
 export type CommunicationStyle = 'concise' | 'detailed';
+export type NewsTopic =
+  | 'world' | 'nation' | 'business' | 'technology'
+  | 'entertainment' | 'sports' | 'science' | 'health' | 'local';
+
 export type Skill =
   | 'travel_assistant' | 'bill_tracker' | 'delivery_tracker'
   | 'people_crm' | 'followup_tracker';
@@ -26,6 +30,9 @@ export interface Me {
   /** True once a Shopify store domain + Admin API token are stored. */
   shopify_connected?: boolean;
   shopify_domain?: string | null;
+  /** News topics the user follows, and the city used for local news. */
+  news_topics?: NewsTopic[] | null;
+  news_city?: string | null;
   /** Wingman's own WhatsApp number users message (from WINGMAN_NUMBER env). */
   wingman_number?: string;
   /** True once the user has exchanged a message with Wingman on WhatsApp. */
@@ -65,6 +72,8 @@ export interface SettingsPatch {
   enabled_skills?: Skill[];
   tone?: Tone;
   communication_style?: CommunicationStyle;
+  news_topics?: NewsTopic[];
+  news_city?: string;
 }
 
 export interface CalendarEvent {

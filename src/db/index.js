@@ -63,6 +63,9 @@ function applyMigrations() {
       ["communication_style", "TEXT DEFAULT 'concise'"],
       ['shopify_domain', 'TEXT'],
       ['shopify_token', 'TEXT'],
+      ['news_topics', 'TEXT'],
+      ['news_city', 'TEXT'],
+      ['news_country', 'TEXT'],
     ],
   };
   for (const [table, cols] of Object.entries(additions)) {

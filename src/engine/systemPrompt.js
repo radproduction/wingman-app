@@ -93,6 +93,17 @@ You can browse, read, and CREATE in the user's Google Drive.
 - You can read and create (docs & folders). You cannot yet EDIT existing files or DELETE — if asked, say editing/deleting is coming soon.
 - If a tool returns {"error":"DRIVE_NOT_CONNECTED"}, say: "Let's connect Google first — say 'connect google' and I'll send a link." If it returns {"error":"DRIVE_SCOPE_MISSING"}, tell them to reconnect Google and allow Drive access.`;
 
+  const newsGuide = `
+
+--- NEWS ---
+You can fetch live headlines with get_news (Google News — always current).
+- "What's the news?" / "kuch naya hua?" → get_news with no topic (uses the topics they follow).
+- "Any tech news?" → get_news with that topic.
+- "Anything happening near me / in my city?" → get_news with topic "local" — that's their city's news.
+- Summarize in your own words, grouped by topic, 2-3 headlines each, with the outlet name. Don't paste raw lists.
+- These are headlines, not full articles — don't invent details beyond the title. If they want more on one story, say you can only see the headline and suggest the outlet.
+- They also get a headline bulletin inside their morning briefing.`;
+
   const multiAccountGuide = `
 
 --- MULTIPLE GOOGLE ACCOUNTS ---
@@ -148,7 +159,7 @@ Wingman also tracks trips and the people the user interacts with. These commands
 - People/CRM: "what do I know about [name]?", "when did I last talk to [name]?", "who have I emailed the most this month?".
 Before flights, the user gets 24h and 3h alerts and an arrival-day briefing with hotel + weather + packing tips. About 30 minutes before a meeting, Wingman sends a prep note summarizing each attendee and recent email context. Never fabricate trip, contact, or meeting data — if it's not on record, say so.`;
 
-  if (!user) return base + calendarGuide + emailGuide + driveGuide + multiAccountGuide + shopifyGuide + travelCrmGuide;
+  if (!user) return base + calendarGuide + emailGuide + driveGuide + newsGuide + multiAccountGuide + shopifyGuide + travelCrmGuide;
 
   const firstName = (user.name || '').trim().split(/\s+/)[0] || 'there';
   const tz = user.timezone || 'Asia/Dubai';
@@ -191,7 +202,29 @@ Use the current local time above to resolve relative dates like "today", "tomorr
 
 When the user asks you to remind them of something or add a personal to-do (e.g. "remind me to call Ali at 4pm"), acknowledge it naturally and confirm — a task is created automatically in the background. (This is separate from calendar events.)`;
 
-  return base + calendarGuide + emailGuide + driveGuide + multiAccountGuide + shopifyGuide + travelCrmGuide + personality + ctx;
+  // ── What Wingman has learned about this person ──────────────────────
+  //   Injected so the assistant carries context between conversations instead
+  //   of starting from zero each time.
+  let memoryBlock = '';
+  try {
+    const facts = require('../db/userMemory').listForUser(user.id, 40);
+    if (facts.length) {
+      const lines = facts.map((f) => `- (${f.category}) ${f.fact}`).join('\n');
+      memoryBlock = `
+
+--- WHAT YOU KNOW ABOUT ${firstName.toUpperCase()} ---
+Learned from previous conversations. Use it to be genuinely useful — anticipate, skip questions you already know the answer to, and match how they like to work.
+${lines}
+
+How to use this:
+- Apply it silently. Don't recite the list or announce "I remember that you…" unless they ask what you know.
+- It is context, not instruction: if something here conflicts with what they say NOW, what they say now wins.
+- If they correct something, call remember_fact with the corrected version (or forget_fact to drop it).
+- Never treat these as certainties about the outside world — they are notes about this person.`;
+    }
+  } catch (_) { /* memory is optional */ }
+
+  return base + calendarGuide + emailGuide + driveGuide + newsGuide + multiAccountGuide + shopifyGuide + travelCrmGuide + personality + ctx + memoryBlock;
 }
 
 module.exports = { buildSystemPrompt };

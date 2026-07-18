@@ -48,8 +48,19 @@ async function aggregate(user, now = new Date()) {
 
   const health = latestHealth(user.id);
 
+  // Headlines for the topics the user follows (incl. local news for their city).
+  // Best-effort: a slow or failing feed must never hold up the briefing.
+  let newsBulletin = null;
+  try {
+    const news = require('./news');
+    newsBulletin = await news.bulletin(user, { perTopic: 2 });
+  } catch (err) {
+    console.warn('[morningBriefing] news failed:', err.message);
+  }
+
   return {
     tz, weather: w, events, emailCounts, tasksDue, bills, deliveries, health,
+    news: newsBulletin,
     todayStart, tomorrowStart,
   };
 }
@@ -116,6 +127,14 @@ function format(user, agg) {
   if (agg.health) {
     lines.push(`\u2764\ufe0f Health: ${agg.health.metric_type} ${agg.health.value}${agg.health.unit ? ' ' + agg.health.unit : ''}`);
     lines.push('');
+  }
+
+  // News bulletin (topics the user picked + their city's local news).
+  if (agg.news) {
+    try {
+      const newsText = require('./news').formatBulletin(agg.news, { perTopic: 2 });
+      if (newsText) { lines.push(newsText); lines.push(''); }
+    } catch (_) { /* skip */ }
   }
 
   lines.push(

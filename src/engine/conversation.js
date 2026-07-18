@@ -13,6 +13,10 @@ const { executeGmailTool } = require('./gmailExecutor');
 const { driveTools, driveToolNames } = require('./driveTools');
 const { executeDriveTool } = require('./driveExecutor');
 const { shopifyTools, shopifyToolNames } = require('./shopifyTools');
+const { newsTools, newsToolNames } = require('./newsTools');
+const { memoryTools, memoryToolNames } = require('./memoryTools');
+const { executeMemoryTool } = require('./memoryExecutor');
+const { executeNewsTool } = require('./newsExecutor');
 const { executeShopifyTool } = require('./shopifyExecutor');
 const googleAuth = require('../auth/googleAuth');
 const config = require('../config');
@@ -271,6 +275,14 @@ async function runConversation(user, text) {
     // non-fatal
   }
 
+  // Learn durable things about the user from this conversation (background —
+  // must never delay or break the reply).
+  try {
+    require('../services/behaviorLearner')
+      .learnForUser(user.id)
+      .catch((e) => console.warn('[behaviorLearner]', e.message));
+  } catch (_) { /* non-fatal */ }
+
   return reply;
 }
 
@@ -284,7 +296,7 @@ async function runToolLoop(user, messages, system, maxRounds = 4) {
   for (let round = 0; round < maxRounds; round++) {
     const response = await claude.chatWithTools(convo, {
       system,
-      tools: [...calendarTools, ...gmailTools, ...driveTools, ...shopifyTools],
+      tools: [...calendarTools, ...gmailTools, ...driveTools, ...shopifyTools, ...newsTools, ...memoryTools],
       maxTokens: 1024,
     });
 
@@ -303,6 +315,10 @@ async function runToolLoop(user, messages, system, maxRounds = 4) {
           result = await executeDriveTool(user, { name: block.name, input: block.input });
         } else if (shopifyToolNames.has(block.name)) {
           result = await executeShopifyTool(user, { name: block.name, input: block.input });
+        } else if (newsToolNames.has(block.name)) {
+          result = await executeNewsTool(user, { name: block.name, input: block.input });
+        } else if (memoryToolNames.has(block.name)) {
+          result = await executeMemoryTool(user, { name: block.name, input: block.input });
         } else {
           result = await executeCalendarTool(user, { name: block.name, input: block.input });
         }

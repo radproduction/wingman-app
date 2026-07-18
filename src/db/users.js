@@ -44,6 +44,7 @@ function update(id, fields = {}) {
     'onboarding_complete', 'briefing_time', 'debrief_time', 'proactiveness_level',
     'enabled_skills', 'tone', 'communication_style',
     'shopify_domain', 'shopify_token',
+    'news_topics', 'news_city', 'news_country',
   ];
   const sets = [];
   const params = { id };
@@ -52,6 +53,7 @@ function update(id, fields = {}) {
     sets.push(`${k} = @${k}`);
     if (k === 'preferences' && typeof v === 'object') params[k] = JSON.stringify(v);
     else if (k === 'enabled_skills' && Array.isArray(v)) params[k] = JSON.stringify(v);
+    else if (k === 'news_topics' && Array.isArray(v)) params[k] = JSON.stringify(v);
     else if (typeof v === 'boolean') params[k] = v ? 1 : 0;
     else params[k] = v;
   }
@@ -71,6 +73,10 @@ function hydrate(row) {
       : DEFAULT_SKILLS.slice();
     if (!Array.isArray(row.enabled_skills)) row.enabled_skills = DEFAULT_SKILLS.slice();
   } catch (_) { row.enabled_skills = DEFAULT_SKILLS.slice(); }
+  try {
+    row.news_topics = row.news_topics ? JSON.parse(row.news_topics) : null;
+    if (!Array.isArray(row.news_topics)) row.news_topics = null;
+  } catch (_) { row.news_topics = null; }
   row.onboarding_complete = !!row.onboarding_complete;
   return row;
 }
@@ -142,6 +148,9 @@ function toPublic(user) {
     // Never expose the Shopify token — only whether it's linked, and the store.
     shopify_connected: !!(user.shopify_domain && user.shopify_token),
     shopify_domain: user.shopify_domain || null,
+    news_topics: user.news_topics || null,
+    news_city: user.news_city || null,
+    news_country: user.news_country || null,
   };
 }
 

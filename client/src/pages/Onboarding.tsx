@@ -7,7 +7,7 @@ import {
 } from '../components/icons';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import type { ProactivenessLevel, Skill, Tone, CommunicationStyle } from '../types';
+import type { ProactivenessLevel, Skill, Tone, CommunicationStyle, NewsTopic } from '../types';
 
 const TZ_OPTIONS = [
   'Asia/Dubai', 'Asia/Karachi', 'Asia/Riyadh', 'Asia/Kolkata',
@@ -35,7 +35,21 @@ interface Draft {
   enabled_skills: Skill[];
   tone: Tone;
   communication_style: CommunicationStyle;
+  news_topics: NewsTopic[];
+  news_city: string;
 }
+
+const NEWS_TOPICS: { value: NewsTopic; label: string }[] = [
+  { value: 'world', label: 'World' },
+  { value: 'nation', label: 'National' },
+  { value: 'local', label: 'Local' },
+  { value: 'business', label: 'Business' },
+  { value: 'technology', label: 'Tech' },
+  { value: 'entertainment', label: 'Entertainment' },
+  { value: 'sports', label: 'Sports' },
+  { value: 'science', label: 'Science' },
+  { value: 'health', label: 'Health' },
+];
 
 export default function Onboarding() {
   const navigate = useNavigate();
@@ -57,12 +71,14 @@ export default function Onboarding() {
     enabled_skills: user?.enabled_skills ?? ALL_SKILLS,
     tone: user?.tone ?? 'friendly',
     communication_style: user?.communication_style ?? 'concise',
+    news_topics: user?.news_topics ?? ['world', 'nation', 'technology', 'local'],
+    news_city: user?.news_city ?? '',
   });
   const set = (patch: Partial<Draft>) => setD((prev) => ({ ...prev, ...patch }));
   const toggleSkill = (s: Skill) =>
     set({ enabled_skills: d.enabled_skills.includes(s) ? d.enabled_skills.filter((x) => x !== s) : [...d.enabled_skills, s] });
 
-  const TOTAL = 10;
+  const TOTAL = 11;
 
   const canNext = useMemo(() => {
     switch (step) {
@@ -93,6 +109,8 @@ export default function Onboarding() {
         enabled_skills: d.enabled_skills,
         tone: d.tone,
         communication_style: d.communication_style,
+        news_topics: d.news_topics,
+        news_city: d.news_city.trim() || undefined,
       });
       updateUser(updated);
       navigate('/', { replace: true });
@@ -252,6 +270,40 @@ export default function Onboarding() {
 
             {/* ── Step 9: Done ── */}
             {step === 9 && (
+              <StepForm title="What news do you want?" subtitle="Headlines land with your daily briefing. Pick as many as you like.">
+                <div className="flex flex-wrap gap-2">
+                  {NEWS_TOPICS.map((t) => {
+                    const on = d.news_topics.includes(t.value);
+                    return (
+                      <button
+                        key={t.value}
+                        onClick={() =>
+                          set({
+                            news_topics: on
+                              ? d.news_topics.filter((x) => x !== t.value)
+                              : [...d.news_topics, t.value],
+                          })
+                        }
+                        className={`px-3.5 py-2 rounded-full text-body font-medium border transition-colors ${
+                          on ? 'bg-accent/15 border-accent text-accent' : 'bg-white/5 border-white/10 text-gray'
+                        }`}
+                      >
+                        {t.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="mt-5">
+                  <Field
+                    label="Your city (for local news & nearby alerts)"
+                    value={d.news_city}
+                    placeholder="e.g. Karachi"
+                    onChange={(v) => set({ news_city: v })}
+                  />
+                </div>
+              </StepForm>
+            )}
+            {step === 10 && (
               <StepBody
                 emoji="✅"
                 title={`You’re all set${d.name ? `, ${d.name.split(/\s+/)[0]}` : ''}!`}

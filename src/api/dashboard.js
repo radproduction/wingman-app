@@ -348,6 +348,7 @@ const SETTINGS_FIELDS = [
   'name', 'timezone', 'work_hours_start', 'work_hours_end', 'language',
   'briefing_time', 'debrief_time', 'proactiveness_level', 'enabled_skills',
   'tone', 'communication_style',
+  'news_topics', 'news_city', 'news_country',
 ];
 
 router.patch(['/me', '/settings'], (req, res) => {

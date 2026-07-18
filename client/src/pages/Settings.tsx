@@ -8,8 +8,21 @@ import { OptionCards, ToggleRow, Field } from '../components/authUi';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import type {
-  Me, ProactivenessLevel, Skill, Tone, CommunicationStyle, SettingsPatch, GoogleAccount,
+  Me, ProactivenessLevel, Skill, Tone, CommunicationStyle, SettingsPatch, GoogleAccount, NewsTopic,
 } from '../types';
+
+const NEWS_TOPICS: { value: NewsTopic; label: string }[] = [
+  { value: 'world', label: 'World' },
+  { value: 'nation', label: 'National' },
+  { value: 'local', label: 'Local' },
+  { value: 'business', label: 'Business' },
+  { value: 'technology', label: 'Tech' },
+  { value: 'entertainment', label: 'Entertainment' },
+  { value: 'sports', label: 'Sports' },
+  { value: 'science', label: 'Science' },
+  { value: 'health', label: 'Health' },
+];
+const DEFAULT_NEWS: NewsTopic[] = ['world', 'nation', 'technology', 'local'];
 
 const SKILL_META: { value: Skill; title: string; desc: string; icon: React.ReactNode }[] = [
   { value: 'travel_assistant', title: 'Travel assistant', desc: 'Flight alerts & itineraries', icon: <PlaneIcon className="w-5 h-5" /> },
@@ -136,6 +149,42 @@ export default function Settings() {
             { value: 'detailed', title: 'Detailed', desc: 'Full context & next steps' },
           ]}
         />
+
+        {/* News */}
+        <Section title="News in your briefing" />
+        <div className="card">
+          <p className="text-caption text-gray mb-3">
+            Pick what you want headlines about — they arrive with your daily briefing.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {NEWS_TOPICS.map((t) => {
+              const on = (user.news_topics ?? DEFAULT_NEWS).includes(t.value);
+              return (
+                <button
+                  key={t.value}
+                  onClick={() => {
+                    const cur = user.news_topics ?? DEFAULT_NEWS;
+                    const next = on ? cur.filter((x) => x !== t.value) : [...cur, t.value];
+                    save({ news_topics: next }, { news_topics: next });
+                  }}
+                  className={`px-3 py-1.5 rounded-full text-body font-medium border transition-colors ${
+                    on ? 'bg-accent/15 border-accent text-accent' : 'bg-white/5 border-white/10 text-gray'
+                  }`}
+                >
+                  {t.label}
+                </button>
+              );
+            })}
+          </div>
+          <div className="mt-4">
+            <Field
+              label="City for local news"
+              value={user.news_city ?? ''}
+              placeholder="e.g. Karachi"
+              onChange={(v) => save({ news_city: v }, { news_city: v })}
+            />
+          </div>
+        </div>
 
         {/* Connections */}
         <Section title="Connections" />

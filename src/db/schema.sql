@@ -30,6 +30,9 @@ CREATE TABLE IF NOT EXISTS users (
   onboarding_complete INTEGER DEFAULT 0,
   briefing_time TEXT DEFAULT '07:00',
   debrief_time TEXT DEFAULT '20:00',
+  news_topics TEXT DEFAULT '["world","nation","technology","local"]',
+  news_city TEXT,
+  news_country TEXT,
   proactiveness_level TEXT DEFAULT 'moderate',   -- 'low' | 'moderate' | 'high'
   enabled_skills TEXT DEFAULT '["travel_assistant","bill_tracker","delivery_tracker","people_crm","followup_tracker"]',
   tone TEXT DEFAULT 'friendly',                  -- 'professional' | 'casual' | 'friendly'
@@ -271,3 +274,18 @@ CREATE TABLE IF NOT EXISTS google_accounts (
 );
 CREATE INDEX IF NOT EXISTS idx_google_accounts_user ON google_accounts(user_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_google_accounts_user_email ON google_accounts(user_id, email);
+
+-- Durable things Wingman has learned about a user (habits, preferences,
+-- relationships, ongoing projects). Injected into the system prompt so the
+-- assistant carries context across conversations instead of starting fresh.
+CREATE TABLE IF NOT EXISTS user_memory (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  category TEXT,                   -- preference | habit | relationship | project | context
+  fact TEXT NOT NULL,
+  source TEXT DEFAULT 'learned',   -- 'learned' (inferred) | 'explicit' (user told us)
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now')),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_user_memory_user ON user_memory(user_id);

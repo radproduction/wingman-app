@@ -74,6 +74,12 @@ function countAll() {
  * Last N messages for a user, returned in chronological (oldest-first) order.
  * Only 'user' and 'assistant' rows are included (system rows excluded).
  */
+/** How many messages this user has exchanged (used to throttle learning). */
+function countForUser(userId) {
+  const r = db.prepare('SELECT COUNT(*) AS n FROM conversations WHERE user_id = ?').get(userId);
+  return (r && r.n) || 0;
+}
+
 function historyForUser(userId, limit = 20) {
   const rows = db.prepare(`
     SELECT id, user_id, role, content, metadata, created_at FROM (
@@ -87,4 +93,4 @@ function historyForUser(userId, limit = 20) {
   return rows;
 }
 
-module.exports = { logMessage, logInbound, logOutbound, getById, recent, countAll, historyForUser };
+module.exports = { logMessage, logInbound, logOutbound, getById, recent, countAll, historyForUser, countForUser };
