@@ -194,6 +194,7 @@ export default function Settings() {
         <Section title="Connections" />
         <div className="flex flex-col gap-2.5">
           <GoogleAccountsRow user={user} />
+          <WebmailRow user={user} />
           <ShopifyRow user={user} />
           <ConnRow icon={<HeartIcon className="w-5 h-5" />} label="Health data" connected={user.health_connected} />
         </div>
@@ -389,6 +390,128 @@ function GoogleAccountsRow({ user }: { user: Me }) {
             {hasAny ? '+ Add another account' : 'Connect Google'}
           </a>
         </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Business email over IMAP/SMTP — the address customers actually write to.
+ * Server settings are auto-detected from the address; the credentials are
+ * verified against the real mail servers before anything is stored.
+ */
+function WebmailRow({ user }: { user: Me }) {
+  const { updateUser } = useAuth();
+  const [open, setOpen] = useState(false);
+  const [address, setAddress] = useState('');
+  const [password, setPassword] = useState('');
+  const [advanced, setAdvanced] = useState(false);
+  const [imapHost, setImapHost] = useState('');
+  const [smtpHost, setSmtpHost] = useState('');
+  const [note, setNote] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Pre-fill the server settings as soon as we have a full address.
+  useEffect(() => {
+    if (!address.includes('@') || !address.split('@')[1]) return;
+    let alive = true;
+    api.webmailDetect(address)
+      .then((d) => {
+        if (!alive) return;
+        setImapHost(d.imapHost); setSmtpHost(d.smtpHost); setNote(d.note);
+      })
+      .catch(() => { /* user can fill it in manually */ });
+    return () => { alive = false; };
+  }, [address]);
+
+  async function connect() {
+    setBusy(true); setError(null);
+    try {
+      const r = await api.webmailConnect({
+        address: address.trim(),
+        password,
+        imap_host: imapHost.trim() || undefined,
+        smtp_host: smtpHost.trim() || undefined,
+      });
+      updateUser({ webmail_connected: true, webmail_address: r.address });
+      setOpen(false); setAddress(''); setPassword('');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not connect that mailbox.');
+    } finally { setBusy(false); }
+  }
+
+  async function disconnect() {
+    setBusy(true); setError(null);
+    try {
+      await api.webmailDisconnect();
+      updateUser({ webmail_connected: false, webmail_address: null });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not disconnect.');
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <div className="card">
+      <div className="flex items-center gap-3 min-h-[60px]">
+        <div className="w-10 h-10 rounded-xl bg-accent/15 text-accent flex items-center justify-center shrink-0">
+          <MailIcon className="w-5 h-5" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-body text-white">Business email</p>
+          <p className="text-caption text-gray truncate">
+            {user.webmail_connected && user.webmail_address ? user.webmail_address : 'Your company address (IMAP/SMTP)'}
+          </p>
+        </div>
+        {user.webmail_connected ? (
+          <div className="flex items-center gap-3 shrink-0">
+            <span className="flex items-center gap-1 text-success text-caption font-medium">
+              <CheckCircleIcon className="w-4 h-4" /> Connected
+            </span>
+            <button onClick={disconnect} disabled={busy} className="text-caption text-danger underline disabled:opacity-50">
+              Disconnect
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setOpen((o) => !o)}
+            className="h-9 px-3.5 rounded-full bg-accent text-bg text-body font-semibold shrink-0"
+          >
+            {open ? 'Cancel' : 'Connect'}
+          </button>
+        )}
+      </div>
+
+      {open && !user.webmail_connected && (
+        <div className="mt-4 flex flex-col gap-3">
+          <Field label="Email address" value={address} onChange={setAddress} placeholder="info@yourcompany.com" />
+          <Field label="Password" value={password} onChange={setPassword} type="password" placeholder="mailbox password" />
+
+          {note && <p className="text-caption text-warning">{note}</p>}
+          <p className="text-caption text-gray">
+            If your provider uses 2-factor login, create an <b>app password</b> and use that instead of your main one.
+            Your password is encrypted before it’s stored, and we check it works before saving.
+          </p>
+
+          <button onClick={() => setAdvanced((a) => !a)} className="text-caption text-gray underline self-start">
+            {advanced ? 'Hide server settings' : `Server settings${imapHost ? ` (auto: ${imapHost})` : ''}`}
+          </button>
+          {advanced && (
+            <div className="flex flex-col gap-3">
+              <Field label="IMAP host" value={imapHost} onChange={setImapHost} placeholder="mail.yourcompany.com" />
+              <Field label="SMTP host" value={smtpHost} onChange={setSmtpHost} placeholder="mail.yourcompany.com" />
+            </div>
+          )}
+
+          {error && <p className="text-caption text-danger">{error}</p>}
+          <button
+            onClick={connect}
+            disabled={busy || !address.trim() || !password}
+            className="h-11 rounded-xl brand-gradient text-[#fff] text-body font-semibold disabled:opacity-40"
+          >
+            {busy ? 'Checking mailbox…' : 'Connect mailbox'}
+          </button>
+        </div>
       )}
     </div>
   );

@@ -77,6 +77,16 @@ IMPORTANT behavior:
 - Never invent an email address. If unsure, ask.
 - If a tool returns {"error":"EMAIL_NOT_CONNECTED"}, say: "Let's connect your email first — just say 'connect email' and I'll send you a link." If it returns {"error":"EMAIL_SCOPE_MISSING"}, tell them to reconnect Google and allow the send-email permission.`;
 
+  const webmailGuide = `
+
+--- BUSINESS EMAIL (separate from Gmail) ---
+The user may also connect a business mailbox over IMAP/SMTP — the address customers actually write to, like info@company.com. That is DIFFERENT from their personal Gmail, and both can be connected at once.
+- "Any customer emails?" / "check the business inbox" → list_business_emails.
+- "Reply to that customer" / "email them from the business address" → send_business_email (it sends FROM the company address).
+- Plain "check my email" is ambiguous when both are connected: default to their Gmail, but mention the business inbox too, e.g. "…and 3 new in info@company.com — want those?"
+- Be explicit about WHICH address you sent from when you confirm: "Sent from info@company.com to ali@acme.com ✅". Customers care which address replies to them.
+- If a tool returns {"error":"WEBMAIL_NOT_CONNECTED"}, tell them they can connect their business email in Settings → Connections → Business email. If it returns WEBMAIL_AUTH_FAILED, the mailbox password was rejected (often a provider that needs an app password) and they should reconnect there.`;
+
   const driveGuide = `
 
 --- GOOGLE DRIVE ---
@@ -176,7 +186,7 @@ Wingman also tracks trips and the people the user interacts with. These commands
 - People/CRM: "what do I know about [name]?", "when did I last talk to [name]?", "who have I emailed the most this month?".
 Before flights, the user gets 24h and 3h alerts and an arrival-day briefing with hotel + weather + packing tips. About 30 minutes before a meeting, Wingman sends a prep note summarizing each attendee and recent email context. Never fabricate trip, contact, or meeting data — if it's not on record, say so.`;
 
-  if (!user) return base + calendarGuide + emailGuide + driveGuide + mapsGuide + newsGuide + multiAccountGuide + shopifyGuide + travelCrmGuide;
+  if (!user) return base + calendarGuide + emailGuide + webmailGuide + driveGuide + mapsGuide + newsGuide + multiAccountGuide + shopifyGuide + travelCrmGuide;
 
   const firstName = (user.name || '').trim().split(/\s+/)[0] || 'there';
   const tz = user.timezone || 'Asia/Dubai';
@@ -241,7 +251,7 @@ How to use this:
     }
   } catch (_) { /* memory is optional */ }
 
-  return base + calendarGuide + emailGuide + driveGuide + mapsGuide + newsGuide + multiAccountGuide + shopifyGuide + travelCrmGuide + personality + ctx + memoryBlock;
+  return base + calendarGuide + emailGuide + webmailGuide + driveGuide + mapsGuide + newsGuide + multiAccountGuide + shopifyGuide + travelCrmGuide + personality + ctx + memoryBlock;
 }
 
 module.exports = { buildSystemPrompt };

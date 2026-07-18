@@ -379,6 +379,67 @@ router.post('/onboarding/complete', (req, res) => {
   res.json({ user: usersRepo.toPublic(updated) });
 });
 
+// ── Webmail (IMAP/SMTP business email) ───────────────────────────────
+//   Credentials are verified against the real servers BEFORE being stored, and
+//   the password is encrypted at rest — it is never returned by any endpoint.
+router.post('/webmail/connect', async (req, res) => {
+  if (!req.user) return res.status(401).json({ error: 'Authentication required.' });
+  const b = req.body || {};
+  const address = String(b.address || '').trim().toLowerCase();
+  const password = String(b.password || '');
+  if (!address || !password) return res.status(400).json({ error: 'Email address and password are required.' });
+
+  const webmail = require('../services/webmail');
+  const secrets = require('../utils/secrets');
+  if (!secrets.available()) {
+    return res.status(503).json({ error: 'Secure storage is not configured on the server, so we cannot save mail credentials yet.' });
+  }
+
+  const guess = webmail.detectSettings(address) || {};
+  const cfg = {
+    address,
+    password,
+    imapHost: String(b.imap_host || guess.imapHost || '').trim(),
+    imapPort: Number(b.imap_port || guess.imapPort || 993),
+    smtpHost: String(b.smtp_host || guess.smtpHost || '').trim(),
+    smtpPort: Number(b.smtp_port || guess.smtpPort || 465),
+    fromName: String(b.from_name || '').trim() || null,
+  };
+  if (!cfg.imapHost || !cfg.smtpHost) {
+    return res.status(400).json({ error: 'Could not work out the mail server for that address — please enter the IMAP and SMTP hosts.' });
+  }
+
+  try {
+    await webmail.testConnection(cfg);
+  } catch (err) {
+    const raw = String(err.message || '');
+    const map = {
+      WEBMAIL_AUTH_FAILED: 'The email address or password was rejected. If your provider uses 2-factor login, create an app password and use that.',
+      WEBMAIL_HOST_NOT_FOUND: `Could not reach the mail server. Check the ${raw.startsWith('IMAP') ? 'IMAP' : 'SMTP'} host.`,
+      WEBMAIL_CONNECTION_FAILED: 'The mail server did not respond. Check the host and port.',
+    };
+    const code = raw.split(':')[1] || raw;
+    return res.status(400).json({ error: map[code] || 'Could not connect to that mailbox. Please check the details.' });
+  }
+
+  webmail.saveForUser(req.user.id, cfg);
+  res.json({ connected: true, address, imap_host: cfg.imapHost, smtp_host: cfg.smtpHost });
+});
+
+router.post('/webmail/disconnect', (req, res) => {
+  if (!req.user) return res.status(401).json({ error: 'Authentication required.' });
+  require('../services/webmail').disconnect(req.user.id);
+  res.json({ connected: false });
+});
+
+/** Suggested IMAP/SMTP settings for an address, so the form can pre-fill. */
+router.get('/webmail/detect', (req, res) => {
+  if (!req.user) return res.status(401).json({ error: 'Authentication required.' });
+  const d = require('../services/webmail').detectSettings(req.query.address);
+  if (!d) return res.status(400).json({ error: 'Enter a full email address.' });
+  res.json(d);
+});
+
 // ── POST /api/places — save home / office (geocoded) ─────────────────
 //   Goes through Maps so we store real coordinates, which is what the traffic
 //   and leave-by calculations need. A bad address is rejected up front.

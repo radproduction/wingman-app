@@ -30,6 +30,13 @@ CREATE TABLE IF NOT EXISTS users (
   onboarding_complete INTEGER DEFAULT 0,
   briefing_time TEXT DEFAULT '07:00',
   debrief_time TEXT DEFAULT '20:00',
+  webmail_address TEXT,                          -- business email (IMAP/SMTP)
+  webmail_password_enc TEXT,                     -- AES-256-GCM encrypted, never plaintext
+  webmail_imap_host TEXT,
+  webmail_imap_port INTEGER,
+  webmail_smtp_host TEXT,
+  webmail_smtp_port INTEGER,
+  webmail_from_name TEXT,
   home_address TEXT,
   home_lat REAL,
   home_lng REAL,

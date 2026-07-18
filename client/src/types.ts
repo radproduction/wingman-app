@@ -30,6 +30,9 @@ export interface Me {
   /** True once a Shopify store domain + Admin API token are stored. */
   shopify_connected?: boolean;
   shopify_domain?: string | null;
+  /** Business mailbox (IMAP/SMTP). The password is never exposed. */
+  webmail_connected?: boolean;
+  webmail_address?: string | null;
   /** Saved places used for traffic + leave-by times. */
   home_address?: string | null;
   office_address?: string | null;

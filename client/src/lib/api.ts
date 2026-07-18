@@ -78,6 +78,16 @@ export const api = {
   savePlace: (which: 'home' | 'office', address: string) =>
     send<{ saved: boolean; which: string; address: string }>('POST', '/places', { which, address }),
 
+  // ── Business email (IMAP/SMTP) ──
+  webmailDetect: (address: string) =>
+    get<{ imapHost: string; imapPort: number; smtpHost: string; smtpPort: number; note: string | null; guessed: boolean }>(
+      '/webmail/detect?address=' + encodeURIComponent(address)),
+  webmailConnect: (body: {
+    address: string; password: string;
+    imap_host?: string; imap_port?: number; smtp_host?: string; smtp_port?: number; from_name?: string;
+  }) => send<{ connected: boolean; address: string }>('POST', '/webmail/connect', body),
+  webmailDisconnect: () => send<{ connected: boolean }>('POST', '/webmail/disconnect'),
+
   // ── Shopify ──
   shopifyConnect: (domain: string, token: string) =>
     send<{ connected: boolean; shop: string; domain: string; currency: string }>(

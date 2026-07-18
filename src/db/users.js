@@ -46,6 +46,8 @@ function update(id, fields = {}) {
     'shopify_domain', 'shopify_token',
     'news_topics', 'news_city', 'news_country',
     'home_address', 'home_lat', 'home_lng', 'office_address', 'office_lat', 'office_lng',
+    'webmail_address', 'webmail_password_enc', 'webmail_imap_host', 'webmail_imap_port',
+    'webmail_smtp_host', 'webmail_smtp_port', 'webmail_from_name',
   ];
   const sets = [];
   const params = { id };
@@ -154,6 +156,9 @@ function toPublic(user) {
     news_country: user.news_country || null,
     home_address: user.home_address || null,
     office_address: user.office_address || null,
+    // Never expose the stored password — only whether webmail is linked.
+    webmail_connected: !!(user.webmail_address && user.webmail_password_enc),
+    webmail_address: user.webmail_address || null,
   };
 }
 
