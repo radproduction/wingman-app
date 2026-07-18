@@ -378,6 +378,76 @@ router.post('/onboarding/complete', (req, res) => {
   res.json({ user: usersRepo.toPublic(updated) });
 });
 
+// ── Google accounts (multi-account) ──────────────────────────────────
+//   The PRIMARY account is mirrored into the legacy users.*_token columns so
+//   every existing feature keeps working; this keeps that mirror correct after
+//   a disconnect or a primary switch.
+function syncPrimaryToLegacy(userId) {
+  const accountsRepo = require('../db/googleAccounts');
+  const next = accountsRepo.getPrimary(userId);
+  if (next) {
+    usersRepo.update(userId, { calendar_token: next.token, gmail_token: next.token });
+  } else {
+    usersRepo.update(userId, { calendar_token: null, gmail_token: null });
+  }
+  return next || null;
+}
+
+/** GET /api/google/accounts — linked accounts, backfilling any missing email. */
+router.get('/google/accounts', async (req, res) => {
+  if (!req.user) return res.status(401).json({ error: 'Authentication required.' });
+  const accountsRepo = require('../db/googleAccounts');
+  let accounts = accountsRepo.listForUser(req.user.id);
+
+  // Accounts linked before the identity scope existed have no email yet — try
+  // to resolve it once so the UI can label them properly.
+  for (const a of accounts) {
+    if (a.email) continue;
+    try {
+      const googleAuth = require('../auth/googleAuth');
+      const client = googleAuth.getAuthorizedClient(req.user, 'gmail', a);
+      const email = await googleAuth.fetchAccountEmail(client);
+      if (email) accountsRepo.setEmail(a.id, email);
+    } catch (_) { /* leave unlabelled */ }
+  }
+  accounts = accountsRepo.listForUser(req.user.id);
+
+  res.json({
+    accounts: accounts.map((a) => ({
+      id: a.id,
+      email: a.email,
+      is_primary: !!a.is_primary,
+      connected_at: a.created_at,
+    })),
+  });
+});
+
+/** POST /api/google/accounts/:id/disconnect — unlink one account. */
+router.post('/google/accounts/:id/disconnect', (req, res) => {
+  if (!req.user) return res.status(401).json({ error: 'Authentication required.' });
+  const accountsRepo = require('../db/googleAccounts');
+  const result = accountsRepo.remove(req.user.id, req.params.id);
+  if (!result.removed) return res.status(404).json({ error: 'Account not found.' });
+  syncPrimaryToLegacy(req.user.id);
+  const accounts = accountsRepo.listForUser(req.user.id);
+  res.json({
+    accounts: accounts.map((a) => ({ id: a.id, email: a.email, is_primary: !!a.is_primary, connected_at: a.created_at })),
+  });
+});
+
+/** POST /api/google/accounts/:id/primary — choose which account sends/creates. */
+router.post('/google/accounts/:id/primary', (req, res) => {
+  if (!req.user) return res.status(401).json({ error: 'Authentication required.' });
+  const accountsRepo = require('../db/googleAccounts');
+  if (!accountsRepo.getById(req.params.id)) return res.status(404).json({ error: 'Account not found.' });
+  accountsRepo.setPrimary(req.user.id, req.params.id);
+  syncPrimaryToLegacy(req.user.id);
+  const accounts = accountsRepo.listForUser(req.user.id);
+  res.json({
+    accounts: accounts.map((a) => ({ id: a.id, email: a.email, is_primary: !!a.is_primary, connected_at: a.created_at })),
+  });
+});
+
 // ── POST /api/shopify/connect — link a store (auth required) ─────────
 //   Verifies the domain + Admin API token against Shopify before saving, so a
 //   bad credential is rejected up front rather than failing later in chat.

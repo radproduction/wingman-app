@@ -33,6 +33,14 @@ export interface Me {
   mock?: boolean;
 }
 
+/** A Google account linked to the user. The primary one sends mail / creates events. */
+export interface GoogleAccount {
+  id: string;
+  email: string | null;
+  is_primary: boolean;
+  connected_at?: string;
+}
+
 export interface RequestOtpResponse {
   sent: boolean;
   delivered: boolean;

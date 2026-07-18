@@ -24,6 +24,10 @@ function initSchema() {
   const schema = fs.readFileSync(schemaPath, 'utf8');
   db.exec(schema);
   applyMigrations();
+  // Move any pre-multi-account Google connection into google_accounts. Required
+  // after the tables exist, and safe to run on every boot (it is a no-op once done).
+  try { require('./googleAccounts').migrateLegacyTokens(); }
+  catch (e) { console.warn('[db] google account migration skipped:', e.message); }
   console.log('[db] Schema initialized at', config.database.path);
 }
 

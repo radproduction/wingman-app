@@ -22,10 +22,17 @@ const DRIVE_SCOPES = [
   'https://www.googleapis.com/auth/drive',
 ];
 
+// Identity — lets us label each linked account with its Google address so a
+// user can tell their personal and work accounts apart (and disconnect one).
+const IDENTITY_SCOPES = [
+  'https://www.googleapis.com/auth/userinfo.email',
+];
+
 // We request all scopes together so a single consent connects Calendar, Gmail
-// and Drive. The same combined token is stored in BOTH users.calendar_token and
-// users.gmail_token so each subsystem can check its own connection flag.
-const SCOPES = [...CALENDAR_SCOPES, ...GMAIL_SCOPES, ...DRIVE_SCOPES];
+// and Drive. Tokens live in google_accounts (one row per linked account); the
+// PRIMARY account is mirrored into users.calendar_token / users.gmail_token so
+// every pre-existing code path keeps working unchanged.
+const SCOPES = [...CALENDAR_SCOPES, ...GMAIL_SCOPES, ...DRIVE_SCOPES, ...IDENTITY_SCOPES];
 
 /**
  * Create a fresh OAuth2 client (not yet authorized).
@@ -80,6 +87,25 @@ function mergeTokens(existingJson, tokens) {
  * @param {string} phone  digits-only WhatsApp number (from state)
  * @returns {Promise<Object>} the updated user row
  */
+/**
+ * Resolve which Google account a token belongs to. Prefers the userinfo
+ * endpoint; falls back to the Gmail profile so accounts linked before the
+ * identity scope existed can still be labelled without re-consenting.
+ */
+async function fetchAccountEmail(oauth2Client) {
+  try {
+    const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
+    const res = await oauth2.userinfo.get();
+    if (res && res.data && res.data.email) return res.data.email;
+  } catch (_) { /* fall through */ }
+  try {
+    const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+    const res = await gmail.users.getProfile({ userId: 'me' });
+    if (res && res.data && res.data.emailAddress) return res.data.emailAddress;
+  } catch (_) { /* unknown */ }
+  return null;
+}
+
 async function handleCallback(code, phone) {
   const oauth2Client = createOAuthClient();
   const { tokens } = await oauth2Client.getToken(code);
@@ -88,6 +114,27 @@ async function handleCallback(code, phone) {
   if (!user) {
     user = usersRepo.create({ phone });
   }
+
+  // Link this Google account (keyed by its address, so connecting a second
+  // account ADDS one rather than replacing the first).
+  let linkedIsPrimary = true; // legacy-only path (no accounts table) mirrors as before
+  try {
+    oauth2Client.setCredentials(tokens);
+    const email = await fetchAccountEmail(oauth2Client);
+    const accountsRepo = require('../db/googleAccounts');
+    const existing = email ? accountsRepo.findByEmail(user.id, email) : null;
+    const merged = existing
+      ? mergeTokens(existing.token, tokens)   // keep refresh_token across re-consent
+      : tokens;
+    const linked = accountsRepo.upsertByEmail(user.id, { email, token: merged, scopes: tokens.scope || null });
+    // Only the primary account is mirrored into the legacy columns — otherwise
+    // linking a second account would silently hijack every existing feature.
+    linkedIsPrimary = !!(linked && linked.is_primary);
+  } catch (e) {
+    console.warn('[auth] could not record google account:', e.message);
+  }
+
+  if (!linkedIsPrimary) return usersRepo.getById(user.id);
 
   const grantedScope = (tokens.scope || '').split(/\s+/);
   const hasCalendar = grantedScope.some((s) => s.includes('calendar'));
@@ -111,53 +158,89 @@ async function handleCallback(code, phone) {
   return usersRepo.getById(user.id);
 }
 
+/** Mirror refreshed tokens into the legacy user columns. */
+function syncLegacyTokens(userId, newTokens) {
+  const fresh = usersRepo.getById(userId);
+  if (!fresh) return;
+  const updates = {};
+  if (fresh.calendar_token) {
+    updates.calendar_token = JSON.stringify(mergeTokens(fresh.calendar_token, newTokens));
+  }
+  if (fresh.gmail_token) {
+    updates.gmail_token = JSON.stringify(mergeTokens(fresh.gmail_token, newTokens));
+  }
+  if (Object.keys(updates).length) usersRepo.update(userId, updates);
+}
+
 /**
- * Build an authorized OAuth2 client for a given user. Reads whichever token
- * field is available (calendar or gmail — they're the same combined token),
- * and auto-persists refreshed tokens back to BOTH fields.
+ * Build an authorized OAuth2 client for a user.
+ *
+ * Token source, in order: an explicitly supplied account row → the user's
+ * PRIMARY linked account → the legacy users.calendar_token/gmail_token columns
+ * (users who connected before multi-account support). Refreshed tokens are
+ * persisted back to whichever source they came from.
  *
  * @param {Object} user
  * @param {'calendar'|'gmail'} [service='calendar']
+ * @param {Object} [account]  a google_accounts row, to target a specific account
  * @throws CALENDAR_NOT_CONNECTED / GMAIL_NOT_CONNECTED
  */
-function getAuthorizedClient(user, service = 'calendar') {
+function getAuthorizedClient(user, service = 'calendar', account = null) {
   const errCode = service === 'gmail' ? 'GMAIL_NOT_CONNECTED' : 'CALENDAR_NOT_CONNECTED';
-  const tokenJson = service === 'gmail'
-    ? (user && (user.gmail_token || user.calendar_token))
-    : (user && (user.calendar_token || user.gmail_token));
 
-  if (!user || !tokenJson) throw new Error(errCode);
+  let acct = account;
+  if (!acct && user && user.id) {
+    try { acct = require('../db/googleAccounts').getPrimary(user.id); } catch (_) { acct = null; }
+  }
 
-  let tokens;
-  try { tokens = JSON.parse(tokenJson); }
-  catch (_) { throw new Error(errCode); }
+  let tokens = null;
+  if (acct && acct.token) {
+    try { tokens = JSON.parse(acct.token); } catch (_) { tokens = null; }
+  }
+  if (!tokens) {
+    acct = null;
+    const tokenJson = service === 'gmail'
+      ? (user && (user.gmail_token || user.calendar_token))
+      : (user && (user.calendar_token || user.gmail_token));
+    if (!user || !tokenJson) throw new Error(errCode);
+    try { tokens = JSON.parse(tokenJson); }
+    catch (_) { throw new Error(errCode); }
+  }
 
   const oauth2Client = createOAuthClient();
   oauth2Client.setCredentials(tokens);
 
   oauth2Client.on('tokens', (newTokens) => {
     try {
-      const fresh = usersRepo.getById(user.id);
-      const updates = {};
-      if (fresh.calendar_token) {
-        updates.calendar_token = JSON.stringify(mergeTokens(fresh.calendar_token, newTokens));
+      if (acct) {
+        const accountsRepo = require('../db/googleAccounts');
+        const fresh = accountsRepo.getById(acct.id);
+        if (fresh) {
+          accountsRepo.updateToken(acct.id, mergeTokens(fresh.token, newTokens));
+          if (fresh.is_primary) syncLegacyTokens(user.id, newTokens);
+        }
+      } else {
+        syncLegacyTokens(user.id, newTokens);
       }
-      if (fresh.gmail_token) {
-        updates.gmail_token = JSON.stringify(mergeTokens(fresh.gmail_token, newTokens));
-      }
-      if (Object.keys(updates).length) usersRepo.update(user.id, updates);
-    } catch (_) {}
+    } catch (_) { /* non-fatal */ }
   });
 
   return oauth2Client;
 }
 
+/** Does the user have at least one linked Google account row? */
+function hasLinkedAccount(user) {
+  if (!user || !user.id) return false;
+  try { return require('../db/googleAccounts').countForUser(user.id) > 0; }
+  catch (_) { return false; }
+}
+
 function isConnected(user) {
-  return !!(user && user.calendar_token);
+  return !!(user && user.calendar_token) || hasLinkedAccount(user);
 }
 
 function isEmailConnected(user) {
-  return !!(user && user.gmail_token);
+  return !!(user && user.gmail_token) || hasLinkedAccount(user);
 }
 
 module.exports = {
@@ -165,6 +248,9 @@ module.exports = {
   CALENDAR_SCOPES,
   GMAIL_SCOPES,
   DRIVE_SCOPES,
+  IDENTITY_SCOPES,
+  fetchAccountEmail,
+  hasLinkedAccount,
   createOAuthClient,
   getAuthUrl,
   handleCallback,

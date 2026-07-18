@@ -1,14 +1,14 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { PageHeader, Loading } from '../components/ui';
 import {
-  CalendarIcon, MailIcon, HeartIcon, CheckCircleIcon,
+  MailIcon, HeartIcon, CheckCircleIcon,
   PlaneIcon, BillIcon, BoxIcon, PeopleIcon, BellIcon,
 } from '../components/icons';
 import { OptionCards, ToggleRow, Field } from '../components/authUi';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import type {
-  Me, ProactivenessLevel, Skill, Tone, CommunicationStyle, SettingsPatch,
+  Me, ProactivenessLevel, Skill, Tone, CommunicationStyle, SettingsPatch, GoogleAccount,
 } from '../types';
 
 const SKILL_META: { value: Skill; title: string; desc: string; icon: React.ReactNode }[] = [
@@ -140,8 +140,7 @@ export default function Settings() {
         {/* Connections */}
         <Section title="Connections" />
         <div className="flex flex-col gap-2.5">
-          <ConnRow icon={<CalendarIcon className="w-5 h-5" />} label="Google Calendar" connected={user.calendar_connected} href={`/auth/google?phone=${encodeURIComponent(user.phone)}`} />
-          <ConnRow icon={<MailIcon className="w-5 h-5" />} label="Gmail" connected={user.gmail_connected} href={`/auth/google?phone=${encodeURIComponent(user.phone)}`} />
+          <GoogleAccountsRow user={user} />
           <ShopifyRow user={user} />
           <ConnRow icon={<HeartIcon className="w-5 h-5" />} label="Health data" connected={user.health_connected} />
         </div>
@@ -168,6 +167,117 @@ function Section({ title, icon }: { title: string; icon?: React.ReactNode }) {
     <div className="flex items-center gap-2 mt-6 mb-2.5 px-1">
       {icon && <span className="text-gray">{icon}</span>}
       <h3 className="text-caption uppercase tracking-wide text-gray font-semibold">{title}</h3>
+    </div>
+  );
+}
+
+/**
+ * Google supports several linked accounts (personal + work). Each row can be
+ * disconnected individually, and one account is marked primary — that's the one
+ * used to send mail and create calendar events.
+ */
+function GoogleAccountsRow({ user }: { user: Me }) {
+  const [accounts, setAccounts] = useState<GoogleAccount[] | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    api.googleAccounts()
+      .then((r) => { if (alive) setAccounts(r.accounts); })
+      .catch(() => { if (alive) setAccounts([]); });
+    return () => { alive = false; };
+  }, []);
+
+  const connectHref = `/auth/google?phone=${encodeURIComponent(user.phone)}`;
+
+  async function disconnect(id: string) {
+    setBusyId(id); setError(null);
+    try {
+      const r = await api.googleDisconnect(id);
+      setAccounts(r.accounts);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not disconnect.');
+    } finally { setBusyId(null); }
+  }
+
+  async function makePrimary(id: string) {
+    setBusyId(id); setError(null);
+    try {
+      const r = await api.googleSetPrimary(id);
+      setAccounts(r.accounts);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not update.');
+    } finally { setBusyId(null); }
+  }
+
+  const list = accounts ?? [];
+  const hasAny = list.length > 0;
+
+  return (
+    <div className="card">
+      <div className="flex items-center gap-3 min-h-[60px]">
+        <div className="w-10 h-10 rounded-xl bg-accent/15 text-accent flex items-center justify-center shrink-0">
+          <MailIcon className="w-5 h-5" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-body text-white">Google</p>
+          <p className="text-caption text-gray">Calendar, Gmail &amp; Drive</p>
+        </div>
+        {hasAny && (
+          <span className="flex items-center gap-1 text-success text-caption font-medium shrink-0">
+            <CheckCircleIcon className="w-4 h-4" /> {list.length} linked
+          </span>
+        )}
+      </div>
+
+      {accounts === null ? (
+        <p className="text-caption text-gray mt-3">Loading accounts…</p>
+      ) : (
+        <>
+          {hasAny && (
+            <div className="mt-3 flex flex-col gap-2">
+              {list.map((a) => (
+                <div key={a.id} className="flex items-center gap-2 rounded-xl bg-white/5 px-3 py-2.5">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-body text-white truncate">{a.email || 'Google account'}</p>
+                    {a.is_primary && (
+                      <p className="text-caption text-accent">Primary · used to send &amp; create</p>
+                    )}
+                  </div>
+                  {!a.is_primary && (
+                    <button
+                      onClick={() => makePrimary(a.id)}
+                      disabled={busyId === a.id}
+                      className="text-caption text-accent font-medium shrink-0 disabled:opacity-50"
+                    >
+                      Make primary
+                    </button>
+                  )}
+                  <button
+                    onClick={() => disconnect(a.id)}
+                    disabled={busyId === a.id}
+                    className="text-caption text-danger font-medium shrink-0 disabled:opacity-50"
+                  >
+                    {busyId === a.id ? '…' : 'Disconnect'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {error && <p className="text-caption text-danger mt-2">{error}</p>}
+
+          <a
+            href={connectHref}
+            className={`mt-3 h-11 rounded-xl flex items-center justify-center text-body font-semibold ${
+              hasAny ? 'bg-white/5 text-accent' : 'brand-gradient text-[#fff]'
+            }`}
+          >
+            {hasAny ? '+ Add another account' : 'Connect Google'}
+          </a>
+        </>
+      )}
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import type {
   Me, CalendarEvent, EmailItem, Task, Bill, Delivery, Trip, Health,
   Contact, Followup, Briefing, DashboardSummary,
-  RequestOtpResponse, VerifyOtpResponse, SettingsPatch,
+  RequestOtpResponse, VerifyOtpResponse, SettingsPatch, GoogleAccount,
 } from '../types';
 
 const BASE = '/api';
@@ -66,6 +66,13 @@ export const api = {
     send<{ user: Me }>('PATCH', '/me', patch),
   completeOnboarding: (patch: SettingsPatch) =>
     send<{ user: Me }>('POST', '/onboarding/complete', patch),
+
+  // ── Google accounts (multi-account) ──
+  googleAccounts: () => get<{ accounts: GoogleAccount[] }>('/google/accounts'),
+  googleDisconnect: (id: string) =>
+    send<{ accounts: GoogleAccount[] }>('POST', `/google/accounts/${id}/disconnect`),
+  googleSetPrimary: (id: string) =>
+    send<{ accounts: GoogleAccount[] }>('POST', `/google/accounts/${id}/primary`),
 
   // ── Shopify ──
   shopifyConnect: (domain: string, token: string) =>

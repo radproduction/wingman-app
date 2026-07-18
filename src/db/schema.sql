@@ -18,6 +18,9 @@ CREATE TABLE IF NOT EXISTS users (
   work_hours_start TEXT DEFAULT '09:00',
   work_hours_end TEXT DEFAULT '18:00',
   language TEXT DEFAULT 'en',
+  -- Legacy single-account token columns. Kept in sync with the PRIMARY row in
+  -- google_accounts so older code paths keep working; google_accounts is the
+  -- source of truth once a user links more than one Google account.
   gmail_token TEXT,
   calendar_token TEXT,
   shopify_domain TEXT,                           -- e.g. mystore.myshopify.com
@@ -251,3 +254,18 @@ CREATE INDEX IF NOT EXISTS idx_reminders_trigger      ON reminders(trigger_at, s
 CREATE INDEX IF NOT EXISTS idx_followups_user         ON followups(user_id, status);
 CREATE INDEX IF NOT EXISTS idx_otp_phone               ON otp_codes(phone, consumed);
 CREATE INDEX IF NOT EXISTS idx_sessions_user           ON sessions(user_id);
+
+-- Google accounts linked to a Wingman user. A user may connect several
+-- (personal + work); exactly one is flagged is_primary and drives sends/creates.
+CREATE TABLE IF NOT EXISTS google_accounts (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  email TEXT,                                    -- null until backfilled for legacy rows
+  token TEXT NOT NULL,                           -- JSON OAuth tokens
+  scopes TEXT,
+  is_primary INTEGER DEFAULT 0,
+  created_at TEXT DEFAULT (datetime('now')),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_google_accounts_user ON google_accounts(user_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_google_accounts_user_email ON google_accounts(user_id, email);
