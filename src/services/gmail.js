@@ -3,9 +3,23 @@
 const { google } = require('googleapis');
 const googleAuth = require('../auth/googleAuth');
 
-function gmailFor(user) {
-  const auth = googleAuth.getAuthorizedClient(user, 'gmail');
+/** Gmail client for a user, optionally for one specific linked account. */
+function gmailFor(user, account = null) {
+  const auth = googleAuth.getAuthorizedClient(user, 'gmail', account);
   return google.gmail({ version: 'v1', auth });
+}
+
+/**
+ * Every Google account linked to the user. Returns [null] when there are no
+ * account rows so legacy single-account users keep working unchanged.
+ */
+function accountsFor(user) {
+  try {
+    const list = require('../db/googleAccounts').listForUser(user.id);
+    return list.length ? list : [null];
+  } catch (_) {
+    return [null];
+  }
 }
 
 /**
@@ -17,8 +31,8 @@ function gmailFor(user) {
  * @param {string} [opts.query] Gmail search query (e.g. 'is:unread', 'newer_than:1d')
  * @returns {Promise<string[]>} message ids
  */
-async function listMessageIds(user, { maxResults = 50, query } = {}) {
-  const gmail = gmailFor(user);
+async function listMessageIds(user, { maxResults = 50, query, account = null } = {}) {
+  const gmail = gmailFor(user, account);
   const res = await gmail.users.messages.list({
     userId: 'me',
     maxResults,
@@ -57,8 +71,8 @@ function extractBody(payload) {
 /**
  * Fetch one message and normalize to {gmailId, subject, sender, snippet, body}.
  */
-async function getMessage(user, messageId) {
-  const gmail = gmailFor(user);
+async function getMessage(user, messageId, account = null) {
+  const gmail = gmailFor(user, account);
   const res = await gmail.users.messages.get({
     userId: 'me',
     id: messageId,
@@ -85,8 +99,8 @@ async function getMessage(user, messageId) {
 /**
  * Send a reply email (used for draft_reply send-through, optional).
  */
-async function sendMessage(user, { to, subject, body, threadId } = {}) {
-  const gmail = gmailFor(user);
+async function sendMessage(user, { to, subject, body, threadId, account = null } = {}) {
+  const gmail = gmailFor(user, account);
   const raw = Buffer.from(
     `To: ${to}\r\nSubject: ${subject}\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n${body}`
   ).toString('base64').replace(/\+/g, '-').replace(/\//g, '_');
@@ -98,10 +112,10 @@ async function sendMessage(user, { to, subject, body, threadId } = {}) {
 }
 
 /** Get the authenticated user's email address (for sender-self detection). */
-async function getProfile(user) {
-  const gmail = gmailFor(user);
+async function getProfile(user, account = null) {
+  const gmail = gmailFor(user, account);
   const res = await gmail.users.getProfile({ userId: 'me' });
   return { emailAddress: res.data.emailAddress };
 }
 
-module.exports = { listMessageIds, getMessage, sendMessage, extractBody, getProfile };
+module.exports = { listMessageIds, getMessage, sendMessage, extractBody, getProfile, accountsFor };

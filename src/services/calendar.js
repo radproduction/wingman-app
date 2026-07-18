@@ -6,11 +6,37 @@ const calendarCache = require('../db/calendarEvents');
 const googleAuth = require('../auth/googleAuth');
 
 /**
- * Build a Google Calendar API client for a user.
+ * Build a Google Calendar API client for a user, optionally for one specific
+ * linked account. Without an account it uses the user's primary account.
  */
-function calendarFor(user) {
-  const auth = googleAuth.getAuthorizedClient(user);
+function calendarFor(user, account = null) {
+  const auth = googleAuth.getAuthorizedClient(user, 'calendar', account);
   return google.calendar({ version: 'v3', auth });
+}
+
+/**
+ * Every Google account linked to the user. Returns [null] when there are no
+ * account rows so legacy single-account users keep working unchanged.
+ */
+function accountsFor(user) {
+  try {
+    const list = require('../db/googleAccounts').listForUser(user.id);
+    return list.length ? list : [null];
+  } catch (_) {
+    return [null];
+  }
+}
+
+/**
+ * Which linked account a cached event belongs to, so an edit or cancellation
+ * is sent to the calendar it actually lives on (not just the primary one).
+ */
+function accountForEvent(userId, gcalEventId) {
+  try {
+    const row = calendarCache.findByGcalId(userId, gcalEventId);
+    if (row && row.account_id) return require('../db/googleAccounts').getById(row.account_id) || null;
+  } catch (_) { /* fall back to primary */ }
+  return null;
 }
 
 function loadUser(userId) {
@@ -120,19 +146,37 @@ function normalize(ev) {
  */
 async function getEvents(userId, dateRange = 'today') {
   const user = loadUser(userId);
-  const cal = calendarFor(user);
   const { timeMin, timeMax, label } = resolveRange(user, dateRange);
 
-  const res = await cal.events.list({
-    calendarId: 'primary',
-    timeMin,
-    timeMax,
-    singleEvents: true,
-    orderBy: 'startTime',
-    maxResults: 50,
-  });
+  // Pull from EVERY linked Google account and merge, so a user with a personal
+  // and a work account sees one combined schedule. A failing account is skipped
+  // rather than breaking the whole answer.
+  const accounts = accountsFor(user);
+  const events = [];
+  for (const account of accounts) {
+    try {
+      const cal = calendarFor(user, account);
+      const res = await cal.events.list({
+        calendarId: 'primary',
+        timeMin,
+        timeMax,
+        singleEvents: true,
+        orderBy: 'startTime',
+        maxResults: 50,
+      });
+      for (const item of (res.data.items || [])) {
+        const ev = normalize(item);
+        ev.accountId = account ? account.id : null;
+        ev.accountEmail = account ? account.email : null;
+        events.push(ev);
+      }
+    } catch (err) {
+      const who = account && account.email ? account.email : 'primary';
+      console.warn(`[calendar] events fetch failed for ${who}:`, err.message);
+    }
+  }
 
-  const events = (res.data.items || []).map(normalize);
+  events.sort((a, b) => String(a.startTime || '').localeCompare(String(b.startTime || '')));
   calendarCache.cacheEvents(userId, events);
   return { label, events, timeMin, timeMax };
 }
@@ -180,7 +224,7 @@ async function createEvent(userId, { title, startTime, endTime, description = ''
  */
 async function updateEvent(userId, eventId, updates = {}) {
   const user = loadUser(userId);
-  const cal = calendarFor(user);
+  const cal = calendarFor(user, accountForEvent(userId, eventId));
   const tz = user.timezone || 'Asia/Dubai';
 
   const requestBody = {};
@@ -212,7 +256,7 @@ async function updateEvent(userId, eventId, updates = {}) {
  */
 async function deleteEvent(userId, eventId) {
   const user = loadUser(userId);
-  const cal = calendarFor(user);
+  const cal = calendarFor(user, accountForEvent(userId, eventId));
   // Notify guests that the meeting was cancelled.
   await cal.events.delete({ calendarId: 'primary', eventId, sendUpdates: 'all' });
   calendarCache.removeByGcalId(userId, eventId);

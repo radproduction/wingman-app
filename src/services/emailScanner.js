@@ -51,27 +51,36 @@ async function scanUser(userId, { maxResults = 50 } = {}) {
     } catch (_) { /* non-fatal */ }
   }
 
-  let ids = [];
-  try {
-    ids = await gmail.listMessageIds(user, { maxResults, query });
-    // Also include recent SENT mail so the follow-up tracker can capture
-    // commitments the user made ("I'll send…").
-    const sentIds = await gmail.listMessageIds(user, { maxResults: 20, query: 'in:sent newer_than:7d' });
-    for (const sid of sentIds) if (!ids.includes(sid)) ids.push(sid);
-  } catch (err) {
-    console.warn(`[emailScanner] list failed for ${user.phone}:`, err.message);
-    return { scanned: 0, newItems: 0, urgent: 0, error: err.message };
+  // Scan EVERY linked Google account, so a user with personal + work mailboxes
+  // gets alerts from both. Each message is paired with the account it came from
+  // so it is fetched with the right credentials. A failing account is skipped.
+  const items = [];
+  const seenIds = new Set();
+  for (const account of gmail.accountsFor(user)) {
+    try {
+      const ids = await gmail.listMessageIds(user, { maxResults, query, account });
+      // Also include recent SENT mail so the follow-up tracker can capture
+      // commitments the user made ("I'll send…").
+      const sentIds = await gmail.listMessageIds(user, { maxResults: 20, query: 'in:sent newer_than:7d', account });
+      for (const id of [...ids, ...sentIds]) {
+        if (seenIds.has(id)) continue;
+        seenIds.add(id);
+        items.push({ id, account });
+      }
+    } catch (err) {
+      console.warn(`[emailScanner] list failed for ${(account && account.email) || user.phone}:`, err.message);
+    }
   }
 
   let newItems = 0;
   let urgent = 0;
 
-  for (const id of ids) {
+  for (const { id, account } of items) {
     if (emailItemsRepo.existsByGmailId(userId, id)) continue; // de-dupe
 
     let msg;
     try {
-      msg = await gmail.getMessage(user, id);
+      msg = await gmail.getMessage(user, id, account);
     } catch (err) {
       console.warn(`[emailScanner] fetch ${id} failed:`, err.message);
       continue;
@@ -151,7 +160,7 @@ async function scanUser(userId, { maxResults = 50 } = {}) {
   try { await peopleCRM.refreshContacts(userId, { enrich: true }); }
   catch (err) { console.warn('[emailScanner] CRM enrichment failed:', err.message); }
 
-  return { scanned: ids.length, newItems, urgent };
+  return { scanned: items.length, newItems, urgent };
 }
 
 /**

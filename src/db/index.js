@@ -38,6 +38,10 @@ function initSchema() {
  */
 function applyMigrations() {
   const additions = {
+    calendar_events: [
+      ['account_id', 'TEXT'],
+      ['account_email', 'TEXT'],
+    ],
     travel: [
       ['return_time', 'TEXT'],
       ['hotel_name', 'TEXT'],

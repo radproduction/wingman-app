@@ -15,7 +15,8 @@ async function syncAllUsers({ now = new Date() } = {}) {
   const to = new Date(now.getTime() + 26 * 3600000).toISOString();    // 26h ahead
   const results = [];
   for (const u of users) {
-    if (!u.calendar_token) continue;
+    // getEvents fans out across every linked account internally.
+    if (!require('../auth/googleAuth').isConnected(u)) continue;
     try {
       const { events } = await calendarService.getEvents(u.id, { from, to });
       results.push({ phone: u.phone, synced: events.length });

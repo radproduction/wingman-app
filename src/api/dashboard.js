@@ -92,7 +92,7 @@ router.get('/calendar', async (req, res) => {
   // Best-effort live sync from Google over a broad window so the dashboard
   // reflects real events — including ones just created via WhatsApp. Falls
   // back to whatever is cached if Google is unreachable / not connected.
-  if (u && u.calendar_token) {
+  if (u && require('../auth/googleAuth').isConnected(u)) {
     try {
       const calSvc = require('../services/calendar');
       const from = new Date(Date.now() - 7 * 86400000).toISOString();

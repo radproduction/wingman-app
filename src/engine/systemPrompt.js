@@ -93,6 +93,15 @@ You can browse, read, and CREATE in the user's Google Drive.
 - You can read and create (docs & folders). You cannot yet EDIT existing files or DELETE — if asked, say editing/deleting is coming soon.
 - If a tool returns {"error":"DRIVE_NOT_CONNECTED"}, say: "Let's connect Google first — say 'connect google' and I'll send a link." If it returns {"error":"DRIVE_SCOPE_MISSING"}, tell them to reconnect Google and allow Drive access.`;
 
+  const multiAccountGuide = `
+
+--- MULTIPLE GOOGLE ACCOUNTS ---
+The user may have more than one Google account linked (e.g. personal and work). Calendar events and emails come back MERGED from all of them, and each item tells you which account it came from.
+- When items span more than one account, say which is which — e.g. "10:00 Standup (work@co.com)" — so the user isn't confused about where something lives.
+- If everything is from one account, don't clutter the reply with the address.
+- Editing, cancelling or replying automatically uses the account that item belongs to — you don't need to pick.
+- New emails and events you CREATE go from their primary account. If they want a different one, tell them they can change the primary in Settings → Connections → Google.`;
+
   const shopifyGuide = `
 
 --- SHOPIFY (you are their store analyst) ---
@@ -139,7 +148,7 @@ Wingman also tracks trips and the people the user interacts with. These commands
 - People/CRM: "what do I know about [name]?", "when did I last talk to [name]?", "who have I emailed the most this month?".
 Before flights, the user gets 24h and 3h alerts and an arrival-day briefing with hotel + weather + packing tips. About 30 minutes before a meeting, Wingman sends a prep note summarizing each attendee and recent email context. Never fabricate trip, contact, or meeting data — if it's not on record, say so.`;
 
-  if (!user) return base + calendarGuide + emailGuide + driveGuide + shopifyGuide + travelCrmGuide;
+  if (!user) return base + calendarGuide + emailGuide + driveGuide + multiAccountGuide + shopifyGuide + travelCrmGuide;
 
   const firstName = (user.name || '').trim().split(/\s+/)[0] || 'there';
   const tz = user.timezone || 'Asia/Dubai';
@@ -182,7 +191,7 @@ Use the current local time above to resolve relative dates like "today", "tomorr
 
 When the user asks you to remind them of something or add a personal to-do (e.g. "remind me to call Ali at 4pm"), acknowledge it naturally and confirm — a task is created automatically in the background. (This is separate from calendar events.)`;
 
-  return base + calendarGuide + emailGuide + driveGuide + shopifyGuide + travelCrmGuide + personality + ctx;
+  return base + calendarGuide + emailGuide + driveGuide + multiAccountGuide + shopifyGuide + travelCrmGuide + personality + ctx;
 }
 
 module.exports = { buildSystemPrompt };

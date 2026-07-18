@@ -14,6 +14,10 @@ function upsert(userId, ev) {
   const row = {
     user_id: userId,
     gcal_event_id: ev.gcalEventId,
+    // Which linked Google account this event belongs to, so edits/cancellations
+    // are sent to the calendar they actually live on.
+    account_id: ev.accountId || null,
+    account_email: ev.accountEmail || null,
     title: ev.title || null,
     description: ev.description || null,
     location: ev.location || null,
@@ -29,6 +33,7 @@ function upsert(userId, ev) {
     db.prepare(`
       UPDATE calendar_events SET
         title=@title, description=@description, location=@location,
+        account_id=COALESCE(@account_id, account_id), account_email=COALESCE(@account_email, account_email),
         start_time=@start_time, end_time=@end_time, all_day=@all_day,
         attendees=@attendees, status=@status, has_conflict=@has_conflict
       WHERE id=@id
@@ -39,10 +44,10 @@ function upsert(userId, ev) {
   const id = uuid();
   db.prepare(`
     INSERT INTO calendar_events
-      (id, user_id, gcal_event_id, title, description, location,
+      (id, user_id, gcal_event_id, account_id, account_email, title, description, location,
        start_time, end_time, all_day, attendees, status, has_conflict)
     VALUES
-      (@id, @user_id, @gcal_event_id, @title, @description, @location,
+      (@id, @user_id, @gcal_event_id, @account_id, @account_email, @title, @description, @location,
        @start_time, @end_time, @all_day, @attendees, @status, @has_conflict)
   `).run({ ...row, id });
   return id;
@@ -55,6 +60,12 @@ function cacheEvents(userId, events) {
   });
   tx(events);
   return events.length;
+}
+
+/** Look up one cached event by its Google event id (used to find its account). */
+function findByGcalId(userId, gcalEventId) {
+  return db.prepare('SELECT * FROM calendar_events WHERE user_id = ? AND gcal_event_id = ?')
+    .get(userId, gcalEventId);
 }
 
 /** Remove a cached event by its Google event id. */
@@ -104,4 +115,4 @@ function listEndingBetween(userId, fromIso, toIso) {
   `).all(userId, fromIso, toIso);
 }
 
-module.exports = { upsert, cacheEvents, removeByGcalId, listCached, listStartingBetween, listForUser, listEndingBetween };
+module.exports = { upsert, cacheEvents, removeByGcalId, listCached, listStartingBetween, listForUser, listEndingBetween, findByGcalId };

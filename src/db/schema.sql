@@ -133,6 +133,8 @@ CREATE TABLE IF NOT EXISTS calendar_events (
   id TEXT PRIMARY KEY,
   user_id TEXT REFERENCES users(id),
   gcal_event_id TEXT,
+  account_id TEXT,                 -- which linked Google account this came from
+  account_email TEXT,
   title TEXT,
   description TEXT,
   location TEXT,

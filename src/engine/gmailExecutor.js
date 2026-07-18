@@ -42,18 +42,29 @@ async function executeGmailTool(user, toolUse) {
 
       case 'list_recent_emails': {
         const limit = Math.min(Math.max(parseInt(input.limit, 10) || 6, 1), 10);
-        const ids = await gmail.listMessageIds(user, { maxResults: limit, query: input.query });
+        // Pull from every linked Google account so a user with personal + work
+        // mailboxes sees one merged inbox. One bad account doesn't break the rest.
+        const accounts = gmail.accountsFor(user);
         const emails = [];
-        for (const id of ids.slice(0, limit)) {
-          const m = await gmail.getMessage(user, id);
-          emails.push({
-            id: m.gmailId,
-            from: m.sender,
-            subject: m.subject,
-            snippet: (m.snippet || '').slice(0, 200),
-          });
+        for (const account of accounts) {
+          try {
+            const ids = await gmail.listMessageIds(user, { maxResults: limit, query: input.query, account });
+            for (const id of ids.slice(0, limit)) {
+              const m = await gmail.getMessage(user, id, account);
+              emails.push({
+                id: m.gmailId,
+                account: account ? account.email : null,
+                from: m.sender,
+                subject: m.subject,
+                snippet: (m.snippet || '').slice(0, 200),
+              });
+            }
+          } catch (err) {
+            console.warn(`[gmail] list failed for ${(account && account.email) || 'primary'}:`, err.message);
+          }
         }
-        return { count: emails.length, emails };
+        const linked = accounts.map((a) => (a ? a.email : null)).filter(Boolean);
+        return { count: emails.length, accounts: linked, emails };
       }
 
       case 'send_email': {
@@ -72,7 +83,18 @@ async function executeGmailTool(user, toolUse) {
       }
 
       case 'reply_to_email': {
-        const original = await gmail.getMessage(user, input.email_id);
+        // The message may live in any linked mailbox — find the account that
+        // actually holds it so the reply is sent from the right address.
+        let account = null;
+        let original = null;
+        for (const candidate of gmail.accountsFor(user)) {
+          try {
+            original = await gmail.getMessage(user, input.email_id, candidate);
+            account = candidate;
+            break;
+          } catch (_) { /* try the next account */ }
+        }
+        if (!original) return { error: 'EMAIL_NOT_FOUND', detail: 'That message was not found in any connected mailbox.' };
         const to = extractAddress(original.sender);
         if (!EMAIL_RE.test(to)) {
           return { error: 'REPLY_TARGET_UNKNOWN', detail: 'Could not determine the original sender address.' };
@@ -85,6 +107,7 @@ async function executeGmailTool(user, toolUse) {
           subject,
           body: input.body || '',
           threadId: original.threadId,
+          account,
         });
         try { contactsRepo.recordInteraction(user.id, { email: to, at: new Date().toISOString() }); } catch (_) {}
         return { sent: true, to, subject };
