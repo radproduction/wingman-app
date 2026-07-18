@@ -11,11 +11,27 @@ function isConnected(user) {
  * so Claude can explain them to the user instead of the turn failing.
  */
 async function executeShopifyTool(user, toolUse) {
+  const { name, input } = toolUse;
+
+  // The connect link is the one tool that must work BEFORE a store is linked.
+  if (name === 'get_shopify_connect_link') {
+    const config = require('../config');
+    const shopifyAuth = require('../auth/shopifyAuth');
+    if (!config.shopify.enabled) {
+      return { error: 'SHOPIFY_OAUTH_NOT_CONFIGURED', detail: 'Shopify connect is not set up on this server yet.' };
+    }
+    const shop = shopifyAuth.normalizeShop(input.shop_domain);
+    if (!shopifyAuth.isValidShop(shop)) {
+      return { error: 'INVALID_SHOP_DOMAIN', detail: 'That does not look like a Shopify store domain. It should look like mystore.myshopify.com.' };
+    }
+    const url = `${config.publicBaseUrl}/auth/shopify?shop=${encodeURIComponent(shop)}&phone=${encodeURIComponent(user.phone)}`;
+    return { shop, connect_url: url, already_connected: isConnected(user) };
+  }
+
   if (!isConnected(user)) {
     return { error: 'SHOPIFY_NOT_CONNECTED' };
   }
 
-  const { name, input } = toolUse;
   try {
     switch (name) {
       case 'shopify_summary': {

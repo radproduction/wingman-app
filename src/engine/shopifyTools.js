@@ -9,6 +9,25 @@ const PERIOD_DESC =
 
 const shopifyTools = [
   {
+    name: 'get_shopify_connect_link',
+    description:
+      "Generate the personalised link the user taps to connect their Shopify store. " +
+      'Use when they ask to connect/link their store, or when another Shopify tool ' +
+      'returns SHOPIFY_NOT_CONNECTED. You need their store domain first — if you ' +
+      "don't have it, ASK for it (e.g. \"what's your store domain? something like " +
+      'mystore.myshopify.com").',
+    input_schema: {
+      type: 'object',
+      properties: {
+        shop_domain: {
+          type: 'string',
+          description: 'The store domain, e.g. "mystore.myshopify.com" (just the store name is fine too).',
+        },
+      },
+      required: ['shop_domain'],
+    },
+  },
+  {
     name: 'shopify_summary',
     description:
       "Get the user's Shopify store performance for a period, WITH an automatic " +

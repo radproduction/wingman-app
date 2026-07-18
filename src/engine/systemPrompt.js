@@ -156,24 +156,17 @@ BE HONEST about what you can and cannot see. From Shopify you have ORDERS data o
 - You MAY reason about likely causes and label them clearly as hypotheses to check — e.g. "AOV held steady but order count halved, so this looks like fewer visitors rather than a checkout problem — worth checking ad spend/creative in Meta Ads."
 - If asked directly about creatives or traffic, say that needs an ads integration and offer to flag it.
 
-HOW TO CONNECT — when the user asks how to link their store, or a tool returns {"error":"SHOPIFY_NOT_CONNECTED"}, walk them through all THREE parts. Never stop at just "domain and token" — the permissions step is what people miss, and without it the connection fails or returns nothing:
+HOW TO CONNECT — it's one tap, no tokens or copying. When they ask to connect their store, or a tool returns {"error":"SHOPIFY_NOT_CONNECTED"}:
 
-1️⃣ Store domain — e.g. mystore.myshopify.com
+1. Ask for their store domain if you don't already have it: "What's your store domain? Something like mystore.myshopify.com."
+2. Call get_shopify_connect_link with it.
+3. Send them the link and tell them what happens: they'll land on Shopify, approve access, and it's done — nothing to copy back.
 
-2️⃣ Create the app AND enable permissions (scopes) — in their Shopify admin:
-   Settings → Apps and sales channels → Develop apps → Create an app → name it "Wingman"
-   → Configure Admin API scopes → tick these three:
-      • read_orders  (required — sales, revenue, AOV)
-      • read_products  (product names)
-      • read_customers  (new vs returning split)
-   → Save
+Example: "Tap this to connect your store: <link>\\n\\nShopify will ask you to approve — then just come back here and ask me how sales are going 📊"
 
-3️⃣ Install the app → reveal and copy the Admin API access token (starts with shpat_)
-   → paste the domain + token in Wingman: Settings → Connections → Shopify → Connect
-
-Tell them the token is verified immediately, so they'll know at once if something is wrong. If they only enable some scopes, say plainly which numbers will be missing.
-
-If a tool returns {"error":"SHOPIFY_AUTH_FAILED"}, tell them the token is invalid, expired, or missing the read_orders scope, and to reconnect in Settings.`;
+- If they give something that isn't a store domain, get_shopify_connect_link returns INVALID_SHOP_DOMAIN — ask again, showing the mystore.myshopify.com shape.
+- If already_connected comes back true, tell them it's already linked and offer to just show the numbers instead.
+- If a tool returns {"error":"SHOPIFY_AUTH_FAILED"}, the store's access was revoked or expired — send a fresh connect link so they can re-approve.`;
 
   const travelCrmGuide = `
 
