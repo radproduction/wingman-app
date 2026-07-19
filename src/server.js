@@ -53,6 +53,29 @@ app.get('/health', (req, res) => {
   res.json({ ok: true, whatsappReady: wa.ready() });
 });
 
+// ─── Health ingest ──────────────────────────────────────────────────
+//   Public by design: an iPhone Shortcut (or any automation / wearable cloud)
+//   POSTs here. Authenticated by the user's private token in the URL, since
+//   Shortcuts cannot hold a session. Apple Health and Health Connect are
+//   on-device only, so this is how their data reaches us at all.
+app.post('/health/ingest/:token', (req, res) => {
+  const health = require('./services/health');
+  const user = health.userForToken(req.params.token);
+  if (!user) return res.status(401).json({ error: 'Invalid link.' });
+
+  try {
+    const result = health.ingest(user.id, req.body, { source: 'shortcut' });
+    if (!result.saved && !result.skipped) {
+      return res.status(400).json({ error: 'No readings found in that request.' });
+    }
+    console.log(`[health] ${user.phone}: saved ${result.saved}, skipped ${result.skipped}`);
+    res.json({ ok: true, saved: result.saved, skipped: result.skipped });
+  } catch (err) {
+    console.error('[health] ingest failed:', err.message);
+    res.status(500).json({ error: 'Could not store those readings.' });
+  }
+});
+
 // ─── WhatsApp Cloud API webhook ─────────────────────────────────────
 //   GET  → Meta verification handshake (hub.challenge)
 //   POST → incoming messages: parse, run the engine, reply via Cloud API.

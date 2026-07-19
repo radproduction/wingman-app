@@ -66,6 +66,7 @@ function applyMigrations() {
 ['voice_replies', 'TEXT'],
       ['voice_name', 'TEXT'],
       ['assistant_name', 'TEXT'],
+      ['health_token', 'TEXT'],
       ['webmail_address','TEXT'],
       ['webmail_password_enc','TEXT'],
       ['webmail_imap_host','TEXT'],

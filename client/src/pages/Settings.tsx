@@ -248,7 +248,7 @@ export default function Settings() {
           <GoogleAccountsRow user={user} />
           <WebmailRow user={user} />
           <ShopifyRow user={user} />
-          <ConnRow icon={<HeartIcon className="w-5 h-5" />} label="Health data" connected={user.health_connected} />
+          <HealthRow />
         </div>
 
         <div className="mt-6">
@@ -442,6 +442,111 @@ function GoogleAccountsRow({ user }: { user: Me }) {
             {hasAny ? '+ Add another account' : 'Connect Google'}
           </a>
         </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Apple Health and Google Health Connect are on-device APIs with no server to
+ * call, so instead of an OAuth button each user gets a private URL that a phone
+ * automation (iOS Shortcuts, or any wearable app) posts readings to.
+ */
+function HealthRow() {
+  const [url, setUrl] = useState<string | null>(null);
+  const [connected, setConnected] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    api.healthConnect()
+      .then((r) => { if (alive) { setUrl(r.ingest_url); setConnected(r.connected); } })
+      .catch(() => { /* leave unset */ });
+    return () => { alive = false; };
+  }, []);
+
+  async function copy() {
+    if (!url) return;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch { /* clipboard blocked — the URL is visible anyway */ }
+  }
+
+  async function resetLink() {
+    setBusy(true);
+    try {
+      const r = await api.healthResetLink();
+      setUrl(r.ingest_url);
+    } catch { /* ignore */ } finally { setBusy(false); }
+  }
+
+  return (
+    <div className="card">
+      <div className="flex items-center gap-3 min-h-[60px]">
+        <div className="w-10 h-10 rounded-xl bg-accent/15 text-accent flex items-center justify-center shrink-0">
+          <HeartIcon className="w-5 h-5" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-body text-white">Health data</p>
+          <p className="text-caption text-gray">Apple Health, wearables, sleep &amp; heart rate</p>
+        </div>
+        {connected ? (
+          <span className="flex items-center gap-1 text-success text-caption font-medium shrink-0">
+            <CheckCircleIcon className="w-4 h-4" /> Receiving
+          </span>
+        ) : (
+          <button
+            onClick={() => setOpen((o) => !o)}
+            className="h-9 px-3.5 rounded-full bg-accent text-bg text-body font-semibold shrink-0"
+          >
+            {open ? 'Close' : 'Set up'}
+          </button>
+        )}
+      </div>
+
+      {(open || connected) && (
+        <div className="mt-4 flex flex-col gap-3">
+          <p className="text-caption text-gray">
+            Apple Health keeps your data on your phone — no website can read it directly.
+            So your phone sends it here instead, using this private link:
+          </p>
+          <div className="rounded-xl bg-white/5 px-3 py-2.5 break-all text-caption text-gray-light">
+            {url ?? 'Loading…'}
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={copy}
+              disabled={!url}
+              className="h-9 px-4 rounded-full bg-accent/15 text-accent text-body font-semibold disabled:opacity-40"
+            >
+              {copied ? 'Copied ✓' : 'Copy link'}
+            </button>
+            <button
+              onClick={resetLink}
+              disabled={busy}
+              className="h-9 px-4 rounded-full bg-white/5 text-gray text-body font-semibold disabled:opacity-40"
+            >
+              {busy ? '…' : 'Reset link'}
+            </button>
+          </div>
+
+          <div className="text-caption text-gray">
+            <p className="text-gray-light font-semibold mb-1">On iPhone (5 minutes, no app needed):</p>
+            <p>1. Open <b>Shortcuts</b> → <b>Automation</b> → <b>New</b> → <b>Time of Day</b> (e.g. every morning)</p>
+            <p>2. Add action <b>“Find Health Samples”</b> — pick Sleep, Resting Heart Rate, Steps</p>
+            <p>3. Add action <b>“Get Contents of URL”</b> → paste the link → Method <b>POST</b>, Request Body <b>JSON</b></p>
+            <p>4. Send fields named <code>metric</code> and <code>value</code> — e.g. metric “sleep”, value from the health sample</p>
+            <p className="mt-2">Any fitness app or automation that can POST JSON works too.</p>
+          </div>
+
+          <p className="text-caption text-gray">
+            Keep this link private — anyone with it could add readings to your account. Reset it any time.
+          </p>
+        </div>
       )}
     </div>
   );
@@ -680,20 +785,3 @@ function ShopifyRow({ user }: { user: Me }) {
   );
 }
 
-function ConnRow({ icon, label, connected, href }: { icon: React.ReactNode; label: string; connected: boolean; href?: string }) {
-  return (
-    <div className="card flex items-center gap-3 min-h-[60px]">
-      <div className="w-10 h-10 rounded-xl bg-accent/15 text-accent flex items-center justify-center shrink-0">{icon}</div>
-      <span className="text-body text-white flex-1">{label}</span>
-      {connected ? (
-        <span className="flex items-center gap-1 text-success text-caption font-medium">
-          <CheckCircleIcon className="w-4 h-4" /> Connected
-        </span>
-      ) : href ? (
-        <a href={href} className="h-9 px-3.5 rounded-full bg-accent text-bg text-body font-semibold flex items-center">Connect</a>
-      ) : (
-        <button className="h-9 px-3.5 rounded-full bg-white/10 text-gray text-body font-semibold" disabled>Soon</button>
-      )}
-    </div>
-  );
-}

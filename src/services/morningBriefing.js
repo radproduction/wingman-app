@@ -60,6 +60,7 @@ async function aggregate(user, now = new Date()) {
 
   return {
     tz, weather: w, events, emailCounts, tasksDue, bills, deliveries, health,
+    healthLine: (() => { try { return require('./health').summaryLine(user.id); } catch (_) { return null; } })(),
     news: newsBulletin,
     todayStart, tomorrowStart,
   };
@@ -123,9 +124,9 @@ function format(user, agg) {
     lines.push('');
   }
 
-  // Health (optional)
-  if (agg.health) {
-    lines.push(`\u2764\ufe0f Health: ${agg.health.metric_type} ${agg.health.value}${agg.health.unit ? ' ' + agg.health.unit : ''}`);
+  // Health \u2014 a readable roll-up of the latest readings, not one raw metric.
+  if (agg.healthLine) {
+    lines.push(`\u2764\ufe0f Health: ${agg.healthLine}`);
     lines.push('');
   }
 

@@ -379,6 +379,28 @@ router.post('/onboarding/complete', (req, res) => {
   res.json({ user: usersRepo.toPublic(updated) });
 });
 
+// ── Health ───────────────────────────────────────────────────────────
+//   Apple Health / Health Connect are on-device only, so instead of an OAuth
+//   flow each user gets a private URL that a phone automation posts readings to.
+router.get('/health/connect', (req, res) => {
+  if (!req.user) return res.status(401).json({ error: 'Authentication required.' });
+  const health = require('../services/health');
+  const healthRepo = require('../db/healthData');
+  res.json({
+    ingest_url: `${config.publicBaseUrl}/health/ingest/${health.tokenFor(req.user.id)}`,
+    connected: healthRepo.hasAnyData(req.user.id),
+    metrics: Object.entries(healthRepo.METRICS).map(([k, v]) => ({ metric: k, label: v.label, unit: v.unit })),
+  });
+});
+
+/** Rotate the link (old one stops working immediately). */
+router.post('/health/reset-link', (req, res) => {
+  if (!req.user) return res.status(401).json({ error: 'Authentication required.' });
+  const health = require('../services/health');
+  health.revokeToken(req.user.id);
+  res.json({ ingest_url: `${config.publicBaseUrl}/health/ingest/${health.tokenFor(req.user.id)}` });
+});
+
 // ── Webmail (IMAP/SMTP business email) ───────────────────────────────
 //   Credentials are verified against the real servers BEFORE being stored, and
 //   the password is encrypted at rest — it is never returned by any endpoint.

@@ -78,6 +78,11 @@ export const api = {
   savePlace: (which: 'home' | 'office', address: string) =>
     send<{ saved: boolean; which: string; address: string }>('POST', '/places', { which, address }),
 
+  // ── Health (private ingest link for phone automations) ──
+  healthConnect: () =>
+    get<{ ingest_url: string; connected: boolean; metrics: { metric: string; label: string; unit: string }[] }>('/health/connect'),
+  healthResetLink: () => send<{ ingest_url: string }>('POST', '/health/reset-link'),
+
   // ── Business email (IMAP/SMTP) ──
   webmailDetect: (address: string) =>
     get<{ imapHost: string; imapPort: number; smtpHost: string; smtpPort: number; note: string | null; guessed: boolean }>(

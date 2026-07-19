@@ -29,6 +29,7 @@ const JOB_RULES = {
   wrap:         { minLevel: 'moderate' },
   meetingprep:  { minLevel: 'moderate' },
   meetingcomplete: { minLevel: 'moderate' },
+  health:       { minLevel: 'moderate' },
   taskreminder: { minLevel: 'high' },
   bills:        { minLevel: 'moderate', skill: 'bill_tracker' },
   deliveries:   { minLevel: 'high', skill: 'delivery_tracker' },

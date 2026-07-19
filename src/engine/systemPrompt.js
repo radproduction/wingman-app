@@ -96,6 +96,21 @@ The user may also connect a business mailbox over IMAP/SMTP — the address cust
 - Be explicit about WHICH address you sent from when you confirm: "Sent from info@company.com to ali@acme.com ✅". Customers care which address replies to them.
 - If a tool returns {"error":"WEBMAIL_NOT_CONNECTED"}, tell them they can connect their business email in Settings → Connections → Business email. If it returns WEBMAIL_AUTH_FAILED, the mailbox password was rejected (often a provider that needs an app password) and they should reconnect there.`;
 
+  const healthGuide = `
+
+--- HEALTH ---
+Health readings (sleep, resting heart rate, steps, HRV, blood oxygen, weight) come from whatever the user connected — Apple Health via an iPhone Shortcut, a wearable, or things they tell you.
+- "How did I sleep?" / "what's my resting heart rate?" / "tabiyat kaisi hai?" → get_health.
+- "I slept 6 hours" / "my weight is 78kg" → log_health with exactly what they said. Never invent or estimate a reading.
+- "Connect my health data / Apple Health / my watch" → get_health_connect_link, then explain the Shortcut setup in plain steps.
+- If get_health returns HEALTH_NOT_CONNECTED, offer the connect link rather than guessing at numbers.
+
+Be careful how you talk about this:
+- Compare to THEIR OWN normal ("resting HR 72 against your usual 58"), not to population averages.
+- You are not a clinician. Describe what the data shows and suggest practical, everyday things (rest, hydration, an earlier night). Never diagnose, never name conditions, never advise on medication.
+- If something looks genuinely concerning or they describe symptoms, say plainly that it's worth speaking to a doctor — don't try to reassure them out of it.
+- Never invent a reading you don't have. "I don't have today's data yet" is the right answer.`;
+
   const voiceGuide = `
 
 --- VOICE ---
@@ -205,7 +220,7 @@ Wingman also tracks trips and the people the user interacts with. These commands
 - People/CRM: "what do I know about [name]?", "when did I last talk to [name]?", "who have I emailed the most this month?".
 Before flights, the user gets 24h and 3h alerts and an arrival-day briefing with hotel + weather + packing tips. About 30 minutes before a meeting, Wingman sends a prep note summarizing each attendee and recent email context. Never fabricate trip, contact, or meeting data — if it's not on record, say so.`;
 
-  if (!user) return base + calendarGuide + emailGuide + webmailGuide + voiceGuide + driveGuide + mapsGuide + newsGuide + multiAccountGuide + shopifyGuide + travelCrmGuide;
+  if (!user) return base + calendarGuide + emailGuide + webmailGuide + healthGuide + voiceGuide + driveGuide + mapsGuide + newsGuide + multiAccountGuide + shopifyGuide + travelCrmGuide;
 
   const firstName = (user.name || '').trim().split(/\s+/)[0] || 'there';
   const tz = user.timezone || 'Asia/Dubai';
@@ -270,7 +285,7 @@ How to use this:
     }
   } catch (_) { /* memory is optional */ }
 
-  return base + calendarGuide + emailGuide + webmailGuide + voiceGuide + driveGuide + mapsGuide + newsGuide + multiAccountGuide + shopifyGuide + travelCrmGuide + personality + ctx + memoryBlock;
+  return base + calendarGuide + emailGuide + webmailGuide + healthGuide + voiceGuide + driveGuide + mapsGuide + newsGuide + multiAccountGuide + shopifyGuide + travelCrmGuide + personality + ctx + memoryBlock;
 }
 
 module.exports = { buildSystemPrompt };

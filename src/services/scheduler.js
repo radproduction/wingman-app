@@ -13,6 +13,7 @@ const meetingPrep = require('./meetingPrep');
 const meetingComplete = require('./meetingComplete');
 const calendarSync = require('./calendarSync');
 const leaveByAlerts = require('./leaveByAlerts');
+const healthAlerts = require('./healthAlerts');
 
 const jobs = [];
 
@@ -67,6 +68,7 @@ async function runMeetingPrepTick(now = new Date()) {
     await meetingPrep.runAllUsers({ now });      // reminders before meetings
     await meetingComplete.runAllUsers({ now });  // "that wrapped up" after meetings
     await leaveByAlerts.runAllUsers({ now });    // "leave by X" for events with a location
+    await healthAlerts.runAllUsers({ now });     // readings drifting from the user's own normal
   } catch (err) {
     console.warn('[scheduler] meeting tick error:', err.message);
   }
