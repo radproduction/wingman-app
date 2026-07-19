@@ -25,6 +25,8 @@ const NEWS_TOPICS: { value: NewsTopic; label: string }[] = [
 const VOICE_CHOICES: { value: VoiceName; label: string }[] = [
   { value: 'onyx', label: 'Male — deep' },
   { value: 'echo', label: 'Male — clear' },
+  { value: 'fable', label: 'Male — British' },
+  { value: 'ballad', label: 'Male — British, calm' },
   { value: 'nova', label: 'Female — warm' },
   { value: 'shimmer', label: 'Female — soft' },
   { value: 'alloy', label: 'Neutral' },
@@ -194,7 +196,7 @@ export default function Settings() {
                 })}
               </div>
               <p className="text-caption text-gray mt-3">
-                You can also just tell Wingman on WhatsApp — “use a male voice”.
+                Or just say it on WhatsApp — “use a male voice”, “British voice”.
               </p>
             </div>
           </>

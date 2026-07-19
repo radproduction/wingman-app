@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS users (
   debrief_time TEXT DEFAULT '20:00',
   voice_replies TEXT DEFAULT 'on_voice',          -- 'off' | 'on_voice' | 'always'
   voice_name TEXT DEFAULT 'nova',
+  assistant_name TEXT DEFAULT 'Wingman',          -- users can rename the assistant
   webmail_address TEXT,                          -- business email (IMAP/SMTP)
   webmail_password_enc TEXT,                     -- AES-256-GCM encrypted, never plaintext
   webmail_imap_host TEXT,

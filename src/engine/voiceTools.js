@@ -32,6 +32,21 @@ const voiceTools = [
   },
 ];
 
+voiceTools.push({
+  name: 'set_assistant_name',
+  description:
+    'Rename yourself when the user asks to call you something else ' +
+    '("I want to call you Jarvis", "tumhara naam X rakh do"). ' +
+    'Confirm warmly in your new name afterwards.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      name: { type: 'string', description: 'The new name, e.g. "Jarvis".' },
+    },
+    required: ['name'],
+  },
+});
+
 const voiceToolNames = new Set(voiceTools.map((t) => t.name));
 
 module.exports = { voiceTools, voiceToolNames };

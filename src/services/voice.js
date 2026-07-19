@@ -124,12 +124,21 @@ function shouldSpeak(user, incomingWasVoice) {
 const VOICE_OPTIONS = [
   { id: 'onyx', gender: 'male', label: 'Male — deep' },
   { id: 'echo', gender: 'male', label: 'Male — clear' },
+  { id: 'fable', gender: 'male', label: 'Male — British' },
+  { id: 'ballad', gender: 'male', label: 'Male — British, calm' },
   { id: 'nova', gender: 'female', label: 'Female — warm' },
   { id: 'shimmer', gender: 'female', label: 'Female — soft' },
   { id: 'alloy', gender: 'neutral', label: 'Neutral' },
 ];
 
 const DEFAULT_BY_GENDER = { male: 'onyx', female: 'nova', neutral: 'alloy' };
+
+// Friendly aliases people actually say. 'fable' is the British-accented male
+// voice, which is the closest thing we have to the JARVIS style users ask for.
+const VOICE_ALIASES = {
+  british: 'fable', jarvis: 'fable', butler: 'fable', formal: 'ballad',
+  deep: 'onyx', warm: 'nova', soft: 'shimmer', calm: 'ballad',
+};
 
 function isValidVoice(id) {
   return VOICE_OPTIONS.some((v) => v.id === id);
@@ -139,6 +148,7 @@ function isValidVoice(id) {
 function resolveVoice(input) {
   const v = String(input || '').trim().toLowerCase();
   if (DEFAULT_BY_GENDER[v]) return DEFAULT_BY_GENDER[v];
+  if (VOICE_ALIASES[v]) return VOICE_ALIASES[v];
   if (isValidVoice(v)) return v;
   return null;
 }
@@ -151,5 +161,5 @@ function voiceFor(user) {
 
 module.exports = {
   enabled, transcribe, speak, shouldSpeak, cleanForSpeech,
-  VOICE_OPTIONS, resolveVoice, isValidVoice, voiceFor,
+  VOICE_OPTIONS, VOICE_ALIASES, resolveVoice, isValidVoice, voiceFor,
 };

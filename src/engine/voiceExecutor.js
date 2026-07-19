@@ -8,6 +8,14 @@ const VALID_REPLIES = new Set(['off', 'on_voice', 'always']);
 /** Execute the voice-preference tool. Never throws — errors become {error}. */
 async function executeVoiceTool(user, toolUse) {
   const { name, input } = toolUse;
+
+  if (name === 'set_assistant_name') {
+    const newName = String(input.name || '').trim().slice(0, 40);
+    if (newName.length < 2) return { error: 'INVALID_NAME', detail: 'That name is too short.' };
+    usersRepo.update(user.id, { assistant_name: newName });
+    return { updated: true, assistant_name: newName };
+  }
+
   if (name !== 'set_voice') return { error: `Unknown tool: ${name}` };
 
   const patch = {};

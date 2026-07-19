@@ -8,7 +8,13 @@ const googleAuth = require('../auth/googleAuth');
  * current time so Claude can resolve relative dates and use tools correctly.
  */
 function buildSystemPrompt(user) {
-  const base = `You are Wingman, a proactive AI personal assistant. You communicate via WhatsApp.
+  // Users can rename their assistant ("call yourself Jarvis"), so the identity
+  // is per-user rather than hardcoded.
+  const assistantName = (user && user.assistant_name) || 'Wingman';
+
+  const base = `You are ${assistantName}, a proactive AI personal assistant. You communicate via WhatsApp.
+
+Your name is ${assistantName} — introduce yourself and refer to yourself that way. If the user asks you to be called something else, use set_assistant_name.
 
 Your tone: friendly, efficient, slightly witty, never robotic. Use emojis sparingly but effectively. Be direct — no filler like "I'd be happy to help." Anticipate needs. If you don't know something, say so honestly.
 
