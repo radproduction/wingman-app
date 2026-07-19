@@ -76,6 +76,32 @@ app.post('/health/ingest/:token', (req, res) => {
   }
 });
 
+// ─── Work clock webhook ─────────────────────────────────────────────
+//   The user's HRMS (or any attendance system) POSTs clock-in / clock-out
+//   here. Token in the URL identifies the user, so the sending system needs
+//   no account or session of its own — it just fires and forgets.
+//     { "event": "clock_in" | "clock_out", "at": "<ISO time, optional>" }
+app.post('/work/event/:token', (req, res) => {
+  const work = require('./services/work');
+  const user = work.userForToken(req.params.token);
+  if (!user) return res.status(401).json({ error: 'Invalid link.' });
+
+  try {
+    const result = work.handleEvent(user.id, req.body || {}, { source: 'hrms' });
+    if (!result.ok) {
+      return res.status(400).json({
+        error: 'Send "event": "clock_in" or "clock_out".',
+        received: (req.body && (req.body.event || req.body.type)) || null,
+      });
+    }
+    console.log(`[work] ${user.phone}: ${result.event}${result.duplicate ? ' (already open)' : ''}`);
+    res.json({ ok: true, event: result.event });
+  } catch (err) {
+    console.error('[work] event failed:', err.message);
+    res.status(500).json({ error: 'Could not record that.' });
+  }
+});
+
 // ─── WhatsApp Cloud API webhook ─────────────────────────────────────
 //   GET  → Meta verification handshake (hub.challenge)
 //   POST → incoming messages: parse, run the engine, reply via Cloud API.

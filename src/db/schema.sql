@@ -306,3 +306,19 @@ CREATE TABLE IF NOT EXISTS user_memory (
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_user_memory_user ON user_memory(user_id);
+
+-- ─── Work sessions (clock in / clock out) ───────────────────────────
+--   Source-agnostic: an HRMS webhook, or the user telling Wingman directly.
+--   An open session is one with clock_out_at IS NULL.
+CREATE TABLE IF NOT EXISTS work_sessions (
+  id TEXT PRIMARY KEY,
+  user_id TEXT REFERENCES users(id),
+  clock_in_at TEXT,
+  clock_out_at TEXT,
+  day_key TEXT,               -- local YYYY-MM-DD of clock-in, so "today" is the user's today
+  source TEXT,                -- 'hrms' | 'told_to_wingman'
+  nudged_at TEXT,             -- set once we have asked about clocking out
+  snooze_until TEXT,          -- set when they say they are staying late
+  created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_work_sessions_user_day ON work_sessions(user_id, day_key);

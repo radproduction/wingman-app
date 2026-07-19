@@ -20,6 +20,8 @@ const { webmailTools, webmailToolNames } = require('./webmailTools');
 const { voiceTools, voiceToolNames } = require('./voiceTools');
 const { healthTools, healthToolNames } = require('./healthTools');
 const { executeHealthTool } = require('./healthExecutor');
+const { workTools, workToolNames } = require('./workTools');
+const { executeWorkTool } = require('./workExecutor');
 const { executeVoiceTool } = require('./voiceExecutor');
 const { executeWebmailTool } = require('./webmailExecutor');
 const { executeMapsTool } = require('./mapsExecutor');
@@ -304,7 +306,7 @@ async function runToolLoop(user, messages, system, maxRounds = 4) {
   for (let round = 0; round < maxRounds; round++) {
     const response = await claude.chatWithTools(convo, {
       system,
-      tools: [...calendarTools, ...gmailTools, ...driveTools, ...shopifyTools, ...newsTools, ...memoryTools, ...mapsTools, ...webmailTools, ...voiceTools, ...healthTools],
+      tools: [...calendarTools, ...gmailTools, ...driveTools, ...shopifyTools, ...newsTools, ...memoryTools, ...mapsTools, ...webmailTools, ...voiceTools, ...healthTools, ...workTools],
       maxTokens: 1024,
     });
 
@@ -335,6 +337,8 @@ async function runToolLoop(user, messages, system, maxRounds = 4) {
           result = await executeVoiceTool(user, { name: block.name, input: block.input });
         } else if (healthToolNames.has(block.name)) {
           result = await executeHealthTool(user, { name: block.name, input: block.input });
+        } else if (workToolNames.has(block.name)) {
+          result = await executeWorkTool(user, { name: block.name, input: block.input });
         } else {
           result = await executeCalendarTool(user, { name: block.name, input: block.input });
         }

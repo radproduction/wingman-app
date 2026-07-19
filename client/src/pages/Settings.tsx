@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { PageHeader, Loading } from '../components/ui';
 import {
-  MailIcon, HeartIcon, CheckCircleIcon,
+  MailIcon, HeartIcon, CheckCircleIcon, ClockIcon,
   PlaneIcon, BillIcon, BoxIcon, PeopleIcon, BellIcon,
 } from '../components/icons';
 import { OptionCards, ToggleRow, Field } from '../components/authUi';
@@ -249,6 +249,7 @@ export default function Settings() {
           <WebmailRow user={user} />
           <ShopifyRow user={user} />
           <HealthRow />
+          <WorkRow />
         </div>
 
         <div className="mt-6">
@@ -545,6 +546,124 @@ function HealthRow() {
 
           <p className="text-caption text-gray">
             Keep this link private — anyone with it could add readings to your account. Reset it any time.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Attendance / HRMS clock. The system posts clock-in and clock-out to a private
+ * URL, which is all Wingman needs to notice a forgotten clock-out.
+ */
+function WorkRow() {
+  const [url, setUrl] = useState<string | null>(null);
+  const [connected, setConnected] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState<'url' | 'code' | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    api.workConnect()
+      .then((r) => { if (alive) { setUrl(r.webhook_url); setConnected(r.connected); } })
+      .catch(() => { /* leave unset */ });
+    return () => { alive = false; };
+  }, []);
+
+  const snippet = `await fetch("${url ?? '<your link>'}", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ event: "clock_in" })   // or "clock_out"
+});`;
+
+  async function copyText(text: string, which: 'url' | 'code') {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(which);
+      setTimeout(() => setCopied(null), 2000);
+    } catch { /* clipboard blocked — the text is visible anyway */ }
+  }
+
+  async function resetLink() {
+    setBusy(true);
+    try {
+      const r = await api.workResetLink();
+      setUrl(r.webhook_url);
+    } catch { /* ignore */ } finally { setBusy(false); }
+  }
+
+  return (
+    <div className="card">
+      <div className="flex items-center gap-3 min-h-[60px]">
+        <div className="w-10 h-10 rounded-xl bg-accent/15 text-accent flex items-center justify-center shrink-0">
+          <ClockIcon className="w-5 h-5" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-body text-white">Work clock</p>
+          <p className="text-caption text-gray">Attendance system — catch a forgotten clock-out</p>
+        </div>
+        {connected ? (
+          <span className="flex items-center gap-1 text-success text-caption font-medium shrink-0">
+            <CheckCircleIcon className="w-4 h-4" /> Receiving
+          </span>
+        ) : (
+          <button
+            onClick={() => setOpen((o) => !o)}
+            className="h-9 px-3.5 rounded-full bg-accent text-bg text-body font-semibold shrink-0"
+          >
+            {open ? 'Close' : 'Set up'}
+          </button>
+        )}
+      </div>
+
+      {(open || connected) && (
+        <div className="mt-4 flex flex-col gap-3">
+          <p className="text-caption text-gray">
+            Have your attendance system POST to this private link when you clock in and out:
+          </p>
+          <div className="rounded-xl bg-white/5 px-3 py-2.5 break-all text-caption text-gray-light">
+            {url ?? 'Loading…'}
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => url && copyText(url, 'url')}
+              disabled={!url}
+              className="h-9 px-4 rounded-full bg-accent/15 text-accent text-body font-semibold disabled:opacity-40"
+            >
+              {copied === 'url' ? 'Copied ✓' : 'Copy link'}
+            </button>
+            <button
+              onClick={resetLink}
+              disabled={busy}
+              className="h-9 px-4 rounded-full bg-white/5 text-gray text-body font-semibold disabled:opacity-40"
+            >
+              {busy ? '…' : 'Reset link'}
+            </button>
+          </div>
+
+          <div className="text-caption text-gray">
+            <p className="text-gray-light font-semibold mb-1">If you can edit the attendance app:</p>
+            <pre className="rounded-xl bg-white/5 px-3 py-2.5 overflow-x-auto text-caption text-gray-light">
+              <code>{snippet}</code>
+            </pre>
+            <button
+              onClick={() => copyText(snippet, 'code')}
+              disabled={!url}
+              className="mt-2 h-8 px-3 rounded-full bg-white/5 text-gray text-caption font-semibold disabled:opacity-40"
+            >
+              {copied === 'code' ? 'Copied ✓' : 'Copy code'}
+            </button>
+            <p className="mt-3">
+              Can&apos;t edit it? Zapier or Make can bridge most HR systems to a webhook — or just
+              tell Wingman &ldquo;clocked in&rdquo; and it will keep track.
+            </p>
+          </div>
+
+          <p className="text-caption text-gray">
+            Wingman only reminds you once per shift, and never if you say you&apos;re staying late.
+            Keep this link private — reset it any time.
           </p>
         </div>
       )}

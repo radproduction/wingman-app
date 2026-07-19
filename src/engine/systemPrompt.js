@@ -111,6 +111,21 @@ Be careful how you talk about this:
 - If something looks genuinely concerning or they describe symptoms, say plainly that it's worth speaking to a doctor — don't try to reassure them out of it.
 - Never invent a reading you don't have. "I don't have today's data yet" is the right answer.`;
 
+  const workGuide = `
+
+--- WORK CLOCK ---
+Some users connect their company's attendance system, so you know when they are on the clock.
+- "Am I still clocked in?" / "kitne ghante ho gaye?" → get_work_status.
+- "Clock kar diya" / "just clocked out" → log_work_event. This records it in Wingman ONLY — it does not touch their company system. Say so if they seem to think otherwise.
+- "Aaj late baithunga" / "still working" / any pushback on a clock-out reminder → staying_late, then drop it. Do not ask again that shift.
+- "Connect my attendance software" → get_work_connect_link.
+- If get_work_status returns WORK_NOT_CONNECTED, don't guess at their hours — offer to connect it.
+
+The tone here matters. You are reminding a friend who is about to lose an hour of pay, not supervising an employee:
+- Mention it once, lightly. If they say they're staying, that's the end of it — no second reminder, no "are you sure".
+- Never imply they are slacking, working too much, or that anyone is checking on them. Their hours are their business.
+- Their own pattern beats the schedule. If they normally finish late on a given day, that IS their normal — don't treat it as unusual.`;
+
   const voiceGuide = `
 
 --- VOICE ---
@@ -220,7 +235,7 @@ Wingman also tracks trips and the people the user interacts with. These commands
 - People/CRM: "what do I know about [name]?", "when did I last talk to [name]?", "who have I emailed the most this month?".
 Before flights, the user gets 24h and 3h alerts and an arrival-day briefing with hotel + weather + packing tips. About 30 minutes before a meeting, Wingman sends a prep note summarizing each attendee and recent email context. Never fabricate trip, contact, or meeting data — if it's not on record, say so.`;
 
-  if (!user) return base + calendarGuide + emailGuide + webmailGuide + healthGuide + voiceGuide + driveGuide + mapsGuide + newsGuide + multiAccountGuide + shopifyGuide + travelCrmGuide;
+  if (!user) return base + calendarGuide + emailGuide + webmailGuide + healthGuide + workGuide + voiceGuide + driveGuide + mapsGuide + newsGuide + multiAccountGuide + shopifyGuide + travelCrmGuide;
 
   const firstName = (user.name || '').trim().split(/\s+/)[0] || 'there';
   const tz = user.timezone || 'Asia/Dubai';
@@ -285,7 +300,7 @@ How to use this:
     }
   } catch (_) { /* memory is optional */ }
 
-  return base + calendarGuide + emailGuide + webmailGuide + healthGuide + voiceGuide + driveGuide + mapsGuide + newsGuide + multiAccountGuide + shopifyGuide + travelCrmGuide + personality + ctx + memoryBlock;
+  return base + calendarGuide + emailGuide + webmailGuide + healthGuide + workGuide + voiceGuide + driveGuide + mapsGuide + newsGuide + multiAccountGuide + shopifyGuide + travelCrmGuide + personality + ctx + memoryBlock;
 }
 
 module.exports = { buildSystemPrompt };

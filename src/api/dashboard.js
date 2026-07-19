@@ -401,6 +401,29 @@ router.post('/health/reset-link', (req, res) => {
   res.json({ ingest_url: `${config.publicBaseUrl}/health/ingest/${health.tokenFor(req.user.id)}` });
 });
 
+// ── Work clock (attendance / HRMS webhook) ───────────────────────────
+//   The user's attendance system posts clock-in / clock-out to a private URL,
+//   so Wingman can catch a forgotten clock-out. Same shape as health: a token
+//   in the URL, because the sending system has no session of its own.
+router.get('/work/connect', (req, res) => {
+  if (!req.user) return res.status(401).json({ error: 'Authentication required.' });
+  const work = require('../services/work');
+  const sessionsRepo = require('../db/workSessions');
+  res.json({
+    webhook_url: `${config.publicBaseUrl}/work/event/${work.tokenFor(req.user.id)}`,
+    connected: sessionsRepo.hasAnyData(req.user.id),
+    status: work.status(req.user.id),
+  });
+});
+
+/** Rotate the link (old one stops working immediately). */
+router.post('/work/reset-link', (req, res) => {
+  if (!req.user) return res.status(401).json({ error: 'Authentication required.' });
+  const work = require('../services/work');
+  work.revokeToken(req.user.id);
+  res.json({ webhook_url: `${config.publicBaseUrl}/work/event/${work.tokenFor(req.user.id)}` });
+});
+
 // ── Webmail (IMAP/SMTP business email) ───────────────────────────────
 //   Credentials are verified against the real servers BEFORE being stored, and
 //   the password is encrypted at rest — it is never returned by any endpoint.

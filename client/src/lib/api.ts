@@ -83,6 +83,15 @@ export const api = {
     get<{ ingest_url: string; connected: boolean; metrics: { metric: string; label: string; unit: string }[] }>('/health/connect'),
   healthResetLink: () => send<{ ingest_url: string }>('POST', '/health/reset-link'),
 
+  // ── Work clock (attendance / HRMS) ──
+  workConnect: () =>
+    get<{
+      webhook_url: string;
+      connected: boolean;
+      status: { clocked_in?: boolean; since?: string | null; worked_today?: string | null };
+    }>('/work/connect'),
+  workResetLink: () => send<{ webhook_url: string }>('POST', '/work/reset-link'),
+
   // ── Business email (IMAP/SMTP) ──
   webmailDetect: (address: string) =>
     get<{ imapHost: string; imapPort: number; smtpHost: string; smtpPort: number; note: string | null; guessed: boolean }>(
