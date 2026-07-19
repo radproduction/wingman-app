@@ -93,6 +93,8 @@ const config = {
   voice: {
     apiKey: process.env.OPENAI_API_KEY || '',
     sttModel: process.env.VOICE_STT_MODEL || 'whisper-1',
+    // Latin script keeps Roman Urdu as Roman Urdu (see transcribe()).
+    sttLanguage: process.env.VOICE_STT_LANGUAGE || 'en',
     ttsModel: process.env.VOICE_TTS_MODEL || 'gpt-4o-mini-tts',
     ttsVoice: process.env.VOICE_TTS_VOICE || 'alloy',
     get enabled() { return !!process.env.OPENAI_API_KEY; },

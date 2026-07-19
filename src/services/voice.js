@@ -41,11 +41,18 @@ function friendlyError(status, body) {
 async function transcribe(audio, { filename = 'voice.ogg' } = {}) {
   const key = keyOrThrow();
   const form = new FormData();
+  // Whisper infers the format from the FILENAME, and rejects ".opus" even
+  // though the bytes are fine — WhatsApp voice notes must be sent as ".ogg".
   form.append('file', new Blob([audio]), filename);
   form.append('model', config.voice.sttModel);
-  // Nudges Whisper to keep Roman Urdu / English code-switching as spoken,
-  // instead of "correcting" it into one language.
-  form.append('prompt', 'The speaker may mix English and Roman Urdu (Urdu written in English letters).');
+
+  // Users here speak Roman Urdu mixed with English. Left alone, Whisper
+  // "corrects" that into Urdu script (and a Roman-only prompt pushes it into
+  // Devanagari). Pinning the language to Latin script AND seeding the prompt
+  // with real Roman Urdu keeps the transcript in the script they actually type,
+  // which in turn keeps the assistant replying in Roman Urdu.
+  form.append('language', config.voice.sttLanguage);
+  form.append('prompt', 'Bhai kal teen baje meeting rakh do. Mujhe email bhej dena. Traffic kaisa hai? Aaj sales kaisi rahi?');
 
   const res = await fetch(`${API}/audio/transcriptions`, {
     method: 'POST',
