@@ -199,6 +199,134 @@ function stayLate(userId, { untilISO = null, hours = DEFAULT_SNOOZE_HOURS, now =
   return { ok: true, until };
 }
 
+// ── Acting ON the attendance system (Wingman → HRMS) ─────────────────
+//   The inbound webhook only tells us what happened. This is the other
+//   direction: the user says "clock me out" and we actually do it.
+
+const ACTION_TIMEOUT_MS = 8000;
+
+/** Is outbound clocking set up for this user? */
+function hasAction(user) {
+  return !!(user && user.work_action_url && user.work_action_secret_enc);
+}
+
+/**
+ * Store where to send clock actions, and the secret the user's system will
+ * check. Validates the URL first — this is a URL our server will call.
+ */
+async function setAction(userId, { url, secret, employeeRef = null } = {}) {
+  const secrets = require('../utils/secrets');
+  const outboundUrl = require('../utils/outboundUrl');
+
+  if (!secrets.available()) {
+    return { ok: false, error: 'Secure storage is not configured on the server, so we cannot save that secret yet.' };
+  }
+  if (!secret || String(secret).length < 8) {
+    return { ok: false, error: 'Use a secret of at least 8 characters — your system will check it to be sure the request is really from Wingman.' };
+  }
+  const safe = await outboundUrl.check(url);
+  if (!safe.ok) return { ok: false, error: safe.reason };
+
+  usersRepo.update(userId, {
+    work_action_url: safe.url.toString(),
+    work_action_secret_enc: secrets.encrypt(String(secret)),
+    work_employee_ref: employeeRef ? String(employeeRef) : null,
+  });
+  return { ok: true, url: safe.url.toString() };
+}
+
+function clearAction(userId) {
+  usersRepo.update(userId, {
+    work_action_url: null,
+    work_action_secret_enc: null,
+    work_employee_ref: null,
+  });
+}
+
+/**
+ * Actually clock the user in or out on their own system.
+ *
+ * On success we also record the session locally, so what Wingman reports and
+ * what their timesheet says do not drift apart.
+ */
+async function performClock(userId, event, { now = new Date() } = {}) {
+  const user = usersRepo.getById(userId);
+  if (!user) return { ok: false, error: 'no_user' };
+
+  const normalized = normalizeEvent(event);
+  if (!normalized) return { ok: false, error: 'INVALID_EVENT' };
+  if (!hasAction(user)) return { ok: false, error: 'ACTION_NOT_CONFIGURED' };
+
+  const secrets = require('../utils/secrets');
+  const outboundUrl = require('../utils/outboundUrl');
+
+  // Re-check on every call: DNS could have changed since it was saved.
+  const safe = await outboundUrl.check(user.work_action_url);
+  if (!safe.ok) return { ok: false, error: 'UNSAFE_URL', detail: safe.reason };
+
+  let secret;
+  try { secret = secrets.decrypt(user.work_action_secret_enc); }
+  catch (_) { return { ok: false, error: 'SECRET_UNREADABLE' }; }
+
+  const body = {
+    event: normalized,
+    at: now.toISOString(),
+    ...(user.work_employee_ref ? { employee: user.work_employee_ref } : {}),
+  };
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ACTION_TIMEOUT_MS);
+  let res;
+  try {
+    res = await fetch(safe.url.toString(), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Wingman-Secret': secret,
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+      // A redirect would send the secret to a host we never validated.
+      redirect: 'manual',
+    });
+  } catch (err) {
+    clearTimeout(timer);
+    const timedOut = err && err.name === 'AbortError';
+    return { ok: false, error: timedOut ? 'TIMEOUT' : 'UNREACHABLE' };
+  }
+  clearTimeout(timer);
+
+  if (res.status >= 300 && res.status < 400) {
+    return { ok: false, error: 'REDIRECTED', detail: 'The endpoint redirected somewhere else, so we stopped rather than send the secret on.' };
+  }
+  if (res.status === 401 || res.status === 403) {
+    return { ok: false, error: 'REJECTED', detail: 'The attendance system refused the secret.' };
+  }
+
+  let payload = null;
+  try { payload = await res.json(); } catch (_) { /* a bare 200 is fine */ }
+  if (!res.ok || (payload && payload.ok === false)) {
+    return {
+      ok: false,
+      error: 'ACTION_FAILED',
+      detail: (payload && (payload.error || payload.message)) || `The system returned ${res.status}.`,
+    };
+  }
+
+  // Keep our own picture in step with theirs.
+  const at = (payload && (payload.at || payload.time)) || now.toISOString();
+  const local = handleEvent(userId, { event: normalized, at }, { source: 'hrms' });
+
+  return {
+    ok: true,
+    event: normalized,
+    at,
+    already: normalized === 'clock_in' ? !!local.duplicate : !!local.noSession,
+    worked: local.hours != null ? fmtDuration(local.hours) : null,
+    remote: payload || null,
+  };
+}
+
 /** One-line summary for the briefing / end-of-day wrap. Null when irrelevant. */
 function summaryLine(userId, { now = new Date() } = {}) {
   const s = status(userId, { now });
@@ -222,6 +350,10 @@ module.exports = {
   stayLate,
   summaryLine,
   fmtDuration,
+  hasAction,
+  setAction,
+  clearAction,
+  performClock,
   GRACE_HOURS,
   DEFAULT_SNOOZE_HOURS,
 };

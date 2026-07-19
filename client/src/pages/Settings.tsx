@@ -561,16 +561,71 @@ function WorkRow() {
   const [url, setUrl] = useState<string | null>(null);
   const [connected, setConnected] = useState(false);
   const [open, setOpen] = useState(false);
-  const [copied, setCopied] = useState<'url' | 'code' | null>(null);
+  const [copied, setCopied] = useState<'url' | 'code' | 'secret' | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // Outbound side: letting Wingman actually clock them in/out.
+  const [actionOpen, setActionOpen] = useState(false);
+  const [actionConfigured, setActionConfigured] = useState(false);
+  const [actionUrl, setActionUrl] = useState('');
+  const [secret, setSecret] = useState('');
+  const [employeeRef, setEmployeeRef] = useState('');
+  const [note, setNote] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
 
   useEffect(() => {
     let alive = true;
     api.workConnect()
-      .then((r) => { if (alive) { setUrl(r.webhook_url); setConnected(r.connected); } })
+      .then((r) => {
+        if (!alive) return;
+        setUrl(r.webhook_url);
+        setConnected(r.connected);
+        setActionConfigured(r.action_configured);
+        setActionUrl(r.action_url ?? '');
+        setEmployeeRef(r.employee_ref ?? '');
+      })
       .catch(() => { /* leave unset */ });
     return () => { alive = false; };
   }, []);
+
+  function generateSecret() {
+    const bytes = new Uint8Array(24);
+    crypto.getRandomValues(bytes);
+    setSecret(btoa(String.fromCharCode(...bytes)).replace(/[+/=]/g, '').slice(0, 28));
+  }
+
+  async function saveAction() {
+    setSaving(true); setNote(null);
+    try {
+      await api.workSetAction({ url: actionUrl.trim(), secret, employee_ref: employeeRef.trim() || null });
+      setActionConfigured(true);
+      setSecret('');
+      setNote({ kind: 'ok', text: 'Saved. Try the test below to be sure it works.' });
+    } catch (e) {
+      setNote({ kind: 'err', text: e instanceof Error ? e.message : 'Could not save that.' });
+    } finally { setSaving(false); }
+  }
+
+  async function testAction(event: 'clock_in' | 'clock_out') {
+    setTesting(true); setNote(null);
+    try {
+      await api.workTestAction(event);
+      setNote({ kind: 'ok', text: `Worked — a real ${event === 'clock_in' ? 'clock-in' : 'clock-out'} was sent. Check your attendance system, and undo it there if you weren't meant to be clocked.` });
+    } catch (e) {
+      setNote({ kind: 'err', text: e instanceof Error ? e.message : 'That did not go through.' });
+    } finally { setTesting(false); }
+  }
+
+  async function disconnectAction() {
+    setSaving(true); setNote(null);
+    try {
+      await api.workClearAction();
+      setActionConfigured(false);
+      setActionUrl(''); setSecret(''); setEmployeeRef('');
+      setNote({ kind: 'ok', text: 'Disconnected. Wingman can no longer clock you in or out.' });
+    } catch { /* ignore */ } finally { setSaving(false); }
+  }
 
   const snippet = `await fetch("${url ?? '<your link>'}", {
   method: "POST",
@@ -578,7 +633,7 @@ function WorkRow() {
   body: JSON.stringify({ event: "clock_in" })   // or "clock_out"
 });`;
 
-  async function copyText(text: string, which: 'url' | 'code') {
+  async function copyText(text: string, which: 'url' | 'code' | 'secret') {
     try {
       await navigator.clipboard.writeText(text);
       setCopied(which);
@@ -665,6 +720,119 @@ function WorkRow() {
             Wingman only reminds you once per shift, and never if you say you&apos;re staying late.
             Keep this link private — reset it any time.
           </p>
+
+          {/* ── The other direction: Wingman clocks you in/out on request ── */}
+          <div className="mt-2 pt-4 border-t border-white/10">
+            <div className="flex items-center gap-3">
+              <div className="flex-1 min-w-0">
+                <p className="text-body text-white">Let Wingman clock you in &amp; out</p>
+                <p className="text-caption text-gray">So &ldquo;clock out kar do&rdquo; actually does it</p>
+              </div>
+              {actionConfigured && !actionOpen ? (
+                <span className="flex items-center gap-1 text-success text-caption font-medium shrink-0">
+                  <CheckCircleIcon className="w-4 h-4" /> On
+                </span>
+              ) : null}
+              <button
+                onClick={() => setActionOpen((o) => !o)}
+                className="h-9 px-3.5 rounded-full bg-white/5 text-gray text-body font-semibold shrink-0"
+              >
+                {actionOpen ? 'Close' : actionConfigured ? 'Edit' : 'Set up'}
+              </button>
+            </div>
+
+            {actionOpen && (
+              <div className="mt-4 flex flex-col gap-3">
+                <p className="text-caption text-gray">
+                  Add an endpoint to your attendance app that clocks you in or out, then put its
+                  address here. Wingman sends the secret in an <code>X-Wingman-Secret</code> header —
+                  your endpoint should reject anything without it, otherwise anyone who finds the URL
+                  could change your hours.
+                </p>
+
+                <Field
+                  label="Endpoint URL (https)"
+                  value={actionUrl}
+                  onChange={setActionUrl}
+                  placeholder="https://now-hrms.vercel.app/api/wingman/clock"
+                />
+                <div>
+                  <Field
+                    label={actionConfigured ? 'Secret (leave blank to keep the current one)' : 'Shared secret'}
+                    value={secret}
+                    onChange={setSecret}
+                    type="password"
+                    placeholder="a long random string"
+                  />
+                  <div className="flex gap-2 mt-2">
+                    <button
+                      onClick={generateSecret}
+                      className="h-8 px-3 rounded-full bg-white/5 text-gray text-caption font-semibold"
+                    >
+                      Generate one
+                    </button>
+                    {secret && (
+                      <button
+                        onClick={() => copyText(secret, 'secret')}
+                        className="h-8 px-3 rounded-full bg-accent/15 text-accent text-caption font-semibold"
+                      >
+                        {copied === 'secret' ? 'Copied ✓' : 'Copy secret'}
+                      </button>
+                    )}
+                  </div>
+                  {secret && (
+                    <p className="text-caption text-gray mt-2">
+                      Copy this into your app as well — it is hidden once saved.
+                    </p>
+                  )}
+                </div>
+                <Field
+                  label="Employee ID (optional — only if your endpoint needs it)"
+                  value={employeeRef}
+                  onChange={setEmployeeRef}
+                  placeholder="e.g. talha@company.com"
+                />
+
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={saveAction}
+                    disabled={saving || !actionUrl.trim() || (!actionConfigured && secret.length < 8)}
+                    className="h-9 px-4 rounded-full bg-accent text-bg text-body font-semibold disabled:opacity-40"
+                  >
+                    {saving ? '…' : 'Save'}
+                  </button>
+                  {actionConfigured && (
+                    <>
+                      <button
+                        onClick={() => testAction('clock_out')}
+                        disabled={testing}
+                        className="h-9 px-4 rounded-full bg-white/5 text-gray text-body font-semibold disabled:opacity-40"
+                      >
+                        {testing ? '…' : 'Send a test clock-out'}
+                      </button>
+                      <button
+                        onClick={disconnectAction}
+                        disabled={saving}
+                        className="h-9 px-4 rounded-full bg-white/5 text-gray text-body font-semibold disabled:opacity-40"
+                      >
+                        Disconnect
+                      </button>
+                    </>
+                  )}
+                </div>
+
+                {note && (
+                  <p className={`text-caption ${note.kind === 'ok' ? 'text-success' : 'text-danger'}`}>
+                    {note.text}
+                  </p>
+                )}
+                <p className="text-caption text-gray">
+                  The test sends a <b>real</b> clock-out, not a pretend one — there is no safe way to
+                  check this without actually calling your system.
+                </p>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

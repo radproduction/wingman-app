@@ -413,7 +413,44 @@ router.get('/work/connect', (req, res) => {
     webhook_url: `${config.publicBaseUrl}/work/event/${work.tokenFor(req.user.id)}`,
     connected: sessionsRepo.hasAnyData(req.user.id),
     status: work.status(req.user.id),
+    // Outbound side: configured or not, and where to — never the secret.
+    action_configured: work.hasAction(req.user),
+    action_url: req.user.work_action_url || null,
+    employee_ref: req.user.work_employee_ref || null,
   });
+});
+
+/**
+ * Configure the other direction: where Wingman should POST when the user says
+ * "clock me out". The secret is encrypted at rest and never returned.
+ */
+router.post('/work/action', async (req, res) => {
+  if (!req.user) return res.status(401).json({ error: 'Authentication required.' });
+  const work = require('../services/work');
+  const b = req.body || {};
+
+  if (b.disconnect) {
+    work.clearAction(req.user.id);
+    return res.json({ ok: true, configured: false });
+  }
+
+  const r = await work.setAction(req.user.id, {
+    url: b.url,
+    secret: b.secret,
+    employeeRef: b.employee_ref || null,
+  });
+  if (!r.ok) return res.status(400).json({ error: r.error });
+  res.json({ ok: true, configured: true, url: r.url });
+});
+
+/** Fire a real clock event to check the endpoint actually works. */
+router.post('/work/action/test', async (req, res) => {
+  if (!req.user) return res.status(401).json({ error: 'Authentication required.' });
+  const work = require('../services/work');
+  const event = req.body && req.body.event === 'clock_in' ? 'clock_in' : 'clock_out';
+  const r = await work.performClock(req.user.id, event);
+  if (!r.ok) return res.status(400).json({ error: r.detail || r.error, code: r.error });
+  res.json({ ok: true, event: r.event, at: r.at });
 });
 
 /** Rotate the link (old one stops working immediately). */

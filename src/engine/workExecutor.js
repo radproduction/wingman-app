@@ -25,6 +25,39 @@ async function executeWorkTool(user, toolUse) {
         return s;
       }
 
+      case 'clock_action': {
+        const r = await work.performClock(user.id, input.event);
+        if (r.ok) {
+          if (r.already) {
+            return {
+              done: true,
+              event: r.event,
+              detail: r.event === 'clock_in'
+                ? 'They were already clocked in — the system accepted it, nothing changed.'
+                : 'There was no open shift on our side, but the system accepted the clock-out.',
+            };
+          }
+          return { done: true, event: r.event, at: r.at, worked: r.worked || undefined };
+        }
+        // Be precise about the failure — the user must never be left thinking
+        // their timesheet was fixed when it wasn't.
+        const reasons = {
+          ACTION_NOT_CONFIGURED: 'Clocking from chat is not set up yet — it can be connected in Settings → Work clock.',
+          TIMEOUT: 'Their attendance system did not respond in time. Nothing was clocked.',
+          UNREACHABLE: 'Could not reach their attendance system. Nothing was clocked.',
+          REJECTED: 'Their attendance system refused the request (the secret did not match). Nothing was clocked.',
+          REDIRECTED: r.detail,
+          UNSAFE_URL: r.detail,
+          SECRET_UNREADABLE: 'The stored secret could not be read — it needs setting up again in Settings.',
+          INVALID_EVENT: 'Expected clock_in or clock_out.',
+        };
+        return {
+          error: r.error,
+          detail: reasons[r.error] || r.detail || 'That did not go through, so nothing was clocked.',
+          clocked: false,
+        };
+      }
+
       case 'log_work_event': {
         const r = work.handleEvent(user.id, { event: input.event, at: input.at }, { source: 'told_to_wingman' });
         if (!r.ok) return { error: 'INVALID_EVENT', detail: 'Expected clock_in or clock_out.' };

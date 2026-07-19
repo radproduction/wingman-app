@@ -15,12 +15,31 @@ const workTools = [
     input_schema: { type: 'object', properties: {}, required: [] },
   },
   {
+    name: 'clock_action',
+    description:
+      'ACTUALLY clock the user in or out on their company attendance system. Use ' +
+      'when they ASK you to do it: "clock me out", "clock out kar do", "clock me ' +
+      'in", "punch me out". This changes their real timesheet.\n' +
+      'Do NOT use this when they are merely telling you what they already did ' +
+      '("I clocked out at 6") — that is log_work_event.\n' +
+      'If it returns ACTION_NOT_CONFIGURED, they have not connected the ' +
+      'clock-out side yet; tell them it can be set up in Settings → Work clock, ' +
+      'and do not claim anything was clocked.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        event: { type: 'string', enum: ['clock_in', 'clock_out'], description: 'Which action to perform.' },
+      },
+      required: ['event'],
+    },
+  },
+  {
     name: 'log_work_event',
     description:
-      'Record a clock-in or clock-out the user tells you about directly ("clock ' +
-      'kar diya", "just clocked out", "I got in at 9"). Only when they say it — ' +
-      'this does NOT clock them in on their company system, it only keeps ' +
-      "Wingman's own picture straight, so say so if they seem to expect otherwise.",
+      'Record a clock-in or clock-out the user TELLS you already happened ("clock ' +
+      'kar diya tha", "I got in at 9", "just clocked out myself"). This only ' +
+      "updates Wingman's own record — it does NOT touch their company system. " +
+      'If they wanted you to actually do it, use clock_action instead.',
     input_schema: {
       type: 'object',
       properties: {

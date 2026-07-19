@@ -89,8 +89,16 @@ export const api = {
       webhook_url: string;
       connected: boolean;
       status: { clocked_in?: boolean; since?: string | null; worked_today?: string | null };
+      action_configured: boolean;
+      action_url: string | null;
+      employee_ref: string | null;
     }>('/work/connect'),
   workResetLink: () => send<{ webhook_url: string }>('POST', '/work/reset-link'),
+  workSetAction: (body: { url: string; secret: string; employee_ref?: string | null }) =>
+    send<{ ok: boolean; configured: boolean; url: string }>('POST', '/work/action', body),
+  workClearAction: () => send<{ ok: boolean; configured: boolean }>('POST', '/work/action', { disconnect: true }),
+  workTestAction: (event: 'clock_in' | 'clock_out') =>
+    send<{ ok: boolean; event: string; at: string }>('POST', '/work/action/test', { event }),
 
   // ── Business email (IMAP/SMTP) ──
   webmailDetect: (address: string) =>
