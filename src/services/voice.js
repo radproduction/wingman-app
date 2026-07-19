@@ -117,4 +117,39 @@ function shouldSpeak(user, incomingWasVoice) {
   return !!incomingWasVoice;
 }
 
-module.exports = { enabled, transcribe, speak, shouldSpeak, cleanForSpeech };
+/**
+ * The voices we offer. All verified working against the TTS model; kept to a
+ * clear male/female choice rather than exposing raw provider names.
+ */
+const VOICE_OPTIONS = [
+  { id: 'onyx', gender: 'male', label: 'Male — deep' },
+  { id: 'echo', gender: 'male', label: 'Male — clear' },
+  { id: 'nova', gender: 'female', label: 'Female — warm' },
+  { id: 'shimmer', gender: 'female', label: 'Female — soft' },
+  { id: 'alloy', gender: 'neutral', label: 'Neutral' },
+];
+
+const DEFAULT_BY_GENDER = { male: 'onyx', female: 'nova', neutral: 'alloy' };
+
+function isValidVoice(id) {
+  return VOICE_OPTIONS.some((v) => v.id === id);
+}
+
+/** Resolve "male"/"female"/"neutral" or an exact voice id to a voice id. */
+function resolveVoice(input) {
+  const v = String(input || '').trim().toLowerCase();
+  if (DEFAULT_BY_GENDER[v]) return DEFAULT_BY_GENDER[v];
+  if (isValidVoice(v)) return v;
+  return null;
+}
+
+/** The voice a given user's replies should be read in. */
+function voiceFor(user) {
+  const chosen = user && user.voice_name;
+  return isValidVoice(chosen) ? chosen : config.voice.ttsVoice;
+}
+
+module.exports = {
+  enabled, transcribe, speak, shouldSpeak, cleanForSpeech,
+  VOICE_OPTIONS, resolveVoice, isValidVoice, voiceFor,
+};

@@ -2,6 +2,7 @@ export type ProactivenessLevel = 'low' | 'moderate' | 'high';
 export type Tone = 'professional' | 'casual' | 'friendly';
 export type CommunicationStyle = 'concise' | 'detailed';
 export type VoiceReplies = 'off' | 'on_voice' | 'always';
+export type VoiceName = 'onyx' | 'echo' | 'nova' | 'shimmer' | 'alloy';
 export type NewsTopic =
   | 'world' | 'nation' | 'business' | 'technology'
   | 'entertainment' | 'sports' | 'science' | 'health' | 'local';
@@ -33,6 +34,7 @@ export interface Me {
   shopify_domain?: string | null;
   /** When Wingman should reply with a voice note. */
   voice_replies?: VoiceReplies;
+  voice_name?: VoiceName;
   /** Business mailbox (IMAP/SMTP). The password is never exposed. */
   webmail_connected?: boolean;
   webmail_address?: string | null;
@@ -84,6 +86,7 @@ export interface SettingsPatch {
   news_topics?: NewsTopic[];
   news_city?: string;
   voice_replies?: VoiceReplies;
+  voice_name?: VoiceName;
 }
 
 export interface CalendarEvent {

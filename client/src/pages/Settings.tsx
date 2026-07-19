@@ -8,7 +8,7 @@ import { OptionCards, ToggleRow, Field } from '../components/authUi';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import type {
-  Me, ProactivenessLevel, Skill, Tone, CommunicationStyle, SettingsPatch, GoogleAccount, NewsTopic, VoiceReplies,
+  Me, ProactivenessLevel, Skill, Tone, CommunicationStyle, SettingsPatch, GoogleAccount, NewsTopic, VoiceReplies, VoiceName,
 } from '../types';
 
 const NEWS_TOPICS: { value: NewsTopic; label: string }[] = [
@@ -22,6 +22,14 @@ const NEWS_TOPICS: { value: NewsTopic; label: string }[] = [
   { value: 'science', label: 'Science' },
   { value: 'health', label: 'Health' },
 ];
+const VOICE_CHOICES: { value: VoiceName; label: string }[] = [
+  { value: 'onyx', label: 'Male — deep' },
+  { value: 'echo', label: 'Male — clear' },
+  { value: 'nova', label: 'Female — warm' },
+  { value: 'shimmer', label: 'Female — soft' },
+  { value: 'alloy', label: 'Neutral' },
+];
+
 const DEFAULT_NEWS: NewsTopic[] = ['world', 'nation', 'technology', 'local'];
 
 const SKILL_META: { value: Skill; title: string; desc: string; icon: React.ReactNode }[] = [
@@ -164,6 +172,33 @@ export default function Settings() {
         <p className="text-caption text-gray mt-2 px-1">
           You can send Wingman a voice note any time — it understands English and Roman Urdu.
         </p>
+
+        {(user.voice_replies ?? 'on_voice') !== 'off' && (
+          <>
+            <Section title="How Wingman sounds" />
+            <div className="card">
+              <div className="flex flex-wrap gap-2">
+                {VOICE_CHOICES.map((v) => {
+                  const on = (user.voice_name ?? 'nova') === v.value;
+                  return (
+                    <button
+                      key={v.value}
+                      onClick={() => save({ voice_name: v.value }, { voice_name: v.value })}
+                      className={`px-3.5 py-2 rounded-full text-body font-medium border transition-colors ${
+                        on ? 'bg-accent/15 border-accent text-accent' : 'bg-white/5 border-white/10 text-gray'
+                      }`}
+                    >
+                      {v.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-caption text-gray mt-3">
+                You can also just tell Wingman on WhatsApp — “use a male voice”.
+              </p>
+            </div>
+          </>
+        )}
 
         {/* Places */}
         <Section title="Your places" />

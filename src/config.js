@@ -96,7 +96,7 @@ const config = {
     // Latin script keeps Roman Urdu as Roman Urdu (see transcribe()).
     sttLanguage: process.env.VOICE_STT_LANGUAGE || 'en',
     ttsModel: process.env.VOICE_TTS_MODEL || 'gpt-4o-mini-tts',
-    ttsVoice: process.env.VOICE_TTS_VOICE || 'alloy',
+    ttsVoice: process.env.VOICE_TTS_VOICE || 'nova',
     get enabled() { return !!process.env.OPENAI_API_KEY; },
   },
 

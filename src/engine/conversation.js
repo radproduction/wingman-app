@@ -17,6 +17,8 @@ const { newsTools, newsToolNames } = require('./newsTools');
 const { memoryTools, memoryToolNames } = require('./memoryTools');
 const { mapsTools, mapsToolNames } = require('./mapsTools');
 const { webmailTools, webmailToolNames } = require('./webmailTools');
+const { voiceTools, voiceToolNames } = require('./voiceTools');
+const { executeVoiceTool } = require('./voiceExecutor');
 const { executeWebmailTool } = require('./webmailExecutor');
 const { executeMapsTool } = require('./mapsExecutor');
 const { executeMemoryTool } = require('./memoryExecutor');
@@ -300,7 +302,7 @@ async function runToolLoop(user, messages, system, maxRounds = 4) {
   for (let round = 0; round < maxRounds; round++) {
     const response = await claude.chatWithTools(convo, {
       system,
-      tools: [...calendarTools, ...gmailTools, ...driveTools, ...shopifyTools, ...newsTools, ...memoryTools, ...mapsTools, ...webmailTools],
+      tools: [...calendarTools, ...gmailTools, ...driveTools, ...shopifyTools, ...newsTools, ...memoryTools, ...mapsTools, ...webmailTools, ...voiceTools],
       maxTokens: 1024,
     });
 
@@ -327,6 +329,8 @@ async function runToolLoop(user, messages, system, maxRounds = 4) {
           result = await executeMapsTool(user, { name: block.name, input: block.input });
         } else if (webmailToolNames.has(block.name)) {
           result = await executeWebmailTool(user, { name: block.name, input: block.input });
+        } else if (voiceToolNames.has(block.name)) {
+          result = await executeVoiceTool(user, { name: block.name, input: block.input });
         } else {
           result = await executeCalendarTool(user, { name: block.name, input: block.input });
         }

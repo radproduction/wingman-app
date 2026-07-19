@@ -64,6 +64,7 @@ function applyMigrations() {
       ['shopify_domain', 'TEXT'],
       ['shopify_token', 'TEXT'],
 ['voice_replies', 'TEXT'],
+      ['voice_name', 'TEXT'],
       ['webmail_address','TEXT'],
       ['webmail_password_enc','TEXT'],
       ['webmail_imap_host','TEXT'],
