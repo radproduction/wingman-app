@@ -83,6 +83,14 @@ export const api = {
     get<HealthConnectInfo>('/health/connect'),
   healthResetLink: () => send<{ ingest_url: string }>('POST', '/health/reset-link'),
 
+  // ── Google Health (one-click OAuth: Android, Pixel Watch, Fitbit, Wear OS) ──
+  healthGoogle: () =>
+    get<{ connected: boolean; last_synced_at: string | null; connect_url: string }>('/health/google'),
+  healthGoogleSync: () =>
+    send<{ ok: boolean; saved: number; skipped: number; errors: string[] }>('POST', '/health/google/sync'),
+  healthGoogleDisconnect: () =>
+    send<{ ok: boolean; connected: boolean }>('POST', '/health/google/disconnect'),
+
   // ── Work clock (attendance / HRMS) ──
   workConnect: () =>
     get<{

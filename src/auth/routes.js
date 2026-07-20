@@ -20,7 +20,18 @@ router.get('/auth/google', (req, res) => {
 });
 
 /**
- * GET /auth/google/callback?code=...&state=<phone>
+ * GET /auth/google/health?phone=9715XXXXXXX
+ * Health has its own consent so connecting Calendar never asks for health data,
+ * and a user can grant one without the other.
+ */
+router.get('/auth/google/health', (req, res) => {
+  const phone = (req.query.phone || '').toString();
+  if (!phone) return res.status(400).send('Missing phone parameter.');
+  res.redirect(googleAuth.getHealthAuthUrl(phone));
+});
+
+/**
+ * GET /auth/google/callback?code=...&state=<phone>[|health]
  * Exchanges the code for tokens, stores them, confirms via WhatsApp, and
  * kicks off an initial email scan when Gmail was connected.
  */
@@ -34,7 +45,50 @@ router.get('/auth/google/callback', async (req, res) => {
     return res.status(400).send('Missing authorization code.');
   }
 
-  const phone = (state || '').toString();
+  const rawState = (state || '').toString();
+  const isHealthFlow = rawState.endsWith('|health');
+  const phone = isHealthFlow ? rawState.slice(0, -'|health'.length) : rawState;
+
+  // Health consent comes back through the same callback; handle it separately
+  // so it never touches the calendar/gmail token columns.
+  if (isHealthFlow) {
+    try {
+      const user = await googleAuth.handleHealthCallback(code.toString(), phone);
+
+      // Pull the first batch now so the user sees data immediately rather than
+      // waiting for the next scheduled sync.
+      let firstSync = { saved: 0 };
+      try {
+        firstSync = await require('../services/googleHealth').syncUser(user.id, { days: 14 });
+      } catch (e) {
+        console.warn('[auth] initial health sync failed:', e.message);
+      }
+
+      try {
+        if (wa.ready() && phone) {
+          await wa.sendMessage(
+            phone,
+            firstSync.saved
+              ? `Health connected ✅ I pulled in ${firstSync.saved} recent readings.\n\nTry asking: "how did I sleep?"`
+              : 'Health connected ✅\n\nNo readings yet — they\'ll appear once your phone or watch syncs with Google.'
+          );
+        }
+      } catch (waErr) {
+        console.warn('[auth] health confirmation failed:', waErr.message);
+      }
+
+      return res.send(`
+        <html><body style="font-family:sans-serif;text-align:center;padding:60px;">
+          <h2>✅ Health connected!</h2>
+          <p>${firstSync.saved ? `${firstSync.saved} recent readings pulled in.` : 'Readings will appear as your device syncs with Google.'}</p>
+          <p>You can close this tab and head back to WhatsApp.</p>
+        </body></html>
+      `);
+    } catch (err) {
+      console.error('[auth] Health callback error:', err);
+      return res.status(500).send(`Failed to connect Google Health: ${err.message}`);
+    }
+  }
 
   try {
     const user = await googleAuth.handleCallback(code.toString(), phone);

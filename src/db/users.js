@@ -46,7 +46,7 @@ function update(id, fields = {}) {
     'shopify_domain', 'shopify_token',
     'news_topics', 'news_city', 'news_country',
     'home_address', 'home_lat', 'home_lng', 'office_address', 'office_lat', 'office_lng',
-    'voice_replies', 'voice_name', 'assistant_name', 'health_token', 'work_token',
+    'voice_replies', 'voice_name', 'assistant_name', 'health_token', 'work_token', 'google_health_token', 'google_health_synced_at',
     'work_action_url', 'work_action_secret_enc', 'work_employee_ref',
     'webmail_address', 'webmail_password_enc', 'webmail_imap_host', 'webmail_imap_port',
     'webmail_smtp_host', 'webmail_smtp_port', 'webmail_from_name',

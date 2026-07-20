@@ -34,6 +34,18 @@ const IDENTITY_SCOPES = [
 // every pre-existing code path keeps working unchanged.
 const SCOPES = [...CALENDAR_SCOPES, ...GMAIL_SCOPES, ...DRIVE_SCOPES, ...IDENTITY_SCOPES];
 
+// Google Health API (read-only) — sleep, heart rate, steps and body metrics
+// from Android, Pixel Watch, Fitbit and anything else that syncs to Google.
+//
+// Kept deliberately OUT of SCOPES: health data is far more sensitive than a
+// calendar, so connecting Gmail must never drag a health consent along, and
+// existing users must not be forced to re-consent. Health is opt-in, on its own.
+const HEALTH_SCOPES = [
+  'https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly',
+  'https://www.googleapis.com/auth/googlehealth.sleep.readonly',
+  'https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly',
+];
+
 /**
  * Create a fresh OAuth2 client (not yet authorized).
  */
@@ -228,6 +240,69 @@ function getAuthorizedClient(user, service = 'calendar', account = null) {
   return oauth2Client;
 }
 
+// ── Google Health (separate, opt-in consent) ─────────────────────────
+
+/**
+ * Consent URL for health only. Reuses the same callback route — the `|health`
+ * suffix on `state` is what tells the callback which flow came back, so no
+ * second redirect URI has to be registered in Google Cloud.
+ */
+function getHealthAuthUrl(phone) {
+  const oauth2Client = createOAuthClient();
+  return oauth2Client.generateAuthUrl({
+    access_type: 'offline',
+    prompt: 'consent',
+    scope: HEALTH_SCOPES,
+    state: `${phone || ''}|health`,
+    include_granted_scopes: true,
+  });
+}
+
+/** Exchange the code and store the health token on its own column. */
+async function handleHealthCallback(code, phone) {
+  const oauth2Client = createOAuthClient();
+  const { tokens } = await oauth2Client.getToken(code);
+
+  let user = usersRepo.getByPhone(phone);
+  if (!user) user = usersRepo.create({ phone });
+
+  usersRepo.update(user.id, {
+    google_health_token: JSON.stringify(mergeTokens(user.google_health_token, tokens)),
+  });
+  return usersRepo.getById(user.id);
+}
+
+/**
+ * Authorized client for the Google Health API, or null when not connected.
+ * Refreshed tokens are written back so the connection survives on its own.
+ */
+function getHealthClient(user) {
+  if (!user || !user.google_health_token) return null;
+  let tokens;
+  try { tokens = JSON.parse(user.google_health_token); }
+  catch (_) { return null; }
+
+  const oauth2Client = createOAuthClient();
+  oauth2Client.setCredentials(tokens);
+  oauth2Client.on('tokens', (newTokens) => {
+    try {
+      const fresh = usersRepo.getById(user.id);
+      usersRepo.update(user.id, {
+        google_health_token: JSON.stringify(mergeTokens(fresh && fresh.google_health_token, newTokens)),
+      });
+    } catch (_) { /* non-fatal */ }
+  });
+  return oauth2Client;
+}
+
+function isHealthConnected(user) {
+  return !!(user && user.google_health_token);
+}
+
+function disconnectHealth(userId) {
+  usersRepo.update(userId, { google_health_token: null });
+}
+
 /** Does the user have at least one linked Google account row? */
 function hasLinkedAccount(user) {
   if (!user || !user.id) return false;
@@ -248,6 +323,12 @@ module.exports = {
   CALENDAR_SCOPES,
   GMAIL_SCOPES,
   DRIVE_SCOPES,
+  HEALTH_SCOPES,
+  getHealthAuthUrl,
+  handleHealthCallback,
+  getHealthClient,
+  isHealthConnected,
+  disconnectHealth,
   IDENTITY_SCOPES,
   fetchAccountEmail,
   hasLinkedAccount,

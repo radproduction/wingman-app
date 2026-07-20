@@ -68,6 +68,8 @@ function applyMigrations() {
       ['assistant_name', 'TEXT'],
       ['health_token', 'TEXT'],
       ['work_token', 'TEXT'],
+      ['google_health_token', 'TEXT'],
+      ['google_health_synced_at', 'TEXT'],
       ['work_action_url', 'TEXT'],
       ['work_action_secret_enc', 'TEXT'],
       ['work_employee_ref', 'TEXT'],

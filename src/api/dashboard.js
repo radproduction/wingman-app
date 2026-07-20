@@ -393,6 +393,42 @@ router.get('/health/connect', (req, res) => {
   });
 });
 
+/**
+ * Google Health — the one-click path (Android, Pixel Watch, Fitbit, Wear OS).
+ * Returns the consent URL rather than redirecting, so the SPA can open it.
+ */
+router.get('/health/google', (req, res) => {
+  if (!req.user) return res.status(401).json({ error: 'Authentication required.' });
+  const googleAuth = require('../auth/googleAuth');
+  const phone = String(req.user.phone || '').replace(/[^0-9]/g, '');
+  res.json({
+    connected: googleAuth.isHealthConnected(req.user),
+    last_synced_at: req.user.google_health_synced_at || null,
+    connect_url: `${config.publicBaseUrl}/auth/google/health?phone=${encodeURIComponent(phone)}`,
+  });
+});
+
+/** Pull now, so the user isn't left staring at an empty screen after connecting. */
+router.post('/health/google/sync', async (req, res) => {
+  if (!req.user) return res.status(401).json({ error: 'Authentication required.' });
+  try {
+    const r = await require('../services/googleHealth').syncUser(req.user.id, { days: 14 });
+    if (r.errors && r.errors.includes('NOT_CONNECTED')) {
+      return res.status(400).json({ error: 'Google Health is not connected yet.' });
+    }
+    res.json({ ok: true, saved: r.saved, skipped: r.skipped, errors: r.errors });
+  } catch (err) {
+    console.error('[health] google sync failed:', err.message);
+    res.status(500).json({ error: 'Could not sync from Google Health.' });
+  }
+});
+
+router.post('/health/google/disconnect', (req, res) => {
+  if (!req.user) return res.status(401).json({ error: 'Authentication required.' });
+  require('../auth/googleAuth').disconnectHealth(req.user.id);
+  res.json({ ok: true, connected: false });
+});
+
 /** Rotate the link (old one stops working immediately). */
 router.post('/health/reset-link', (req, res) => {
   if (!req.user) return res.status(401).json({ error: 'Authentication required.' });
