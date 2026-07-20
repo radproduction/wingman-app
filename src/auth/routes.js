@@ -136,25 +136,11 @@ router.get('/auth/google/callback', async (req, res) => {
 });
 
 /**
- * GET /auth/wearable/:provider?phone=…
- * One route for every wearable brand — the provider registry supplies the rest.
+ * GET /auth/wearable/callback?code=…&state=<phone>:<provider>
+ *
+ * MUST stay above '/auth/wearable/:provider' — Express matches in order, and
+ * the parameterised route would otherwise swallow this one as provider="callback".
  */
-router.get('/auth/wearable/:provider', (req, res) => {
-  const wearables = require('../services/wearables');
-  const phone = (req.query.phone || '').toString();
-  if (!phone) return res.status(400).send('Missing phone parameter.');
-
-  try {
-    res.redirect(wearables.connectUrl(req.params.provider, phone));
-  } catch (err) {
-    if (err.message === 'PROVIDER_NOT_CONFIGURED') {
-      return res.status(503).send('That device is not set up on this server yet.');
-    }
-    return res.status(400).send('Unknown device.');
-  }
-});
-
-/** GET /auth/wearable/callback?code=…&state=<phone>:<provider> */
 router.get('/auth/wearable/callback', async (req, res) => {
   const wearables = require('../services/wearables');
   const { code, state, error } = req.query;
@@ -198,6 +184,30 @@ router.get('/auth/wearable/callback', async (req, res) => {
   } catch (err) {
     console.error('[auth] wearable callback error:', err.message);
     res.status(500).send(`Could not complete the connection: ${err.message}`);
+  }
+});
+
+/**
+ * GET /auth/wearable/:provider?phone=…
+ * One route for every wearable brand — the provider registry supplies the rest.
+ * Registered AFTER the callback above, deliberately.
+ */
+router.get('/auth/wearable/:provider', (req, res) => {
+  const wearables = require('../services/wearables');
+  // Belt and braces: even if these routes are ever reordered, 'callback' must
+  // never be treated as a provider name.
+  if (req.params.provider === 'callback') return res.status(400).send('Invalid callback.');
+
+  const phone = (req.query.phone || '').toString();
+  if (!phone) return res.status(400).send('Missing phone parameter.');
+
+  try {
+    res.redirect(wearables.connectUrl(req.params.provider, phone));
+  } catch (err) {
+    if (err.message === 'PROVIDER_NOT_CONFIGURED') {
+      return res.status(503).send('That device is not set up on this server yet.');
+    }
+    return res.status(400).send('Unknown device.');
   }
 });
 
