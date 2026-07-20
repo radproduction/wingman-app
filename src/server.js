@@ -94,6 +94,78 @@ app.get('/_diag/net', async (req, res) => {
   res.json(out);
 });
 
+// ─── TEMPORARY diagnostic: why didn't the briefing arrive? ──────────
+//   Shows the user's briefing time, timezone, whether they're inside WhatsApp's
+//   24h window, and the ACTUAL result of sending a briefing right now (incl. the
+//   real Meta error). Gated by ADMIN_PASSWORD. Remove once briefings are fixed.
+app.get('/_diag/briefing', async (req, res) => {
+  const admin = process.env.ADMIN_PASSWORD;
+  if (admin && req.query.key !== admin) return res.status(403).json({ error: 'forbidden' });
+
+  const phone = String(req.query.phone || '').replace(/[^0-9]/g, '');
+  if (!phone) return res.status(400).json({ error: 'pass ?phone=<number, digits only>' });
+
+  const usersRepo = require('./db/users');
+  const user = usersRepo.getByPhone(phone) || usersRepo.getByPhone(`+${phone}`);
+  if (!user) return res.status(404).json({ error: `no user with phone ${phone}` });
+
+  const { db } = require('./db');
+  const t = require('./utils/time');
+  const now = new Date();
+  const tz = user.timezone || 'Asia/Karachi';
+
+  // Last inbound (role='user') message — this is what opens the 24h window.
+  const lastIn = db.prepare(
+    "SELECT created_at FROM conversations WHERE user_id = ? AND role = 'user' ORDER BY created_at DESC LIMIT 1"
+  ).get(user.id);
+  const lastInboundAt = lastIn ? lastIn.created_at : null;
+  // SQLite stores UTC as 'YYYY-MM-DD HH:MM:SS'; parse it as UTC.
+  const lastInMs = lastInboundAt ? Date.parse(lastInboundAt.replace(' ', 'T') + 'Z') : null;
+  const hoursSince = lastInMs ? (now - lastInMs) / 3600000 : null;
+  const within24h = hoursSince != null && hoursSince < 24;
+
+  const out = {
+    phone: user.phone,
+    name: user.name,
+    onboarded: usersRepo.isOnboarded(user),
+    timezone: tz,
+    localTimeNow: t.timeLabel(now.toISOString(), tz),
+    briefing_time: user.briefing_time || '(unset → 07:00)',
+    proactiveness_level: user.proactiveness_level || 'high',
+    lastBriefingDate: (user.preferences || {}).lastBriefingDate || null,
+    lastInboundAt,
+    hoursSinceLastInbound: hoursSince != null ? Math.round(hoursSince * 10) / 10 : null,
+    within24hWindow: within24h,
+    windowNote: within24h
+      ? 'In window — a free-form briefing WILL deliver.'
+      : 'OUTSIDE window — a free-form briefing is DROPPED by WhatsApp. Needs a template.',
+  };
+
+  const wa = require('./whatsapp/client');
+  out.whatsappReady = wa.ready();
+
+  if (req.query.send === '1') {
+    out.sendAttempted = true;
+    try {
+      const mb = require('./services/morningBriefing');
+      const agg = await mb.aggregate(user, now);
+      const text = mb.format(user, agg);
+      out.briefingPreview = text.slice(0, 160);
+      // Send directly (not via sendForUser, which swallows the error) so the
+      // REAL Meta response surfaces — that's the whole point of this probe.
+      await wa.sendMessage(user.phone, text);
+      out.sent = true;
+    } catch (err) {
+      out.sent = false;
+      out.sendError = err.message;  // e.g. Meta 131047 = outside 24h window
+    }
+  } else {
+    out.hint = 'Add &send=1 to actually attempt a send and see the real Meta result.';
+  }
+
+  res.json(out);
+});
+
 // ─── Health ingest ──────────────────────────────────────────────────
 //   Public by design: an iPhone Shortcut (or any automation / wearable cloud)
 //   POSTs here. Authenticated by the user's private token in the URL, since
