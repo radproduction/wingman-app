@@ -312,11 +312,21 @@ async function sendOtp(phoneNumber, code) {
   return true;
 }
 
+/**
+ * Send a Wingman-initiated message, honouring WhatsApp's 24h rule.
+ *
+ * Inside the window a free-form message delivers, so the full rich text goes
+ * out unchanged. Outside it, Meta only accepts an approved template — so the
+ * caller supplies `templateParams`, one single-line value per {{n}}. The layout
+ * (line breaks, headers, blank lines) lives in the template's static text,
+ * which is the only part allowed to contain newlines.
+ */
 async function sendProactiveMessage(user, text, {
   now = new Date(),
   templateName = config.whatsappCloud.proactiveTemplate,
   templateLang = config.whatsappCloud.proactiveTemplateLang,
   useTemplate = config.whatsappCloud.proactiveUseTemplate,
+  templateParams = null,
   logLabel = 'proactive',
 } = {}) {
   if (!user || !user.phone) throw new Error('user with phone is required');
@@ -330,11 +340,17 @@ async function sendProactiveMessage(user, text, {
     return sendMessage(digits, text);
   }
 
+  // Structured params keep the template's formatting; a single flattened blob
+  // is the fallback for short one-topic alerts that have no template of their own.
+  const values = (Array.isArray(templateParams) && templateParams.length)
+    ? templateParams.map(toTemplateParam)
+    : [toTemplateParam(text)];
+
   const sent = await cloudApi.sendTemplate(
     digits,
     templateName,
     templateLang,
-    [{ type: 'body', parameters: [{ type: 'text', text: toTemplateParam(text) }] }],
+    [{ type: 'body', parameters: values.map((v) => ({ type: 'text', text: v })) }],
   );
 
   conversations.logOutbound({

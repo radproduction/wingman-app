@@ -146,6 +146,59 @@ function format(user, agg) {
   return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
+/**
+ * Values for the approved WhatsApp template, used when the user is outside the
+ * 24h window and only a template will deliver.
+ *
+ * WhatsApp forbids newlines inside a template parameter, so the layout lives in
+ * the template's static text and each parameter carries one section on a single
+ * line. Every parameter must be non-empty — Meta rejects blanks — hence the
+ * fallbacks. Order must match {{1}}…{{6}} in the approved template.
+ */
+function templateParams(user, agg) {
+  const tz = agg.tz;
+  const join = (arr) => arr.filter(Boolean).join('  •  ');
+
+  const greeting = `${t.greetingInTz(tz)}, ${user.name || 'there'}!`;
+
+  const weather = agg.weather
+    ? `${agg.weather.city}: ${agg.weather.temp}°C, ${agg.weather.condition}`
+    : 'Weather unavailable';
+
+  const schedule = agg.events.length
+    ? join(agg.events.map((e) => {
+      const loc = e.location ? ` (${e.location})` : '';
+      return `${t.timeLabel(e.start_time, tz)} — ${e.title || 'Untitled'}${loc}`;
+    }))
+    : 'No meetings — open runway for deep work';
+
+  const email = `${agg.emailCounts.urgent} urgent, ${agg.emailCounts.needsReply} need reply`;
+
+  const tasks = agg.tasksDue.length
+    ? join(agg.tasksDue.map((x) => x.title))
+    : 'Nothing due today';
+
+  // A template cannot skip a section, so anything optional rides along with the
+  // closing line rather than needing its own (possibly empty) parameter.
+  const extras = [];
+  for (const b of agg.bills) extras.push(`💰 ${b.name} due`);
+  for (const d of agg.deliveries.slice(0, 2)) extras.push(`📦 ${d.item_name || 'Order'}`);
+  if (agg.healthLine) extras.push(`❤️ ${agg.healthLine}`);
+
+  const hour = t.hourInTz(tz);
+  const closing = hour < 12 ? 'Have a productive day!'
+    : hour < 17 ? 'Have a productive afternoon!' : 'Have a good evening!';
+
+  return [
+    greeting,
+    weather,
+    schedule,
+    email,
+    tasks,
+    extras.length ? `${join(extras)}  •  ${closing}` : closing,
+  ];
+}
+
 function fmtAmount(n) {
   if (n == null) return '';
   return Number(n).toLocaleString('en-US');
@@ -170,8 +223,15 @@ async function sendForUser(userId, { now = new Date(), send = true } = {}) {
   let sendError = null;
   if (send) {
     try {
-      if (wa().ready()) { await wa().sendProactiveMessage(user, text, { now, logLabel: 'briefing' }); sent = true; }
-      else console.log('[morningBriefing] (WA not ready) briefing for', user.phone);
+      if (wa().ready()) {
+        await wa().sendProactiveMessage(user, text, {
+          now,
+          logLabel: 'briefing',
+          templateName: require('../config').whatsappCloud.briefingTemplate,
+          templateParams: templateParams(user, agg),
+        });
+        sent = true;
+      } else console.log('[morningBriefing] (WA not ready) briefing for', user.phone);
     } catch (err) {
       sendError = err.message;
       console.warn('[morningBriefing] send failed:', err.message);
@@ -228,4 +288,4 @@ async function runDueUsers({ hour = 7, now = new Date(), windowMin = 15 } = {}) 
   return results;
 }
 
-module.exports = { aggregate, format, sendForUser, runDueUsers };
+module.exports = { aggregate, format, templateParams, sendForUser, runDueUsers };

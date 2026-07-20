@@ -72,6 +72,10 @@ const config = {
     // (in or out of the 24h window) — required for new-user login — now that the
     // app is Live with billing configured. Set OTP_USE_TEMPLATE=0 to force text.
     otpUseTemplate: process.env.OTP_USE_TEMPLATE !== '0',
+    // Structured templates keep each message's own layout, so their parameter
+    // counts differ — they must never fall back to one another.
+    briefingTemplate: process.env.BRIEFING_TEMPLATE_NAME || '',
+    wrapTemplate: process.env.WRAP_TEMPLATE_NAME || '',
     proactiveTemplate: process.env.PROACTIVE_TEMPLATE_NAME || '',
     proactiveTemplateLang: process.env.PROACTIVE_TEMPLATE_LANG || 'en_US',
     proactiveUseTemplate: process.env.PROACTIVE_USE_TEMPLATE !== '0',

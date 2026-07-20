@@ -90,6 +90,42 @@ function format(user, agg) {
   return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
+/**
+ * Values for the approved wrap template, used outside the 24h window. Same rule
+ * as the briefing: no newlines inside a parameter, none may be empty, and the
+ * order must match {{1}}…{{7}} in the approved template.
+ */
+function templateParams(user, agg) {
+  const tz = agg.tz;
+  const join = (arr) => arr.filter(Boolean).join('  •  ');
+
+  const pending = [];
+  for (const task of agg.incomplete.slice(0, 5)) pending.push(task.title);
+  for (const f of agg.openFollowups.slice(0, 3)) {
+    if (f.type === 'promise_made') pending.push(`You said you'd ${f.description}`);
+  }
+
+  const tomorrow = [`${agg.tomorrowEvents.length} meeting${agg.tomorrowEvents.length === 1 ? '' : 's'}`];
+  if (agg.tomorrowEvents[0]) {
+    tomorrow.push(`${t.timeLabel(agg.tomorrowEvents[0].start_time, tz)} — ${agg.tomorrowEvents[0].title}`);
+  }
+  for (const b of agg.billsTomorrow) {
+    tomorrow.push(`💰 ${b.name} due (${b.currency} ${Number(b.amount || 0).toLocaleString('en-US')})`);
+  }
+
+  const wrapHour = t.hourInTz(tz);
+
+  return [
+    `That's a wrap, ${user.name || 'there'}!`,
+    `${agg.completedTasks}/${agg.totalTasks} tasks`,
+    `replied to ${agg.repliedEmails}, ${agg.pendingEmails} still pending`,
+    String(agg.meetingsAttended),
+    pending.length ? join(pending) : 'Nothing left over',
+    join(tomorrow),
+    wrapHour >= 20 || wrapHour < 5 ? 'Good night! 💤' : 'Enjoy the rest of your day! 👋',
+  ];
+}
+
 async function sendForUser(userId, { now = new Date(), send = true } = {}) {
   const user = usersRepo.getById(userId);
   if (!user) return { text: '', sent: false, skipped: 'no_user' };
@@ -101,7 +137,15 @@ async function sendForUser(userId, { now = new Date(), send = true } = {}) {
   let sendError = null;
   if (send) {
     try {
-      if (wa().ready()) { await wa().sendProactiveMessage(user, text, { now, logLabel: 'wrap' }); sent = true; }
+      if (wa().ready()) {
+        await wa().sendProactiveMessage(user, text, {
+          now,
+          logLabel: 'wrap',
+          templateName: require('../config').whatsappCloud.wrapTemplate,
+          templateParams: templateParams(user, agg),
+        });
+        sent = true;
+      }
       else console.log('[endOfDayWrap] (WA not ready) wrap for', user.phone);
     } catch (err) {
       sendError = err.message;
@@ -153,4 +197,4 @@ async function runDueUsers({ hour = 20, now = new Date(), windowMin = 15 } = {})
   return results;
 }
 
-module.exports = { aggregate, format, sendForUser, runDueUsers };
+module.exports = { aggregate, format, templateParams, sendForUser, runDueUsers };
