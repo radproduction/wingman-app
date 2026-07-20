@@ -46,6 +46,14 @@ async function executeWebmailTool(user, toolUse) {
       return { error: 'WEBMAIL_AUTH_FAILED', detail: 'Stored mail credentials could not be read — the user should reconnect the mailbox.' };
     }
     if (msg === 'WEBMAIL_HOST_NOT_FOUND' || msg === 'WEBMAIL_CONNECTION_FAILED') {
+      // Reading and sending fail differently here: IMAP works from this host,
+      // outbound SMTP is blocked by it. Saying which one matters.
+      if (name === 'send_business_email') {
+        return {
+          error: 'WEBMAIL_SEND_BLOCKED',
+          detail: 'The email was NOT sent. This server cannot reach the outgoing mail server — reading the inbox still works, but replies from this address are not possible yet.',
+        };
+      }
       return { error: 'WEBMAIL_UNREACHABLE', detail: 'The mail server did not respond.' };
     }
     if (msg === 'WEBMAIL_SENDER_UNVERIFIED') {

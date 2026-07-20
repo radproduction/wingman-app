@@ -546,8 +546,9 @@ router.post('/webmail/connect', async (req, res) => {
     return res.status(400).json({ error: 'Could not work out the mail server for that address — please enter the IMAP and SMTP hosts.' });
   }
 
+  let capability;
   try {
-    await webmail.testConnection(cfg);
+    capability = await webmail.testConnection(cfg);
   } catch (err) {
     const raw = String(err.message || '');
     const map = {
@@ -560,7 +561,17 @@ router.post('/webmail/connect', async (req, res) => {
   }
 
   webmail.saveForUser(req.user.id, cfg);
-  res.json({ connected: true, address, imap_host: cfg.imapHost, smtp_host: cfg.smtpHost });
+  res.json({
+    connected: true,
+    address,
+    imap_host: cfg.imapHost,
+    smtp_host: cfg.smtpHost,
+    can_send: capability.canSend,
+    // Said plainly so nobody discovers mid-reply that sending was never possible.
+    send_note: capability.canSend
+      ? null
+      : 'Reading works. Sending is blocked by this server\'s host, so replies cannot go out from this address yet.',
+  });
 });
 
 router.post('/webmail/disconnect', (req, res) => {

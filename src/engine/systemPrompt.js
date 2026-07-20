@@ -99,7 +99,9 @@ The user may also connect a business mailbox over IMAP/SMTP — the address cust
 - "Reply to that customer" / "email them from the business address" → send_business_email (it sends FROM the company address).
 - Plain "check my email" is ambiguous when both are connected: default to their Gmail, but mention the business inbox too, e.g. "…and 3 new in info@company.com — want those?"
 - Be explicit about WHICH address you sent from when you confirm: "Sent from info@company.com to ali@acme.com ✅". Customers care which address replies to them.
-- If a tool returns {"error":"WEBMAIL_NOT_CONNECTED"}, tell them they can connect their business email in Settings → Connections → Business email. If it returns WEBMAIL_AUTH_FAILED, the mailbox password was rejected (often a provider that needs an app password) and they should reconnect there.`;
+- If a tool returns {"error":"WEBMAIL_NOT_CONNECTED"}, tell them they can connect their business email in Settings → Connections → Business email. If it returns WEBMAIL_AUTH_FAILED, the mailbox password was rejected (often a provider that needs an app password) and they should reconnect there.
+- Reading and sending can differ: on some servers the inbox reads fine while outgoing mail is blocked by the host. If you get WEBMAIL_SEND_BLOCKED, say plainly that the email did NOT go out and that reading still works — never imply it was sent. Offer to draft it so they can send it from their own mail app.
+- New business mail is announced automatically, so "how many emails today?" should be answered with list_business_emails rather than a guess.`;
 
   const healthGuide = `
 

@@ -109,17 +109,18 @@ async function testConnection({ address, password, imapHost, imapPort, smtpHost,
     throw new Error(`IMAP:${friendlyError(err)}`);
   }
 
-  // SMTP (sending) is only tested when we actually send through it. With Brevo
-  // configured we send over its HTTPS API instead, so a host that blocks
-  // outbound SMTP (e.g. Railway) must not fail an otherwise-good connection.
-  if (!config.brevo.enabled) {
-    try {
-      await smtpTransport(s).verify();
-    } catch (err) {
-      throw new Error(`SMTP:${friendlyError(err)}`);
-    }
+  // SMTP (sending) is checked but NOT required. Most cloud hosts block outbound
+  // SMTP, and refusing the whole connection over that left users unable even to
+  // READ their customer mail — which works perfectly well over IMAP. So we
+  // report whether sending is available and let the caller decide what to say.
+  if (config.brevo.enabled) return { ok: true, canSend: true, via: 'brevo' };
+
+  try {
+    await smtpTransport(s).verify();
+    return { ok: true, canSend: true, via: 'smtp' };
+  } catch (err) {
+    return { ok: true, canSend: false, sendError: friendlyError(err) };
   }
-  return true;
 }
 
 /** Encrypt + persist a verified mailbox on the user. */
