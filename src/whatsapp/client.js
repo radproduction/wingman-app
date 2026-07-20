@@ -46,6 +46,28 @@ function lastInboundAtForUser(userId) {
   return row ? parseSqliteUtc(row.created_at) : null;
 }
 
+// WhatsApp rejects template parameters that contain newlines, tabs, or more
+// than four consecutive spaces — so a multi-line briefing cannot be passed as a
+// parameter as-is; Meta refuses the whole send. Flatten it to a single line and
+// clamp to the 1024-char parameter limit. The template's own static text is
+// what provides the layout, since only PARAMETERS carry this restriction.
+const TEMPLATE_PARAM_MAX = 1000;
+
+function toTemplateParam(text) {
+  const flat = String(text || '')
+    .replace(/\r/g, '')
+    .replace(/[*_~]/g, '')          // WhatsApp markdown reads as literal in templates
+    .replace(/\s*\n+\s*/g, ' · ')   // line breaks → a readable separator
+    .replace(/\t/g, ' ')
+    .replace(/ {2,}/g, ' ')
+    .replace(/^(?:\s*·\s*)+|(?:\s*·\s*)+$/g, '')  // no dangling separators
+    .trim();
+  if (!flat) return '—';           // Meta rejects empty parameters
+  return flat.length <= TEMPLATE_PARAM_MAX
+    ? flat
+    : `${flat.slice(0, TEMPLATE_PARAM_MAX - 1).trimEnd()}…`;
+}
+
 function isWithinCustomerWindow(user, now = new Date()) {
   const lastInboundAt = lastInboundAtForUser(user && user.id);
   if (!lastInboundAt) return false;
@@ -312,7 +334,7 @@ async function sendProactiveMessage(user, text, {
     digits,
     templateName,
     templateLang,
-    [{ type: 'body', parameters: [{ type: 'text', text: String(text || '') }] }],
+    [{ type: 'body', parameters: [{ type: 'text', text: toTemplateParam(text) }] }],
   );
 
   conversations.logOutbound({
@@ -388,5 +410,6 @@ function status() {
 
 module.exports = {
   initWhatsApp, sendMessage, sendRaw, sendOtp, sendProactiveMessage, getClient, ready, toChatId,
+  toTemplateParam, isWithinCustomerWindow,
   getLatestQr, status, requestPairingCode,
 };
