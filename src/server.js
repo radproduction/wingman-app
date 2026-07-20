@@ -53,6 +53,47 @@ app.get('/health', (req, res) => {
   res.json({ ok: true, whatsappReady: wa.ready() });
 });
 
+// ─── TEMPORARY diagnostic ───────────────────────────────────────────
+//   Reports this server's outbound IP and whether it can actually reach a
+//   mail host from Railway — used to prove a datacenter-IP firewall block on
+//   shared hosting. Guarded by ADMIN_PASSWORD and refuses private targets so
+//   it can't be used as an internal port scanner. Remove once webmail works.
+app.get('/_diag/net', async (req, res) => {
+  const admin = process.env.ADMIN_PASSWORD;
+  if (admin && req.query.key !== admin) return res.status(403).json({ error: 'forbidden' });
+
+  const net = require('net');
+  const dns = require('dns').promises;
+  const outboundUrl = require('./utils/outboundUrl');
+  const out = {};
+
+  try {
+    const r = await fetch('https://api.ipify.org');
+    out.outboundIp = (await r.text()).trim();
+  } catch (err) { out.outboundIp = `error: ${err.message}`; }
+
+  const host = String(req.query.host || 'mail.wehearyou.studio');
+  const port = parseInt(req.query.port, 10) || 993;
+  try {
+    const addrs = net.isIP(host) ? [{ address: host }] : await dns.lookup(host, { all: true });
+    out.resolved = addrs.map((a) => a.address);
+    if (addrs.some((a) => outboundUrl.isPrivateAddress(a.address))) {
+      out.probe = 'refused: target resolves to a private address';
+    } else {
+      out.probe = await new Promise((resolve) => {
+        const sock = net.connect({ host, port });
+        const done = (r) => { try { sock.destroy(); } catch (_) {} resolve(r); };
+        sock.setTimeout(6000);
+        sock.on('connect', () => done(`${host}:${port} REACHABLE`));
+        sock.on('timeout', () => done(`${host}:${port} TIMEOUT (blocked by firewall)`));
+        sock.on('error', (e) => done(`${host}:${port} ${e.code || e.message}`));
+      });
+    }
+  } catch (err) { out.probe = `error: ${err.message}`; }
+
+  res.json(out);
+});
+
 // ─── Health ingest ──────────────────────────────────────────────────
 //   Public by design: an iPhone Shortcut (or any automation / wearable cloud)
 //   POSTs here. Authenticated by the user's private token in the URL, since
