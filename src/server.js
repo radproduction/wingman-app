@@ -166,6 +166,48 @@ app.get('/_diag/briefing', async (req, res) => {
   res.json(out);
 });
 
+// ─── TEMPORARY diagnostic: what does the WhatsApp side actually see? ──
+//   Settings says connected while chat says otherwise, so this reports the
+//   user row the webhook would resolve and exactly what the health tool sees
+//   for them. Remove once this is settled.
+app.get('/_diag/health', (req, res) => {
+  const admin = process.env.ADMIN_PASSWORD;
+  if (admin && req.query.key !== admin) return res.status(403).json({ error: 'forbidden' });
+
+  const usersRepo = require('./db/users');
+  const { db } = require('./db');
+  const digits = String(req.query.phone || '').replace(/[^0-9]/g, '');
+  if (!digits) return res.status(400).json({ error: 'pass ?phone=<digits>' });
+
+  // Exactly how the Cloud API webhook resolves a sender.
+  const asWebhookSees = usersRepo.getByPhone(digits);
+
+  // Every row whose phone looks like this number, to expose duplicates stored
+  // in a different format (a '+' prefix, spaces, a country-code variant).
+  const similar = db.prepare(
+    "SELECT id, phone, name, created_at FROM users WHERE replace(replace(phone,'+',''),' ','') LIKE ?"
+  ).all(`%${digits.slice(-9)}%`);
+
+  const out = {
+    looked_up: digits,
+    webhook_finds_user: !!asWebhookSees,
+    matching_rows: similar.map((u) => ({ id: u.id, phone: u.phone, name: u.name, created_at: u.created_at })),
+    duplicate_accounts: similar.length > 1,
+  };
+
+  if (asWebhookSees) {
+    const health = require('./services/health');
+    out.health_for_that_user = health.connectionStatus(asWebhookSees);
+    out.google_health_token_set = !!asWebhookSees.google_health_token;
+    out.wearables = require('./db/wearableAccounts').listForUser(asWebhookSees.id)
+      .map((a) => ({ provider: a.provider, last_synced_at: a.last_synced_at, last_error: a.last_error }));
+    out.reading_count = db.prepare('SELECT count(*) c FROM health_data WHERE user_id = ?')
+      .get(asWebhookSees.id).c;
+  }
+
+  res.json(out);
+});
+
 // ─── Health ingest ──────────────────────────────────────────────────
 //   Public by design: an iPhone Shortcut (or any automation / wearable cloud)
 //   POSTs here. Authenticated by the user's private token in the URL, since
