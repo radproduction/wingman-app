@@ -12,6 +12,9 @@ const { db, uuid } = require('./index');
  */
 function create(userId, b) {
   const id = uuid();
+  const sentAt = Object.prototype.hasOwnProperty.call(b || {}, 'sentAt')
+    ? (b.sentAt || null)
+    : new Date().toISOString();
   db.prepare(`
     INSERT INTO briefings (id, user_id, type, content, payload, sent_at)
     VALUES (@id, @user_id, @type, @content, @payload, @sent_at)
@@ -21,7 +24,7 @@ function create(userId, b) {
     type: b.type,
     content: b.content || '',
     payload: JSON.stringify(b.payload || {}),
-    sent_at: b.sentAt || new Date().toISOString(),
+    sent_at: sentAt,
   });
   return id;
 }

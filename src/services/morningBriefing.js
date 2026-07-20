@@ -166,28 +166,33 @@ async function sendForUser(userId, { now = new Date(), send = true } = {}) {
   const agg = await aggregate(user, now);
   const text = format(user, agg);
 
+  let sent = false;
+  let sendError = null;
+  if (send) {
+    try {
+      if (wa().ready()) { await wa().sendProactiveMessage(user, text, { now, logLabel: 'briefing' }); sent = true; }
+      else console.log('[morningBriefing] (WA not ready) briefing for', user.phone);
+    } catch (err) {
+      sendError = err.message;
+      console.warn('[morningBriefing] send failed:', err.message);
+    }
+  }
+
   briefingsRepo.create(userId, {
     type: 'morning',
     content: text,
+    sentAt: sent ? now.toISOString() : null,
     payload: {
       events: agg.events.length,
       emailCounts: agg.emailCounts,
       tasksDue: agg.tasksDue.length,
       bills: agg.bills.length,
       deliveries: agg.deliveries.length,
+      delivery: { sent, error: sendError },
     },
   });
 
-  let sent = false;
-  if (send) {
-    try {
-      if (wa().ready()) { await wa().sendMessage(user.phone, text); sent = true; }
-      else console.log('[morningBriefing] (WA not ready) briefing for', user.phone);
-    } catch (err) {
-      console.warn('[morningBriefing] send failed:', err.message);
-    }
-  }
-  return { text, sent };
+  return { text, sent, sendError };
 }
 
 /**
@@ -208,13 +213,16 @@ async function runDueUsers({ hour = 7, now = new Date(), windowMin = 15 } = {}) 
     const dayKey = t.dateKeyInTz(tz, now);
     if ((u.preferences || {}).lastBriefingDate === dayKey) continue;
 
-    results.push({ phone: u.phone, at: target, ...(await sendForUser(u.id, { now })) });
+    const result = await sendForUser(u.id, { now });
+    results.push({ phone: u.phone, at: target, ...result });
 
-    // Re-read so we don't clobber preference changes made while sending.
-    const fresh = usersRepo.getById(u.id) || u;
-    const prefs = fresh.preferences || {};
-    prefs.lastBriefingDate = dayKey;
-    usersRepo.update(u.id, { preferences: prefs });
+    if (result.sent) {
+      // Re-read so we don't clobber preference changes made while sending.
+      const fresh = usersRepo.getById(u.id) || u;
+      const prefs = fresh.preferences || {};
+      prefs.lastBriefingDate = dayKey;
+      usersRepo.update(u.id, { preferences: prefs });
+    }
   }
   if (results.length) console.log('[morningBriefing] sent to', results.length, 'user(s)');
   return results;

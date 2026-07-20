@@ -97,26 +97,31 @@ async function sendForUser(userId, { now = new Date(), send = true } = {}) {
   const agg = aggregate(user, now);
   const text = format(user, agg);
 
+  let sent = false;
+  let sendError = null;
+  if (send) {
+    try {
+      if (wa().ready()) { await wa().sendProactiveMessage(user, text, { now, logLabel: 'wrap' }); sent = true; }
+      else console.log('[endOfDayWrap] (WA not ready) wrap for', user.phone);
+    } catch (err) {
+      sendError = err.message;
+      console.warn('[endOfDayWrap] send failed:', err.message);
+    }
+  }
+
   briefingsRepo.create(userId, {
     type: 'evening',
     content: text,
+    sentAt: sent ? now.toISOString() : null,
     payload: {
       completed: agg.completedTasks, total: agg.totalTasks,
       replied: agg.repliedEmails, pending: agg.pendingEmails,
       meetings: agg.meetingsAttended, tomorrow: agg.tomorrowEvents.length,
+      delivery: { sent, error: sendError },
     },
   });
 
-  let sent = false;
-  if (send) {
-    try {
-      if (wa().ready()) { await wa().sendMessage(user.phone, text); sent = true; }
-      else console.log('[endOfDayWrap] (WA not ready) wrap for', user.phone);
-    } catch (err) {
-      console.warn('[endOfDayWrap] send failed:', err.message);
-    }
-  }
-  return { text, sent };
+  return { text, sent, sendError };
 }
 
 async function runDueUsers({ hour = 20, now = new Date(), windowMin = 15 } = {}) {
@@ -134,12 +139,15 @@ async function runDueUsers({ hour = 20, now = new Date(), windowMin = 15 } = {})
     const dayKey = t.dateKeyInTz(tz, now);
     if ((u.preferences || {}).lastDebriefDate === dayKey) continue;
 
-    results.push({ phone: u.phone, at: target, ...(await sendForUser(u.id, { now })) });
+    const result = await sendForUser(u.id, { now });
+    results.push({ phone: u.phone, at: target, ...result });
 
-    const fresh = usersRepo.getById(u.id) || u;
-    const prefs = fresh.preferences || {};
-    prefs.lastDebriefDate = dayKey;
-    usersRepo.update(u.id, { preferences: prefs });
+    if (result.sent) {
+      const fresh = usersRepo.getById(u.id) || u;
+      const prefs = fresh.preferences || {};
+      prefs.lastDebriefDate = dayKey;
+      usersRepo.update(u.id, { preferences: prefs });
+    }
   }
   if (results.length) console.log('[endOfDayWrap] sent to', results.length, 'user(s)');
   return results;

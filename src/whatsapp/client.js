@@ -4,6 +4,7 @@ const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const config = require('../config');
 const conversations = require('../db/conversations');
+const { db } = require('../db');
 const users = require('../db/users');
 const engine = require('../engine/conversation');
 const cloudApi = require('./cloudApi');
@@ -24,8 +25,31 @@ function toChatId(phoneNumber) {
   if (!phoneNumber) throw new Error('phoneNumber is required');
   const raw = String(phoneNumber).trim();
   if (raw.includes('@')) return raw; // already a chat/group id
-  const digits = raw.replace(/[^0-9]/g, '');
+  const digits = digitsOnly(raw);
   return `${digits}@c.us`;
+}
+
+function digitsOnly(value) {
+  return String(value || '').replace(/[^0-9]/g, '');
+}
+
+function parseSqliteUtc(value) {
+  if (!value) return null;
+  return new Date(String(value).replace(' ', 'T') + 'Z');
+}
+
+function lastInboundAtForUser(userId) {
+  if (!userId) return null;
+  const row = db.prepare(
+    "SELECT created_at FROM conversations WHERE user_id = ? AND role = 'user' ORDER BY created_at DESC, rowid DESC LIMIT 1"
+  ).get(userId);
+  return row ? parseSqliteUtc(row.created_at) : null;
+}
+
+function isWithinCustomerWindow(user, now = new Date()) {
+  const lastInboundAt = lastInboundAtForUser(user && user.id);
+  if (!lastInboundAt) return false;
+  return now.getTime() - lastInboundAt.getTime() < 24 * 3600 * 1000;
 }
 
 /**
@@ -188,7 +212,7 @@ function initWhatsApp() {
 async function sendMessage(phoneNumber, text) {
   // Cloud API path (official Graph API) — used in production.
   if (cloudApi.ready()) {
-    const digits = String(phoneNumber).replace(/[^0-9]/g, '');
+    const digits = digitsOnly(phoneNumber);
     const sent = await cloudApi.sendText(digits, text);
     conversations.logOutbound({
       waMessageId: sent && sent.messages && sent.messages[0] ? sent.messages[0].id : null,
@@ -230,7 +254,7 @@ async function sendMessage(phoneNumber, text) {
  * @returns {Promise<boolean>}  true if the send was accepted
  */
 async function sendOtp(phoneNumber, code) {
-  const digits = String(phoneNumber).replace(/[^0-9]/g, '');
+  const digits = digitsOnly(phoneNumber);
   const text =
     `${code} is your Wingman verification code. ` +
     `It expires in 5 minutes. Do not share it with anyone.`;
@@ -266,6 +290,44 @@ async function sendOtp(phoneNumber, code) {
   return true;
 }
 
+async function sendProactiveMessage(user, text, {
+  now = new Date(),
+  templateName = config.whatsappCloud.proactiveTemplate,
+  templateLang = config.whatsappCloud.proactiveTemplateLang,
+  useTemplate = config.whatsappCloud.proactiveUseTemplate,
+  logLabel = 'proactive',
+} = {}) {
+  if (!user || !user.phone) throw new Error('user with phone is required');
+
+  const digits = digitsOnly(user.phone);
+  if (!cloudApi.ready()) {
+    return sendMessage(digits, text);
+  }
+
+  if (isWithinCustomerWindow(user, now) || !useTemplate || !templateName) {
+    return sendMessage(digits, text);
+  }
+
+  const sent = await cloudApi.sendTemplate(
+    digits,
+    templateName,
+    templateLang,
+    [{ type: 'body', parameters: [{ type: 'text', text: String(text || '') }] }],
+  );
+
+  conversations.logOutbound({
+    userId: user.id,
+    waMessageId: sent && sent.messages && sent.messages[0] ? sent.messages[0].id : null,
+    chatId: `${digits}@c.us`,
+    phoneNumber: digits,
+    content: text,
+    mediaType: 'template',
+  });
+
+  console.log(`[whatsapp:cloud] >> ${logLabel} template to ${digits}`);
+  return sent;
+}
+
 /**
  * Send a WhatsApp message WITHOUT logging it to the conversations table.
  * Used when the caller (e.g. the conversation engine) has already logged
@@ -273,7 +335,7 @@ async function sendOtp(phoneNumber, code) {
  */
 async function sendRaw(phoneNumber, text) {
   if (cloudApi.ready()) {
-    return cloudApi.sendText(String(phoneNumber).replace(/[^0-9]/g, ''), text);
+    return cloudApi.sendText(digitsOnly(phoneNumber), text);
   }
   if (!client) throw new Error('WhatsApp client not initialized');
   if (!isReady) throw new Error('WhatsApp client not ready yet');
@@ -325,6 +387,6 @@ function status() {
 }
 
 module.exports = {
-  initWhatsApp, sendMessage, sendRaw, sendOtp, getClient, ready, toChatId,
+  initWhatsApp, sendMessage, sendRaw, sendOtp, sendProactiveMessage, getClient, ready, toChatId,
   getLatestQr, status, requestPairingCode,
 };

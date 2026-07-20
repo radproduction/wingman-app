@@ -72,6 +72,9 @@ const config = {
     // (in or out of the 24h window) — required for new-user login — now that the
     // app is Live with billing configured. Set OTP_USE_TEMPLATE=0 to force text.
     otpUseTemplate: process.env.OTP_USE_TEMPLATE !== '0',
+    proactiveTemplate: process.env.PROACTIVE_TEMPLATE_NAME || '',
+    proactiveTemplateLang: process.env.PROACTIVE_TEMPLATE_LANG || 'en_US',
+    proactiveUseTemplate: process.env.PROACTIVE_USE_TEMPLATE !== '0',
     get enabled() {
       return !!(process.env.WHATSAPP_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID);
     },
