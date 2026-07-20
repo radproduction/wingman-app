@@ -322,3 +322,21 @@ CREATE TABLE IF NOT EXISTS work_sessions (
   created_at TEXT DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_work_sessions_user_day ON work_sessions(user_id, day_key);
+
+-- ─── Wearable accounts (Whoop, Oura, …) ─────────────────────────────
+--   One row per user per provider. Tokens are encrypted at rest; a wearable
+--   token exposes months of health history, so it is treated like a password.
+CREATE TABLE IF NOT EXISTS wearable_accounts (
+  id TEXT PRIMARY KEY,
+  user_id TEXT REFERENCES users(id),
+  provider TEXT,                 -- 'whoop' | 'oura' | …
+  access_token_enc TEXT,
+  refresh_token_enc TEXT,
+  expires_at TEXT,
+  scopes TEXT,
+  last_synced_at TEXT,
+  last_error TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_wearable_user_provider
+  ON wearable_accounts(user_id, provider);

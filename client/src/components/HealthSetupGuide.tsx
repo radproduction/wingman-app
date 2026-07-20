@@ -28,6 +28,16 @@ export function HealthSetupGuide({
   const [syncing, setSyncing] = useState(false);
   const [syncNote, setSyncNote] = useState<string | null>(null);
 
+  // Wearable brands (Whoop, Oura, …)
+  type Provider = {
+    id: string; label: string; blurb: string;
+    available: boolean; connected: boolean;
+    last_synced_at: string | null; last_error: string | null;
+    connect_url: string | null;
+  };
+  const [providers, setProviders] = useState<Provider[]>([]);
+  const [busyProvider, setBusyProvider] = useState<string | null>(null);
+
   // Private link (Apple Health fallback)
   const [url, setUrl] = useState<string | null>(null);
   const [receiving, setReceiving] = useState(false);
@@ -52,8 +62,27 @@ export function HealthSetupGuide({
         setReceiving(r.connected);
       })
       .catch(() => { /* leave unset */ });
+    api.healthWearables()
+      .then((r) => { if (alive) setProviders(r.providers); })
+      .catch(() => { /* leave unset */ });
     return () => { alive = false; };
   }, []);
+
+  async function refreshProviders() {
+    try { setProviders((await api.healthWearables()).providers); } catch { /* ignore */ }
+  }
+
+  async function syncProvider(id: string) {
+    setBusyProvider(id);
+    try { await api.healthWearableSync(id); await refreshProviders(); }
+    catch { /* the row shows last_error */ } finally { setBusyProvider(null); }
+  }
+
+  async function disconnectProvider(id: string) {
+    setBusyProvider(id);
+    try { await api.healthWearableDisconnect(id); await refreshProviders(); }
+    catch { /* ignore */ } finally { setBusyProvider(null); }
+  }
 
   async function syncNow() {
     setSyncing(true); setSyncNote(null);
@@ -94,7 +123,8 @@ export function HealthSetupGuide({
     } catch { /* ignore */ } finally { setBusy(false); }
   }
 
-  const connected = googleConnected || receiving;
+  const anyWearable = providers.some((p) => p.connected);
+  const connected = googleConnected || receiving || anyWearable;
   const showBody = !collapsible || open || connected;
 
   return (
@@ -166,6 +196,63 @@ export function HealthSetupGuide({
               </a>
             )}
           </div>
+
+          {/* ── One row per wearable brand ── */}
+          {providers.map((p) => (
+            <div key={p.id} className="rounded-2xl bg-white/5 border border-white/8 p-4">
+              <div className="flex items-center gap-3">
+                <div className="flex-1 min-w-0">
+                  <p className="text-body text-white">{p.label}</p>
+                  <p className="text-caption text-gray">{p.blurb}</p>
+                </div>
+                {p.connected ? (
+                  <span className="flex items-center gap-1 text-success text-caption font-medium shrink-0">
+                    <CheckCircleIcon className="w-4 h-4" /> Connected
+                  </span>
+                ) : p.available && p.connect_url ? (
+                  <a
+                    href={p.connect_url}
+                    className="h-9 px-4 rounded-full bg-accent text-bg text-body font-semibold shrink-0 inline-flex items-center"
+                  >
+                    Connect
+                  </a>
+                ) : (
+                  <span className="text-caption text-gray shrink-0">Coming soon</span>
+                )}
+              </div>
+
+              {p.connected && (
+                <>
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    <button
+                      onClick={() => syncProvider(p.id)}
+                      disabled={busyProvider === p.id}
+                      className="h-9 px-4 rounded-full bg-accent/15 text-accent text-body font-semibold disabled:opacity-40"
+                    >
+                      {busyProvider === p.id ? 'Syncing…' : 'Sync now'}
+                    </button>
+                    <button
+                      onClick={() => disconnectProvider(p.id)}
+                      disabled={busyProvider === p.id}
+                      className="h-9 px-4 rounded-full bg-white/5 text-gray text-body font-semibold disabled:opacity-40"
+                    >
+                      Disconnect
+                    </button>
+                  </div>
+                  {p.last_synced_at && !p.last_error && (
+                    <p className="text-caption text-gray mt-2">
+                      Last synced {new Date(p.last_synced_at).toLocaleString()}
+                    </p>
+                  )}
+                  {p.last_error && (
+                    <p className="text-caption text-danger mt-2">
+                      Last sync failed — try Sync now, or reconnect if it keeps failing.
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
+          ))}
 
           {/* ── The honest fallback ── */}
           <div>

@@ -91,6 +91,21 @@ export const api = {
   healthGoogleDisconnect: () =>
     send<{ ok: boolean; connected: boolean }>('POST', '/health/google/disconnect'),
 
+  // ── Wearables (Whoop, Oura, …) — one-click per brand ──
+  healthWearables: () =>
+    get<{
+      providers: {
+        id: string; label: string; blurb: string;
+        available: boolean; connected: boolean;
+        last_synced_at: string | null; last_error: string | null;
+        connect_url: string | null;
+      }[];
+    }>('/health/wearables'),
+  healthWearableSync: (provider: string) =>
+    send<{ ok: boolean; saved: number }>('POST', `/health/wearables/${provider}/sync`),
+  healthWearableDisconnect: (provider: string) =>
+    send<{ ok: boolean }>('POST', `/health/wearables/${provider}/disconnect`),
+
   // ── Work clock (attendance / HRMS) ──
   workConnect: () =>
     get<{

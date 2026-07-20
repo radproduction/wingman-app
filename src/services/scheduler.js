@@ -72,6 +72,7 @@ async function runMeetingPrepTick(now = new Date()) {
     // Pull fresh readings BEFORE the health alerts run, so an alert reacts to
     // what synced this tick rather than to yesterday's picture.
     await require('./googleHealth').syncAllUsers({ days: 2 });
+    await require('./wearables').syncAllUsers({ days: 2 });
     await healthAlerts.runAllUsers({ now });     // readings drifting from the user's own normal
     await workAlerts.runAllUsers({ now });       // still clocked in past their usual finish
   } catch (err) {

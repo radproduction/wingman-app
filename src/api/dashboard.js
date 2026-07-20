@@ -423,6 +423,25 @@ router.post('/health/google/sync', async (req, res) => {
   }
 });
 
+/** Every wearable brand, with where this user stands on each. */
+router.get('/health/wearables', (req, res) => {
+  if (!req.user) return res.status(401).json({ error: 'Authentication required.' });
+  res.json({ providers: require('../services/wearables').statusFor(req.user) });
+});
+
+router.post('/health/wearables/:provider/sync', async (req, res) => {
+  if (!req.user) return res.status(401).json({ error: 'Authentication required.' });
+  const r = await require('../services/wearables').syncOne(req.user.id, req.params.provider, { days: 14 });
+  if (r.error) return res.status(400).json({ error: r.error });
+  res.json({ ok: true, saved: r.saved });
+});
+
+router.post('/health/wearables/:provider/disconnect', (req, res) => {
+  if (!req.user) return res.status(401).json({ error: 'Authentication required.' });
+  require('../services/wearables').disconnect(req.user.id, req.params.provider);
+  res.json({ ok: true });
+});
+
 router.post('/health/google/disconnect', (req, res) => {
   if (!req.user) return res.status(401).json({ error: 'Authentication required.' });
   require('../auth/googleAuth').disconnectHealth(req.user.id);

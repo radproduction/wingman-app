@@ -136,6 +136,72 @@ router.get('/auth/google/callback', async (req, res) => {
 });
 
 /**
+ * GET /auth/wearable/:provider?phone=…
+ * One route for every wearable brand — the provider registry supplies the rest.
+ */
+router.get('/auth/wearable/:provider', (req, res) => {
+  const wearables = require('../services/wearables');
+  const phone = (req.query.phone || '').toString();
+  if (!phone) return res.status(400).send('Missing phone parameter.');
+
+  try {
+    res.redirect(wearables.connectUrl(req.params.provider, phone));
+  } catch (err) {
+    if (err.message === 'PROVIDER_NOT_CONFIGURED') {
+      return res.status(503).send('That device is not set up on this server yet.');
+    }
+    return res.status(400).send('Unknown device.');
+  }
+});
+
+/** GET /auth/wearable/callback?code=…&state=<phone>:<provider> */
+router.get('/auth/wearable/callback', async (req, res) => {
+  const wearables = require('../services/wearables');
+  const { code, state, error } = req.query;
+
+  if (error) return res.status(400).send(`Authorization failed: ${error}`);
+  if (!code) return res.status(400).send('Missing authorization code.');
+
+  try {
+    const { user, provider } = await wearables.handleCallback(code.toString(), state);
+
+    // Pull straight away so the user sees data now, not after the next tick.
+    let saved = 0;
+    try {
+      const r = await wearables.syncOne(user.id, provider.id, { days: 14 });
+      saved = r.saved || 0;
+    } catch (e) {
+      console.warn('[auth] initial wearable sync failed:', e.message);
+    }
+
+    try {
+      const phone = String(user.phone || '').replace(/[^0-9]/g, '');
+      if (wa.ready() && phone) {
+        await wa.sendMessage(
+          phone,
+          saved
+            ? `${provider.label} connected ✅ I pulled in ${saved} recent readings.\n\nTry asking: "how did I sleep?"`
+            : `${provider.label} connected ✅\n\nNo readings yet — they'll appear once your device syncs.`
+        );
+      }
+    } catch (waErr) {
+      console.warn('[auth] wearable confirmation failed:', waErr.message);
+    }
+
+    res.send(`
+      <html><body style="font-family:sans-serif;text-align:center;padding:60px;">
+        <h2>✅ ${provider.label} connected!</h2>
+        <p>${saved ? `${saved} recent readings pulled in.` : 'Readings will appear as your device syncs.'}</p>
+        <p>You can close this tab and head back to WhatsApp.</p>
+      </body></html>
+    `);
+  } catch (err) {
+    console.error('[auth] wearable callback error:', err.message);
+    res.status(500).send(`Could not complete the connection: ${err.message}`);
+  }
+});
+
+/**
  * GET /auth/shopify?shop=mystore.myshopify.com&phone=9231XXXXXXX
  * Sends the merchant to Shopify's consent screen.
  */
