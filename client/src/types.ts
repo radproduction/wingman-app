@@ -172,18 +172,22 @@ export interface Trip {
 }
 
 export interface Health {
+  connected?: boolean;
+  sleep_hours: number | null;
+  hrv: number | null;
+  steps: number | null;
+  resting_hr?: number | null;
+  heart_rate?: number | null;
+  calories?: number | null;
+  weight?: number | null;
+  blood_oxygen?: number | null;
+  updated_at?: string | null;
+}
+
+export interface HealthConnectInfo {
+  ingest_url: string;
   connected: boolean;
-  sleep_hours: number;
-  sleep_target: number;
-  hrv: number;
-  resting_hr: number;
-  steps: number;
-  steps_target: number;
-  calories: number;
-  readiness: number;
-  recommendation: string;
-  week_sleep: number[];
-  week_steps: number[];
+  metrics: { metric: string; label: string; unit: string }[];
 }
 
 export interface Contact {

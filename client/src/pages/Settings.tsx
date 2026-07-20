@@ -1071,4 +1071,3 @@ function ShopifyRow({ user }: { user: Me }) {
     </div>
   );
 }
-

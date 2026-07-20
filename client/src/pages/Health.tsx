@@ -1,63 +1,76 @@
+import type { ReactNode } from 'react';
 import { api } from '../lib/api';
 import { useAsync } from '../lib/useAsync';
 import { PageHeader, Loading, DemoBadge } from '../components/ui';
-import { MoonIcon, HeartIcon, FootprintsIcon } from '../components/icons';
+import { HeartIcon, MoonIcon, FootprintsIcon } from '../components/icons';
 import PullToRefresh from '../components/PullToRefresh';
+import { HealthSetupGuide } from '../components/HealthSetupGuide';
 
 export default function HealthPage() {
   const { data, loading, refresh } = useAsync(() => api.health(), []);
   if (loading || !data) return <Loading />;
-  const h = data.health;
 
-  // No live health source connected yet → show an honest empty state instead
-  // of sample data.
-  if (h == null || h.sleep_hours == null) {
+  const h = data.health;
+  const cards = [
+    h.sleep_hours != null ? { label: 'Sleep', value: `${h.sleep_hours}h`, sub: 'from Apple Health / Android sync', icon: <MoonIcon className="w-5 h-5" /> } : null,
+    h.steps != null ? { label: 'Steps', value: Number(h.steps).toLocaleString('en-US'), sub: 'latest total', icon: <FootprintsIcon className="w-5 h-5" /> } : null,
+    h.hrv != null ? { label: 'HRV', value: `${h.hrv} ms`, sub: 'heart-rate variability', icon: <HeartIcon className="w-5 h-5" /> } : null,
+    h.resting_hr != null ? { label: 'Resting HR', value: `${h.resting_hr} bpm`, sub: 'latest resting heart rate', icon: <HeartIcon className="w-5 h-5" /> } : null,
+    h.heart_rate != null ? { label: 'Heart Rate', value: `${h.heart_rate} bpm`, sub: 'latest reading', icon: <HeartIcon className="w-5 h-5" /> } : null,
+    h.calories != null ? { label: 'Calories', value: `${h.calories} kcal`, sub: 'active calories', icon: <FootprintsIcon className="w-5 h-5" /> } : null,
+    h.weight != null ? { label: 'Weight', value: `${h.weight} kg`, sub: 'latest weight', icon: <HeartIcon className="w-5 h-5" /> } : null,
+    h.blood_oxygen != null ? { label: 'Blood Oxygen', value: `${h.blood_oxygen}%`, sub: 'latest SpO2', icon: <HeartIcon className="w-5 h-5" /> } : null,
+  ].filter(Boolean) as { label: string; value: string; sub: string; icon: ReactNode }[];
+
+  const connected = cards.length > 0;
+
+  if (!connected) {
     return (
       <PullToRefresh onRefresh={refresh}>
-        <PageHeader title="Health" subtitle="Not connected" />
-        <div className="px-4">
-          <div className="card text-center py-12">
+        <PageHeader title="Health" subtitle="Connect your phone once" />
+        <div className="px-4 space-y-3">
+          <div className="card text-center py-10">
             <div className="w-12 h-12 rounded-2xl bg-accent/15 text-accent flex items-center justify-center mx-auto mb-3">
               <HeartIcon className="w-6 h-6" />
             </div>
-            <p className="text-body text-white">Health tracking isn’t connected yet</p>
-            <p className="text-caption text-gray mt-1">Sleep, HRV and steps will show here once a health source is linked.</p>
+            <p className="text-body text-white">Health tracking is not connected yet</p>
+            <p className="text-caption text-gray mt-1">
+              iPhone users can connect Apple Health. Android users can connect through Google Health / Health Connect.
+            </p>
           </div>
+          <HealthSetupGuide initialOpen />
         </div>
+        <div className="h-4" />
       </PullToRefresh>
     );
   }
 
   return (
     <PullToRefresh onRefresh={refresh}>
-      <PageHeader title="Health" subtitle="Today's readings" right={<DemoBadge show={data.mock} />} />
+      <PageHeader title="Health" subtitle="Latest readings" right={<DemoBadge show={data.mock} />} />
       <div className="px-4">
-        {/* Readiness ring */}
-        <div className="card flex items-center gap-4">
-          <Ring value={h.readiness} />
-          <div className="flex-1">
-            <p className="text-caption text-gray">Readiness</p>
-            <p className="text-title text-white">{h.readiness}%</p>
-            <p className="text-caption text-gray-light mt-1">{h.recommendation}</p>
+        <div className="card">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-2xl bg-accent/15 text-accent flex items-center justify-center shrink-0">
+              <HeartIcon className="w-5 h-5" />
+            </div>
+            <div className="flex-1">
+              <p className="text-body text-white">Receiving health updates</p>
+              <p className="text-caption text-gray mt-0.5">
+                Wingman will use these readings in your briefings and health alerts.
+              </p>
+            </div>
           </div>
         </div>
 
-        {/* Stat grid */}
         <div className="grid grid-cols-2 gap-3 mt-3">
-          <Stat icon={<MoonIcon className="w-5 h-5" />} label="Sleep" value={`${h.sleep_hours}h`} sub={`Target ${h.sleep_target}h`} />
-          <Stat icon={<HeartIcon className="w-5 h-5" />} label="HRV" value={`${h.hrv}ms`} sub={`Resting HR ${h.resting_hr}`} />
-          <Stat icon={<FootprintsIcon className="w-5 h-5" />} label="Steps" value={`${(h.steps / 1000).toFixed(1)}K`} sub={`Target ${(h.steps_target / 1000).toFixed(0)}K`} />
-          <Stat icon={<HeartIcon className="w-5 h-5" />} label="Calories" value={`${h.calories}`} sub="active kcal" />
+          {cards.map((card) => (
+            <Stat key={card.label} icon={card.icon} label={card.label} value={card.value} sub={card.sub} />
+          ))}
         </div>
 
-        {/* Weekly trends */}
-        <div className="card mt-3">
-          <p className="text-caption text-gray mb-3">Sleep · last 7 days</p>
-          <MiniBars values={h.week_sleep} target={h.sleep_target} unit="h" color="bg-accent" />
-        </div>
-        <div className="card mt-3">
-          <p className="text-caption text-gray mb-3">Steps · last 7 days</p>
-          <MiniBars values={h.week_steps.map((s) => s / 1000)} target={h.steps_target / 1000} unit="K" color="bg-success" />
+        <div className="mt-3">
+          <HealthSetupGuide collapsible initialOpen={false} />
         </div>
       </div>
       <div className="h-4" />
@@ -65,44 +78,13 @@ export default function HealthPage() {
   );
 }
 
-function Ring({ value }: { value: number }) {
-  const r = 30, c = 2 * Math.PI * r;
-  const off = c * (1 - value / 100);
-  return (
-    <svg width="80" height="80" viewBox="0 0 80 80" className="shrink-0">
-      <circle cx="40" cy="40" r={r} fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="8" />
-      <circle cx="40" cy="40" r={r} fill="none" stroke="#8b8fff" strokeWidth="8" strokeLinecap="round"
-        strokeDasharray={c} strokeDashoffset={off} transform="rotate(-90 40 40)" />
-      <text x="40" y="45" textAnchor="middle" fill="#fff" fontSize="16" fontWeight="700">{value}</text>
-    </svg>
-  );
-}
-
-function Stat({ icon, label, value, sub }: { icon: React.ReactNode; label: string; value: string; sub: string }) {
+function Stat({ icon, label, value, sub }: { icon: ReactNode; label: string; value: string; sub: string }) {
   return (
     <div className="card">
       <div className="w-9 h-9 rounded-xl bg-accent/15 text-accent flex items-center justify-center mb-2">{icon}</div>
       <p className="text-caption text-gray">{label}</p>
       <p className="text-title text-white leading-tight">{value}</p>
       <p className="text-caption text-gray mt-0.5">{sub}</p>
-    </div>
-  );
-}
-
-function MiniBars({ values, target, unit, color }: { values: number[]; target: number; unit: string; color: string }) {
-  const max = Math.max(...values, target) * 1.15;
-  const days = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-  return (
-    <div className="flex items-end justify-between gap-2 h-24">
-      {values.map((v, i) => (
-        <div key={i} className="flex-1 flex flex-col items-center gap-1">
-          <span className="text-[10px] text-gray-light">{v.toFixed(unit === 'h' ? 1 : 1)}</span>
-          <div className="w-full bg-white/5 rounded-md flex items-end" style={{ height: 64 }}>
-            <div className={`w-full ${color} rounded-md`} style={{ height: `${Math.max(6, (v / max) * 64)}px` }} />
-          </div>
-          <span className="text-[10px] text-gray">{days[i]}</span>
-        </div>
-      ))}
     </div>
   );
 }

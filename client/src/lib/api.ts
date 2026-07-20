@@ -1,5 +1,5 @@
 import type {
-  Me, CalendarEvent, EmailItem, Task, Bill, Delivery, Trip, Health,
+  Me, CalendarEvent, EmailItem, Task, Bill, Delivery, Trip, Health, HealthConnectInfo,
   Contact, Followup, Briefing, DashboardSummary,
   RequestOtpResponse, VerifyOtpResponse, SettingsPatch, GoogleAccount,
 } from '../types';
@@ -80,7 +80,7 @@ export const api = {
 
   // ── Health (private ingest link for phone automations) ──
   healthConnect: () =>
-    get<{ ingest_url: string; connected: boolean; metrics: { metric: string; label: string; unit: string }[] }>('/health/connect'),
+    get<HealthConnectInfo>('/health/connect'),
   healthResetLink: () => send<{ ingest_url: string }>('POST', '/health/reset-link'),
 
   // ── Work clock (attendance / HRMS) ──
