@@ -105,6 +105,13 @@ const config = {
     get enabled() { return !!(process.env.MAPS_API_KEY || process.env.GOOGLE_MAPS_API_KEY); },
   },
 
+  // Brevo transactional email API, used for sending business-mailbox replies
+  // because Railway blocks outbound SMTP. Reading still uses IMAP directly.
+  brevo: {
+    apiKey: process.env.BREVO_API_KEY || '',
+    get enabled() { return !!process.env.BREVO_API_KEY; },
+  },
+
   weather: {
     apiKey: process.env.WEATHER_API_KEY || '',
     defaultCity: process.env.WEATHER_DEFAULT_CITY || 'Dubai',

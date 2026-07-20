@@ -4,6 +4,7 @@ const { ImapFlow } = require('imapflow');
 const nodemailer = require('nodemailer');
 const secrets = require('../utils/secrets');
 const usersRepo = require('../db/users');
+const config = require('../config');
 
 /**
  * Business email over IMAP/SMTP — for mailboxes that aren't Gmail
@@ -80,6 +81,13 @@ function smtpTransport(s) {
 /** Map provider errors to something a user can act on. */
 function friendlyError(err) {
   const msg = String((err && err.message) || err || '');
+  // Brevo (HTTP send) errors — the sender/domain must be authenticated in Brevo.
+  if (/^BREVO:/i.test(msg)) {
+    if (/unauthor|key not found|invalid.*key/i.test(msg)) return 'WEBMAIL_SEND_KEY_INVALID';
+    if (/sender|not been validated|not valid|domain/i.test(msg)) return 'WEBMAIL_SENDER_UNVERIFIED';
+    if (/timeout|unreachable/i.test(msg)) return 'WEBMAIL_CONNECTION_FAILED';
+    return 'WEBMAIL_SEND_FAILED';
+  }
   if (/auth|credential|login|password|AUTHENTICATIONFAILED/i.test(msg)) return 'WEBMAIL_AUTH_FAILED';
   if (/ENOTFOUND|EAI_AGAIN|getaddrinfo/i.test(msg)) return 'WEBMAIL_HOST_NOT_FOUND';
   if (/ETIMEDOUT|ECONNREFUSED|timeout/i.test(msg)) return 'WEBMAIL_CONNECTION_FAILED';
@@ -101,10 +109,15 @@ async function testConnection({ address, password, imapHost, imapPort, smtpHost,
     throw new Error(`IMAP:${friendlyError(err)}`);
   }
 
-  try {
-    await smtpTransport(s).verify();
-  } catch (err) {
-    throw new Error(`SMTP:${friendlyError(err)}`);
+  // SMTP (sending) is only tested when we actually send through it. With Brevo
+  // configured we send over its HTTPS API instead, so a host that blocks
+  // outbound SMTP (e.g. Railway) must not fail an otherwise-good connection.
+  if (!config.brevo.enabled) {
+    try {
+      await smtpTransport(s).verify();
+    } catch (err) {
+      throw new Error(`SMTP:${friendlyError(err)}`);
+    }
   }
   return true;
 }
@@ -172,6 +185,24 @@ async function listRecent(user, { limit = 10, mailbox = 'INBOX' } = {}) {
 /** Send a message from the user's business address. */
 async function send(user, { to, subject, body, replyTo } = {}) {
   const s = settingsFor(user);
+
+  // Prefer Brevo's HTTP API — Railway blocks outbound SMTP, so the mailbox's
+  // own SMTP server is unreachable from here. The From stays the business
+  // address; Brevo keeps it deliverable via the authenticated domain.
+  if (config.brevo.enabled) {
+    const brevo = require('./brevo');
+    const info = await brevo.sendEmail({
+      from: s.address,
+      fromName: s.fromName,
+      to,
+      subject,
+      text: body,
+      replyTo: s.address,
+      inReplyTo: replyTo || undefined,
+    }).catch((err) => { throw new Error(friendlyError(err)); });
+    return { messageId: info.messageId, from: s.address, via: 'brevo' };
+  }
+
   const info = await smtpTransport(s).sendMail({
     from: s.fromName ? `"${s.fromName}" <${s.address}>` : s.address,
     to,

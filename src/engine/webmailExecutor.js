@@ -48,6 +48,15 @@ async function executeWebmailTool(user, toolUse) {
     if (msg === 'WEBMAIL_HOST_NOT_FOUND' || msg === 'WEBMAIL_CONNECTION_FAILED') {
       return { error: 'WEBMAIL_UNREACHABLE', detail: 'The mail server did not respond.' };
     }
+    if (msg === 'WEBMAIL_SENDER_UNVERIFIED') {
+      return { error: 'WEBMAIL_SENDER_UNVERIFIED', detail: "The sending service hasn't verified this business address/domain yet — the email was NOT sent. It needs finishing in the Brevo setup (domain authentication)." };
+    }
+    if (msg === 'WEBMAIL_SEND_KEY_INVALID') {
+      return { error: 'WEBMAIL_SEND_FAILED', detail: 'The email sending service rejected the API key — the email was NOT sent. It needs reconnecting.' };
+    }
+    if (msg === 'WEBMAIL_SEND_FAILED') {
+      return { error: 'WEBMAIL_SEND_FAILED', detail: 'The email could not be sent just now — nothing went out.' };
+    }
     return { error: msg };
   }
 }
