@@ -10,16 +10,40 @@ async function executeHealthTool(user, toolUse) {
   try {
     switch (name) {
       case 'get_health_connect_link': {
-        const token = health.tokenFor(user.id);
+        // Lead with the one-tap options. Sending someone to hand-build an iOS
+        // Shortcut when their watch could be connected in a single tap is what
+        // made this feel impossible in the first place.
+        const oneClick = health.availableOneClick();
+        const status = health.connectionStatus(user);
+
         return {
-          ingest_url: `${config.publicBaseUrl}/health/ingest/${token}`,
-          how: 'On iPhone: Shortcuts app → new Automation → daily → "Get Health Sample" for the metrics you want → "Get Contents of URL" (POST, JSON) to this link. Apple Health data lives only on the phone, so this is what sends it across.',
-          also: 'Any wearable app or automation that can POST JSON works too.',
+          already_connected: status.sources,
+          one_click_options: oneClick,
+          settings_path: 'Settings → Health data, in the Wingman app',
+          how: oneClick.length
+            ? `Easiest by far: open Settings → Health data in the app and tap Connect next to ${oneClick.join(' or ')}. It takes one tap and keeps itself up to date — no setup on the phone.`
+            : 'Open Settings → Health data in the app to connect a device.',
+          apple_health_only: {
+            when: 'ONLY suggest this if they have an iPhone with no fitness tracker at all — Apple keeps Health data on the device with no service we can read it from.',
+            ingest_url: `${config.publicBaseUrl}/health/ingest/${health.tokenFor(user.id)}`,
+            note: 'Do not paste these steps unless they ask for the Apple Health route — point them at Settings first.',
+          },
         };
       }
 
       case 'get_health': {
-        if (!healthRepo.hasAnyData(user.id)) return { error: 'HEALTH_NOT_CONNECTED' };
+        // Connected means a source is SET UP, not that readings have arrived —
+        // a watch connected two minutes ago has nothing to show yet and must
+        // not be reported as "not connected".
+        const status = health.connectionStatus(user);
+        if (!status.connected) return { error: 'HEALTH_NOT_CONNECTED' };
+        if (!status.hasData) {
+          return {
+            connected_sources: status.sources,
+            readings: 0,
+            detail: `Connected to ${status.sources.join(', ')}, but no readings have come through yet — they usually appear after the device next syncs.`,
+          };
+        }
         const days = Math.min(Math.max(parseInt(input.days, 10) || 7, 1), 30);
 
         if (input.metric) {

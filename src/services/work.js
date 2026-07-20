@@ -103,7 +103,12 @@ function fmtDuration(hours) {
 function status(userId, { now = new Date() } = {}) {
   const user = usersRepo.getById(userId);
   if (!user) return { connected: false };
-  if (!sessionsRepo.hasAnyData(userId)) return { connected: false };
+
+  // Set up counts as connected even before the first clock event arrives —
+  // judging it by data alone told someone who had just finished wiring their
+  // HRMS that nothing was connected.
+  const setUp = !!user.work_token || hasAction(user) || sessionsRepo.hasAnyData(userId);
+  if (!setUp) return { connected: false };
 
   const tz = user.timezone || 'Asia/Karachi';
   const open = sessionsRepo.currentOpen(userId);

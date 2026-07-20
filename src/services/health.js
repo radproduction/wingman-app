@@ -14,6 +14,48 @@ const usersRepo = require('../db/users');
  * lands in one place.
  */
 
+/**
+ * What the user actually has connected, and what they could connect.
+ *
+ * "Connected" must mean a source is SET UP — not that readings have already
+ * arrived. Deciding it from data alone is what made a freshly connected WHOOP
+ * report "health isn't connected": true of the data, false of reality, and
+ * infuriating for someone who just finished connecting it.
+ */
+function connectionStatus(user) {
+  const healthRepo = require('../db/healthData');
+  const sources = [];
+
+  try {
+    if (require('../auth/googleAuth').isHealthConnected(user)) sources.push('Google Health');
+  } catch (_) { /* optional */ }
+
+  try {
+    const registry = require('./wearableProviders');
+    for (const acct of require('../db/wearableAccounts').listForUser(user.id)) {
+      const p = registry.get(acct.provider);
+      sources.push(p ? p.label : acct.provider);
+    }
+  } catch (_) { /* optional */ }
+
+  const hasData = healthRepo.hasAnyData(user.id);
+  // The private ingest link is only "connected" once something has used it —
+  // issuing a token is not the same as a phone actually sending readings.
+  if (!sources.length && hasData) sources.push('your phone');
+
+  return { connected: sources.length > 0, sources, hasData };
+}
+
+/** Brands the user could connect in one tap on this deployment. */
+function availableOneClick() {
+  const out = [];
+  if (process.env.GOOGLE_CLIENT_ID) out.push('Google Health (Android, Pixel Watch, Fitbit, Wear OS)');
+  try {
+    for (const p of require('./wearableProviders').configured()) out.push(p.label);
+  } catch (_) { /* optional */ }
+  return out;
+}
+
 /** Get (or create) the user's private ingest token. */
 function tokenFor(userId) {
   const user = usersRepo.getById(userId);
@@ -122,4 +164,5 @@ function isConnected(user) {
 module.exports = {
   tokenFor, userForToken, revokeToken, ingest,
   findAnomalies, summaryLine, isConnected, RULES,
+  connectionStatus, availableOneClick,
 };
