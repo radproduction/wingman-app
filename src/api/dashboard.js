@@ -551,13 +551,24 @@ router.post('/webmail/connect', async (req, res) => {
     capability = await webmail.testConnection(cfg);
   } catch (err) {
     const raw = String(err.message || '');
+    // Log the real thing: the generic fallback below tells the user to "check
+    // the details" for faults that have nothing to do with what they typed.
+    console.error('[webmail] connect failed:', raw);
+
     const map = {
       WEBMAIL_AUTH_FAILED: 'The email address or password was rejected. If your provider uses 2-factor login, create an app password and use that.',
       WEBMAIL_HOST_NOT_FOUND: `Could not reach the mail server. Check the ${raw.startsWith('IMAP') ? 'IMAP' : 'SMTP'} host.`,
       WEBMAIL_CONNECTION_FAILED: 'The mail server did not respond. Check the host and port.',
     };
     const code = raw.split(':')[1] || raw;
-    return res.status(400).json({ error: map[code] || 'Could not connect to that mailbox. Please check the details.' });
+    if (map[code]) return res.status(400).json({ error: map[code] });
+
+    // Unmapped: show what the mail server actually said, rather than implying
+    // the user mistyped something.
+    const detail = raw.replace(/^IMAP:|^SMTP:/, '').trim();
+    return res.status(400).json({
+      error: `Could not connect to that mailbox — the mail server said: ${detail || 'no reason given'}`,
+    });
   }
 
   webmail.saveForUser(req.user.id, cfg);
