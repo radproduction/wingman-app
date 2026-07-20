@@ -208,6 +208,33 @@ app.get('/_diag/health', (req, res) => {
   res.json(out);
 });
 
+// ─── TEMPORARY diagnostic: is the Maps key actually working? ─────────
+app.get('/_diag/maps', async (req, res) => {
+  const admin = process.env.ADMIN_PASSWORD;
+  if (admin && req.query.key !== admin) return res.status(403).json({ error: 'forbidden' });
+
+  const config = require('./config');
+  const out = {
+    key_configured: !!config.maps.apiKey,
+    key_tail: config.maps.apiKey ? `…${config.maps.apiKey.slice(-6)}` : null,
+  };
+
+  const address = String(req.query.address || 'Clifton, Karachi');
+  try {
+    const geo = await require('./services/maps').geocode(address);
+    out.geocode = geo ? { ok: true, resolved: geo.address, lat: geo.lat, lng: geo.lng }
+      : { ok: false, reason: 'ZERO_RESULTS — Google found no match for that text' };
+  } catch (err) {
+    out.geocode = { ok: false, error: err.message };
+    if (err.message === 'MAPS_REQUEST_DENIED') {
+      out.likely_cause = 'Key is wrong/restricted, or the Geocoding API is not enabled on the project that owns this key.';
+    } else if (err.message === 'MAPS_NOT_CONFIGURED') {
+      out.likely_cause = 'MAPS_API_KEY is not set on this deployment.';
+    }
+  }
+  res.json(out);
+});
+
 // ─── Health ingest ──────────────────────────────────────────────────
 //   Public by design: an iPhone Shortcut (or any automation / wearable cloud)
 //   POSTs here. Authenticated by the user's private token in the URL, since

@@ -592,14 +592,26 @@ router.post('/places', async (req, res) => {
   try {
     const maps = require('../services/maps');
     const geo = await maps.savePlace(req.user.id, which, address);
-    if (!geo) return res.status(400).json({ error: `Could not find "${address}" on the map.` });
+    if (!geo) return res.status(400).json({ error: `Could not find "${address}" on the map. Try a simpler version — street and city is usually enough.` });
     res.json({ saved: true, which, address: geo.address });
   } catch (err) {
-    const msg = err && err.message;
+    const msg = (err && err.message) || '';
+    // Collapsing every failure into "could not look up that address" blamed the
+    // user's typing for what is usually a key or billing problem on our side.
+    console.error('[places] lookup failed:', msg);
+
     if (msg === 'MAPS_NOT_CONFIGURED') {
-      return res.status(503).json({ error: 'Traffic features are not switched on yet.' });
+      return res.status(503).json({ error: 'Traffic features are not switched on yet — no Maps API key is configured.' });
     }
-    res.status(400).json({ error: 'Could not look up that address. Please try again.' });
+    if (msg === 'MAPS_REQUEST_DENIED') {
+      return res.status(503).json({
+        error: 'Google rejected the map lookup. The Maps API key is missing, restricted, or the Geocoding API is not enabled for it.',
+      });
+    }
+    if (msg === 'MAPS_QUOTA_EXCEEDED') {
+      return res.status(503).json({ error: "Google's map quota is used up for now — try again later." });
+    }
+    res.status(400).json({ error: `Could not look up that address (${msg || 'unknown error'}).` });
   }
 });
 
