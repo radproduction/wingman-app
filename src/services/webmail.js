@@ -81,6 +81,20 @@ function smtpTransport(s) {
 /** Map provider errors to something a user can act on. */
 function friendlyError(err) {
   const msg = String((err && err.message) || err || '');
+
+  // ImapFlow reports a rejected login as the bare message "Command failed" and
+  // puts the real reason on the error object. Matching on text alone missed the
+  // single most common failure — a wrong mailbox password — and surfaced it as
+  // an unhelpful "Command failed" instead.
+  if (err && (err.authenticationFailed === true || err.serverResponseCode === 'AUTHENTICATIONFAILED')) {
+    return 'WEBMAIL_AUTH_FAILED';
+  }
+  const serverSaid = String((err && (err.responseText || err.response)) || '');
+  if (/AUTHENTICATIONFAILED|auth.*fail|invalid.*(user|credential|password)|login.*fail/i.test(serverSaid)) {
+    return 'WEBMAIL_AUTH_FAILED';
+  }
+  // A LOGIN that fails with no detail is, in practice, always credentials.
+  if (/^command failed$/i.test(msg.trim())) return 'WEBMAIL_AUTH_FAILED';
   // Brevo (HTTP send) errors — the sender/domain must be authenticated in Brevo.
   if (/^BREVO:/i.test(msg)) {
     if (/unauthor|key not found|invalid.*key/i.test(msg)) return 'WEBMAIL_SEND_KEY_INVALID';
