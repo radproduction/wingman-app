@@ -45,7 +45,7 @@ export interface Me {
   office_address?: string | null;
   /** News topics the user follows, and the city used for local news. */
   news_topics?: NewsTopic[] | null;
-  news_city?: string | null;
+  news_city?: string[] | null;
   /** Wingman's own WhatsApp number users message (from WINGMAN_NUMBER env). */
   wingman_number?: string;
   /** True once the user has exchanged a message with Wingman on WhatsApp. */
@@ -86,7 +86,7 @@ export interface SettingsPatch {
   tone?: Tone;
   communication_style?: CommunicationStyle;
   news_topics?: NewsTopic[];
-  news_city?: string;
+  news_city?: string[] | string;
   voice_replies?: VoiceReplies;
   voice_name?: VoiceName;
   assistant_name?: string;

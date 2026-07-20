@@ -58,9 +58,32 @@ function localeFor(user) {
   return { hl: `${lang}-${country}`, gl: country, ceid: `${country}:${lang}` };
 }
 
+// A user can follow several cities, not just where they live — people care
+// about the town their family is in, or the one they are flying to next week.
+const MAX_CITIES = 5;
+
+/** Every city the user follows. Always a list; falls back to their timezone. */
+function citiesFor(user) {
+  let list = user && user.news_city;
+  if (typeof list === 'string') {
+    try { list = JSON.parse(list); }
+    catch (_) { list = [list]; }             // pre-list users stored a bare string
+  }
+  if (!Array.isArray(list)) list = list ? [list] : [];
+
+  const clean = list
+    .map((c) => String(c || '').trim())
+    .filter(Boolean)
+    .slice(0, MAX_CITIES);
+
+  if (clean.length) return clean;
+  const fallback = defaultsForTz((user && user.timezone) || 'Asia/Karachi').city;
+  return fallback ? [fallback] : [];
+}
+
+/** First followed city — for callers that only need one (labels, summaries). */
 function cityFor(user) {
-  if (user && user.news_city) return user.news_city;
-  return defaultsForTz((user && user.timezone) || 'Asia/Karachi').city;
+  return citiesFor(user)[0] || null;
 }
 
 /** Which topics a user follows (falls back to a sensible default set). */
@@ -123,6 +146,14 @@ async function fetchFeed(url, limit) {
   return parseFeed(await res.text(), limit);
 }
 
+/** Headlines about one named city. */
+async function headlinesForCity(user, city, { limit = 4 } = {}) {
+  const { hl, gl, ceid } = localeFor(user);
+  const qs = `hl=${hl}&gl=${gl}&ceid=${ceid}`;
+  if (!city) return [];
+  return fetchFeed(`https://news.google.com/rss/search?q=${encodeURIComponent(city)}&${qs}`, limit);
+}
+
 /** Headlines for one topic (or the user's city when topic === 'local'). */
 async function headlines(user, topic, { limit = 4 } = {}) {
   const { hl, gl, ceid } = localeFor(user);
@@ -131,7 +162,7 @@ async function headlines(user, topic, { limit = 4 } = {}) {
   if (topic === 'local') {
     const city = cityFor(user);
     if (!city) return [];
-    return fetchFeed(`https://news.google.com/rss/search?q=${encodeURIComponent(city)}&${qs}`, limit);
+    return headlinesForCity(user, city, { limit });
   }
 
   const section = TOPIC_SECTIONS[topic];
@@ -145,22 +176,34 @@ async function headlines(user, topic, { limit = 4 } = {}) {
  */
 async function bulletin(user, { perTopic = 3, topics } = {}) {
   const list = topics && topics.length ? topics : topicsFor(user);
+  const cities = citiesFor(user);
   const sections = [];
+
   for (const topic of list) {
+    // 'local' isn't one section — it's one per city the user follows, each
+    // labelled with its own name so several cities never blur together.
+    if (topic === 'local') {
+      for (const city of cities) {
+        try {
+          const items = await headlinesForCity(user, city, { limit: perTopic });
+          if (items.length) sections.push({ topic: 'local', city, label: city, items });
+        } catch (err) {
+          console.warn(`[news] ${city} feed failed:`, err.message);
+        }
+      }
+      continue;
+    }
+
     try {
       const items = await headlines(user, topic, { limit: perTopic });
       if (items.length) {
-        sections.push({
-          topic,
-          label: topic === 'local' ? `${cityFor(user) || 'Local'}` : (TOPIC_LABELS[topic] || topic),
-          items,
-        });
+        sections.push({ topic, label: TOPIC_LABELS[topic] || topic, items });
       }
     } catch (err) {
       console.warn(`[news] ${topic} feed failed:`, err.message);
     }
   }
-  return { sections, city: cityFor(user) };
+  return { sections, cities, city: cities[0] || null };
 }
 
 /** Compact WhatsApp-friendly text for the morning briefing. */
@@ -178,6 +221,6 @@ function formatBulletin(bul, { perTopic = 2 } = {}) {
 
 module.exports = {
   ALL_TOPICS, DEFAULT_TOPICS, TOPIC_LABELS, TOPIC_SECTIONS,
-  topicsFor, cityFor, localeFor, defaultsForTz,
+  topicsFor, cityFor, citiesFor, headlinesForCity, localeFor, defaultsForTz,
   headlines, bulletin, formatBulletin, parseFeed,
 };

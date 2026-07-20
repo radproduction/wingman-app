@@ -72,7 +72,9 @@ export default function Onboarding() {
     tone: user?.tone ?? 'friendly',
     communication_style: user?.communication_style ?? 'concise',
     news_topics: user?.news_topics ?? ['world', 'nation', 'technology', 'local'],
-    news_city: user?.news_city ?? '',
+    // Onboarding asks for one city to keep signup short; more can be added in
+    // Settings, which is why this is stored as a list.
+    news_city: user?.news_city?.[0] ?? '',
   });
   const set = (patch: Partial<Draft>) => setD((prev) => ({ ...prev, ...patch }));
   const toggleSkill = (s: Skill) =>
@@ -110,7 +112,7 @@ export default function Onboarding() {
         tone: d.tone,
         communication_style: d.communication_style,
         news_topics: d.news_topics,
-        news_city: d.news_city.trim() || undefined,
+        news_city: d.news_city.trim() ? [d.news_city.trim()] : undefined,
       });
       updateUser(updated);
       navigate('/', { replace: true });

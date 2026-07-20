@@ -234,11 +234,9 @@ export default function Settings() {
             })}
           </div>
           <div className="mt-4">
-            <Field
-              label="City for local news"
-              value={user.news_city ?? ''}
-              placeholder="e.g. Karachi"
-              onChange={(v) => save({ news_city: v }, { news_city: v })}
+            <CityTags
+              cities={user.news_city ?? []}
+              onChange={(list) => save({ news_city: list }, { news_city: list })}
             />
           </div>
         </div>
@@ -445,6 +443,81 @@ function GoogleAccountsRow({ user }: { user: Me }) {
           </a>
         </>
       )}
+    </div>
+  );
+}
+
+/**
+ * Cities for local news, as removable tags.
+ *
+ * People follow more than one place — where they live, where family is, where
+ * they're travelling next — so this is a list rather than a single field.
+ */
+const MAX_CITIES = 5;
+
+function CityTags({ cities, onChange }: { cities: string[]; onChange: (list: string[]) => void }) {
+  const [draft, setDraft] = useState('');
+
+  function add() {
+    const name = draft.trim();
+    if (!name) return;
+    // Case-insensitive: "karachi" and "Karachi" are the same place.
+    if (cities.some((c) => c.toLowerCase() === name.toLowerCase())) { setDraft(''); return; }
+    if (cities.length >= MAX_CITIES) return;
+    onChange([...cities, name]);
+    setDraft('');
+  }
+
+  return (
+    <div>
+      <span className="block text-caption text-gray mb-2 px-1">Cities for local news</span>
+
+      {cities.length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-2">
+          {cities.map((city) => (
+            <span
+              key={city}
+              className="inline-flex items-center gap-1.5 h-9 pl-3.5 pr-2 rounded-full border border-accent bg-accent/15 text-accent text-body"
+            >
+              {city}
+              <button
+                onClick={() => onChange(cities.filter((c) => c !== city))}
+                aria-label={`Remove ${city}`}
+                className="w-5 h-5 rounded-full hover:bg-accent/20 leading-none"
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
+      {cities.length < MAX_CITIES ? (
+        <div className="flex gap-2">
+          <input
+            className="flex-1 h-13 min-h-[52px] rounded-2xl bg-white/6 border border-white/10 px-4 text-cardtitle text-white placeholder:text-gray/60 outline-none focus:border-accent focus:bg-white/8 transition-colors"
+            value={draft}
+            placeholder={cities.length ? 'Add another city' : 'e.g. Karachi'}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
+          />
+          <button
+            onClick={add}
+            disabled={!draft.trim()}
+            className="h-13 min-h-[52px] px-5 rounded-2xl bg-accent text-bg text-body font-semibold disabled:opacity-40"
+          >
+            Add
+          </button>
+        </div>
+      ) : (
+        <p className="text-caption text-gray px-1">
+          That's {MAX_CITIES} cities — remove one to add another.
+        </p>
+      )}
+
+      <p className="text-caption text-gray mt-2 px-1">
+        You'll get headlines for each city in your briefing. Keep “Local” selected above.
+      </p>
     </div>
   );
 }

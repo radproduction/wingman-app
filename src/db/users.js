@@ -59,6 +59,7 @@ function update(id, fields = {}) {
     if (k === 'preferences' && typeof v === 'object') params[k] = JSON.stringify(v);
     else if (k === 'enabled_skills' && Array.isArray(v)) params[k] = JSON.stringify(v);
     else if (k === 'news_topics' && Array.isArray(v)) params[k] = JSON.stringify(v);
+    else if (k === 'news_city' && Array.isArray(v)) params[k] = JSON.stringify(v);
     else if (typeof v === 'boolean') params[k] = v ? 1 : 0;
     else params[k] = v;
   }
@@ -82,6 +83,19 @@ function hydrate(row) {
     row.news_topics = row.news_topics ? JSON.parse(row.news_topics) : null;
     if (!Array.isArray(row.news_topics)) row.news_topics = null;
   } catch (_) { row.news_topics = null; }
+  // news_city holds a LIST of cities. Users who set a single city before this
+  // was a list still have a bare string stored, so read that as a one-city list
+  // rather than losing what they picked.
+  try {
+    const raw = row.news_city;
+    if (!raw) row.news_city = null;
+    else if (String(raw).trim().startsWith('[')) {
+      const parsed = JSON.parse(raw);
+      row.news_city = Array.isArray(parsed) && parsed.length ? parsed : null;
+    } else {
+      row.news_city = [String(raw)];
+    }
+  } catch (_) { row.news_city = row.news_city ? [String(row.news_city)] : null; }
   row.onboarding_complete = !!row.onboarding_complete;
   return row;
 }
