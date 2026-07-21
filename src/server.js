@@ -166,6 +166,35 @@ app.get('/_diag/briefing', async (req, res) => {
   res.json(out);
 });
 
+// ─── TEMPORARY diagnostic: is the Google Tasks scope actually granted? ──
+app.get('/_diag/tasks', (req, res) => {
+  const admin = process.env.ADMIN_PASSWORD;
+  if (admin && req.query.key !== admin) return res.status(403).json({ error: 'forbidden' });
+
+  const usersRepo = require('./db/users');
+  const digits = String(req.query.phone || '').replace(/[^0-9]/g, '');
+  const user = digits ? usersRepo.getByPhone(digits) : null;
+  if (!user) return res.status(404).json({ error: `no user with phone ${digits}` });
+
+  const googleTasks = require('./services/googleTasks');
+  const accountsRepo = require('./db/googleAccounts');
+  const accounts = accountsRepo.listForUser(user.id);
+
+  res.json({
+    tasks_connected: googleTasks.isConnected(user),
+    needed_scope: googleTasks.TASKS_SCOPE,
+    google_accounts: accounts.map((a) => ({
+      email: a.email,
+      is_primary: !!a.is_primary,
+      has_tasks_scope: googleTasks.hasTasksScope(a),
+      scopes: (a.scopes || '').split(/\s+/).filter(Boolean),
+    })),
+    verdict: googleTasks.isConnected(user)
+      ? 'Tasks scope IS granted — sync should work. If it still fails, check the API/quota.'
+      : 'Tasks scope is NOT on any linked account. Add it to the OAuth consent screen, then reconnect Google and grant it.',
+  });
+});
+
 // ─── TEMPORARY diagnostic: what does the WhatsApp side actually see? ──
 //   Settings says connected while chat says otherwise, so this reports the
 //   user row the webhook would resolve and exactly what the health tool sees
