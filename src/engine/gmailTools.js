@@ -41,6 +41,20 @@ const gmailTools = [
     },
   },
   {
+    name: 'read_email',
+    description:
+      'Read one specific email in full, including readable attachment text ' +
+      '(PDF, DOCX, XLSX, TXT, CSV, JSON, HTML, XML) when present. Use after ' +
+      'list_recent_emails when the user wants details from a message or its attachment.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        email_id: { type: 'string', description: 'The Gmail message id to read.' },
+      },
+      required: ['email_id'],
+    },
+  },
+  {
     name: 'send_email',
     description:
       'Send a NEW email on the user\'s behalf. Call this ONLY when the user has ' +

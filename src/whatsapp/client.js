@@ -8,6 +8,7 @@ const { db } = require('../db');
 const users = require('../db/users');
 const engine = require('../engine/conversation');
 const cloudApi = require('./cloudApi');
+const documentReader = require('../services/documentReader');
 
 let client = null;
 let isReady = false;
@@ -44,6 +45,22 @@ function lastInboundAtForUser(userId) {
     "SELECT created_at FROM conversations WHERE user_id = ? AND role = 'user' ORDER BY created_at DESC, rowid DESC LIMIT 1"
   ).get(userId);
   return row ? parseSqliteUtc(row.created_at) : null;
+}
+
+async function textFromWhatsAppMedia(message) {
+  if (!message || !message.hasMedia || typeof message.downloadMedia !== 'function') return null;
+  const media = await message.downloadMedia();
+  if (!media || !media.data) return null;
+  const extracted = await documentReader.extractTextFromBuffer(
+    Buffer.from(media.data, 'base64'),
+    {
+      filename: media.filename || 'attachment',
+      mimeType: media.mimetype || 'application/octet-stream',
+    },
+  );
+  return documentReader.buildAttachmentContext(extracted, {
+    intro: message.body ? `User note: ${message.body}` : null,
+  });
 }
 
 // WhatsApp rejects template parameters that contain newlines, tabs, or more
@@ -175,26 +192,40 @@ function initWhatsApp() {
       const user = users.getByPhone(phoneNumber);
       registered = user && users.isOnboarded(user);
 
-      if (message.type && message.type !== 'chat') {
-        // Non-text messages (media, etc.). Only acknowledge for registered
-        // users; unknown numbers are bounced by the engine below.
-        if (registered) {
-          await sendRaw(message.from, "I can only read text messages for now \uD83D\uDE4F");
-          return;
+      let inboundText = message.body || '';
+      let mediaType = 'text';
+      if (message.hasMedia || (message.type && message.type !== 'chat')) {
+        if (message.type === 'document' || message.hasMedia) {
+          try {
+            const attachmentText = await textFromWhatsAppMedia(message);
+            if (attachmentText) {
+              inboundText = attachmentText;
+              mediaType = message.type || 'document';
+            }
+          } catch (err) {
+            console.warn('[whatsapp] media read failed:', err.message);
+          }
+        }
+        if (!inboundText) {
+          if (registered) {
+            await sendRaw(message.from, "I couldn't read that file yet. Send a PDF, DOCX, XLSX, TXT, CSV, JSON, HTML, or XML file and I'll read it.");
+            return;
+          }
         }
       }
 
-      console.log(`[whatsapp] << (${phoneNumber})${registered ? '' : ' [unregistered]'}: ${message.body}`);
+      console.log(`[whatsapp] << (${phoneNumber})${registered ? '' : ' [unregistered]'}: ${inboundText}`);
 
       // Delegate to the intelligent engine. It responds ONLY to registered +
       // onboarded users; unknown numbers get a one-line bounce (ignored:true)
       // and nothing is logged as conversation history.
       const { reply, ignored } = await engine.handleMessage({
-        text: message.body || '',
+        text: inboundText,
         phoneNumber,
         meta: {
           chatId: message.from,
           waMessageId: message.id ? message.id._serialized : null,
+          mediaType,
         },
       });
 

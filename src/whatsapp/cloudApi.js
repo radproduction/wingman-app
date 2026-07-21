@@ -171,6 +171,17 @@ function parseIncoming(body) {
           // Voice note: carry the media id so the handler can fetch + transcribe it.
           const a = m.audio || m.voice || {};
           out.push({ ...base, audio: { id: a.id, mimeType: a.mime_type || 'audio/ogg', voice: !!a.voice }, text: '' });
+        } else if (m.type === 'document') {
+          const d = m.document || {};
+          out.push({
+            ...base,
+            document: {
+              id: d.id,
+              mimeType: d.mime_type || 'application/octet-stream',
+              filename: d.filename || 'attachment',
+            },
+            text: d.caption || '',
+          });
         } else if (m.type === 'location') {
           // A shared location pin. Surface it as text (with the coordinates the
           // maps tools need) so the assistant can route to it like any address.

@@ -15,6 +15,7 @@ const dashboardApi = require('./api/dashboard');
 const adminQr = require('./admin/qr');
 const fs = require('fs');
 const path = require('path');
+const documentReader = require('./services/documentReader');
 
 const app = express();
 app.use(cors());
@@ -383,6 +384,7 @@ app.post('/webhook', (req, res) => {
         // Voice notes: transcribe first, then treat exactly like a typed
         // message — so every tool works by voice too.
         let wasVoice = false;
+        let mediaType = m.type || 'text';
         if (m.type === 'audio' && m.audio && m.audio.id) {
           const voice = require('./services/voice');
           if (!voice.enabled()) {
@@ -408,9 +410,31 @@ app.post('/webhook', (req, res) => {
           }
         }
 
+        if (m.type === 'document' && m.document && m.document.id) {
+          try {
+            const media = await cloudApi.downloadMedia(m.document.id);
+            const extracted = await documentReader.extractTextFromBuffer(media.buffer, {
+              filename: m.document.filename,
+              mimeType: m.document.mimeType || media.mimeType,
+            });
+            const attachmentText = documentReader.buildAttachmentContext(extracted, {
+              intro: m.text ? `User note: ${m.text}` : null,
+            });
+            if (!attachmentText) {
+              await cloudApi.sendText(phoneNumber, "I couldn't read that file yet. Send a PDF, DOCX, XLSX, TXT, CSV, JSON, HTML, or XML file and I'll read it.");
+              continue;
+            }
+            m.text = attachmentText;
+          } catch (err) {
+            console.warn('[webhook] document read failed:', err.message);
+            await cloudApi.sendText(phoneNumber, "Sorry, I couldn't read that attachment. Try sending it again, or send a PDF, DOCX, XLSX, TXT, CSV, JSON, HTML, or XML file.");
+            continue;
+          }
+        }
+
         // Shared location pins carry text too (label + coordinates), so the
         // assistant can route to them. Anything else without text is ignored.
-        if (!m.text || (m.type !== 'text' && m.type !== 'interactive' && m.type !== 'location' && m.type !== 'audio')) {
+        if (!m.text || (m.type !== 'text' && m.type !== 'interactive' && m.type !== 'location' && m.type !== 'audio' && m.type !== 'document')) {
           continue;
         }
 
@@ -418,7 +442,7 @@ app.post('/webhook', (req, res) => {
         const { reply, ignored } = await engine.handleMessage({
           text: m.text,
           phoneNumber,
-          meta: { waMessageId: m.id, provider: 'cloud', name: m.name },
+          meta: { waMessageId: m.id, provider: 'cloud', name: m.name, mediaType },
         });
 
         // Stay silent to unregistered/unknown senders (no auto-reply spam).

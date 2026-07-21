@@ -2,6 +2,7 @@
 
 const { google } = require('googleapis');
 const googleAuth = require('../auth/googleAuth');
+const documentReader = require('./documentReader');
 
 /** Gmail client for a user, optionally for one specific linked account. */
 function gmailFor(user, account = null) {
@@ -48,6 +49,11 @@ function decodePart(data) {
   return Buffer.from(data, 'base64').toString('utf8');
 }
 
+function decodePartBuffer(data) {
+  if (!data) return Buffer.alloc(0);
+  return Buffer.from(data, 'base64');
+}
+
 /** Recursively extract the best-effort plain text body from a payload. */
 function extractBody(payload) {
   if (!payload) return '';
@@ -69,8 +75,49 @@ function extractBody(payload) {
   return '';
 }
 
+function collectAttachments(payload, out = []) {
+  if (!payload) return out;
+  if (payload.filename && payload.body && (payload.body.attachmentId || payload.body.data)) {
+    out.push({
+      filename: payload.filename,
+      mimeType: payload.mimeType || 'application/octet-stream',
+      attachmentId: payload.body.attachmentId || null,
+      data: payload.body.data || null,
+      size: payload.body.size || null,
+    });
+  }
+  for (const part of (payload.parts || [])) collectAttachments(part, out);
+  return out;
+}
+
+async function extractAttachment(gmail, messageId, part) {
+  let buffer = part.data ? decodePartBuffer(part.data) : null;
+  if ((!buffer || !buffer.length) && part.attachmentId) {
+    const res = await gmail.users.messages.attachments.get({
+      userId: 'me',
+      messageId,
+      id: part.attachmentId,
+    });
+    buffer = decodePartBuffer(res && res.data && res.data.data);
+  }
+
+  const extracted = await documentReader.extractTextFromBuffer(buffer, {
+    filename: part.filename,
+    mimeType: part.mimeType,
+  });
+  return {
+    filename: part.filename,
+    mimeType: part.mimeType,
+    supported: !!extracted.supported,
+    note: extracted.note || null,
+    text: extracted.text || '',
+    truncated: !!extracted.truncated,
+  };
+}
+
 /**
- * Fetch one message and normalize to {gmailId, subject, sender, snippet, body}.
+ * Fetch one message and normalize to
+ * {gmailId, subject, sender, snippet, body, attachments}.
  */
 async function getMessage(user, messageId, account = null) {
   const gmail = gmailFor(user, account);
@@ -86,14 +133,45 @@ async function getMessage(user, messageId, account = null) {
     return found ? found.value : '';
   };
   const body = extractBody(msg.payload) || msg.snippet || '';
+  const attachmentParts = collectAttachments(msg.payload).slice(0, 3);
+  const attachments = [];
+  for (const part of attachmentParts) {
+    try {
+      attachments.push(await extractAttachment(gmail, msg.id, part));
+    } catch (err) {
+      attachments.push({
+        filename: part.filename,
+        mimeType: part.mimeType,
+        supported: false,
+        note: `Could not read attachment (${err.message}).`,
+        text: '',
+        truncated: false,
+      });
+    }
+  }
+  const attachmentContext = attachments
+    .map((a) => documentReader.buildAttachmentContext({
+      filename: a.filename,
+      mimeType: a.mimeType,
+      supported: a.supported,
+      text: a.text,
+      truncated: a.truncated,
+      note: a.note,
+    }))
+    .filter(Boolean)
+    .join('\n\n');
+  const combinedBody = attachmentContext
+    ? `${body}\n\n[Email attachments]\n${attachmentContext}`
+    : body;
   return {
     gmailId: msg.id,
     threadId: msg.threadId,
     subject: h('Subject'),
     sender: h('From'),
     snippet: msg.snippet || '',
-    body: body.slice(0, 4000), // cap for LLM
+    body: combinedBody.slice(0, 6000), // cap for LLM, incl. attachments
     labelIds: msg.labelIds || [],
+    attachments,
   };
 }
 

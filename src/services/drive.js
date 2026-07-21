@@ -2,6 +2,7 @@
 
 const { google } = require('googleapis');
 const googleAuth = require('../auth/googleAuth');
+const documentReader = require('./documentReader');
 
 // The combined Google token (stored on calendar_token/gmail_token) carries the
 // Drive scope once the user has re-consented, so we can reuse it here.
@@ -98,14 +99,27 @@ async function readFile(user, fileId) {
     return { name, kind: kindOf(mimeType), link: webViewLink, content: String(res.data || '').slice(0, 6000) };
   }
 
-  // Plain-text-ish files: download directly.
   if (mimeType && (mimeType.startsWith('text/') || mimeType === 'application/json')) {
     const res = await drive.files.get({ fileId, alt: 'media' }, { responseType: 'text' });
     return { name, kind: kindOf(mimeType), link: webViewLink, content: String(res.data || '').slice(0, 6000) };
   }
 
-  // Binary (image/pdf/etc.) — we can't extract text, return metadata only.
-  return { name, kind: kindOf(mimeType), link: webViewLink, content: null, note: 'Binary file — open the link to view.' };
+  if (mimeType === 'application/pdf'
+      || mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      || mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      || mimeType === 'application/vnd.ms-excel') {
+    const res = await drive.files.get({ fileId, alt: 'media' }, { responseType: 'arraybuffer' });
+    const extracted = await documentReader.extractTextFromBuffer(Buffer.from(res.data), { filename: name, mimeType });
+    return {
+      name,
+      kind: kindOf(mimeType),
+      link: webViewLink,
+      content: extracted.supported ? extracted.text : null,
+      note: extracted.supported ? extracted.note : extracted.note || 'Binary file - open the link to view.',
+    };
+  }
+
+  return { name, kind: kindOf(mimeType), link: webViewLink, content: null, note: 'Binary file - open the link to view.' };
 }
 
 /** Resolve a folder id by (partial) name, or null if not found. */

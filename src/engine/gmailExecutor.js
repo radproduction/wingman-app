@@ -67,6 +67,24 @@ async function executeGmailTool(user, toolUse) {
         return { count: emails.length, accounts: linked, emails };
       }
 
+      case 'read_email': {
+        for (const account of gmail.accountsFor(user)) {
+          try {
+            const m = await gmail.getMessage(user, input.email_id, account);
+            return {
+              found: true,
+              id: m.gmailId,
+              account: account ? account.email : null,
+              from: m.sender,
+              subject: m.subject,
+              body: m.body,
+              attachments: m.attachments || [],
+            };
+          } catch (_) { /* try the next account */ }
+        }
+        return { found: false, error: 'EMAIL_NOT_FOUND', detail: 'That message was not found in any connected mailbox.' };
+      }
+
       case 'send_email': {
         const to = (input.to || '').trim();
         if (!EMAIL_RE.test(to)) {
