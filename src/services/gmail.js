@@ -190,6 +190,80 @@ async function sendMessage(user, { to, subject, body, threadId, account = null }
   return res.data;
 }
 
+function b64url(buf) {
+  return Buffer.from(buf).toString('base64').replace(/\+/g, '-').replace(/\//g, '_');
+}
+
+/**
+ * Build a raw RFC-2822 message. multipart/mixed when there are attachments,
+ * plain text otherwise. `attachments` = [{ filename, mimeType, dataBase64 }].
+ */
+function buildRawMime({ to, subject, textBody, attachments = [] }) {
+  const headerLines = [`To: ${to}`, `Subject: ${subject}`, 'MIME-Version: 1.0'];
+
+  if (!attachments.length) {
+    const raw = `${headerLines.join('\r\n')}\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n${textBody || ''}`;
+    return b64url(raw);
+  }
+
+  const boundary = `wingman_${Date.now().toString(36)}`;
+  const parts = [];
+  parts.push(`--${boundary}`);
+  parts.push('Content-Type: text/plain; charset=UTF-8', '', textBody || '', '');
+  for (const a of attachments) {
+    // Gmail returns base64url; standard MIME wants base64, wrapped at 76 chars.
+    const std = String(a.dataBase64 || '').replace(/-/g, '+').replace(/_/g, '/');
+    const wrapped = std.replace(/(.{76})/g, '$1\r\n');
+    parts.push(`--${boundary}`);
+    parts.push(`Content-Type: ${a.mimeType || 'application/octet-stream'}; name="${a.filename || 'file'}"`);
+    parts.push(`Content-Disposition: attachment; filename="${a.filename || 'file'}"`);
+    parts.push('Content-Transfer-Encoding: base64', '', wrapped, '');
+  }
+  parts.push(`--${boundary}--`);
+
+  const raw = `${headerLines.join('\r\n')}\r\n` +
+    `Content-Type: multipart/mixed; boundary="${boundary}"\r\n\r\n` +
+    parts.join('\r\n');
+  return b64url(raw);
+}
+
+/**
+ * Forward an existing email to new recipients, carrying its attachments.
+ * Fetches the raw attachment bytes (not the text extraction) so the files
+ * arrive intact.
+ */
+async function forwardMessage(user, { messageId, to, note = '', account = null } = {}) {
+  const gmail = gmailFor(user, account);
+  const res = await gmail.users.messages.get({ userId: 'me', id: messageId, format: 'full' });
+  const msg = res.data;
+  const headers = (msg.payload && msg.payload.headers) || [];
+  const h = (name) => {
+    const f = headers.find((x) => x.name.toLowerCase() === name.toLowerCase());
+    return f ? f.value : '';
+  };
+
+  const origBody = extractBody(msg.payload) || msg.snippet || '';
+  const forwardedHeader =
+    `\r\n\r\n---------- Forwarded message ----------\r\n` +
+    `From: ${h('From')}\r\nDate: ${h('Date')}\r\nSubject: ${h('Subject')}\r\nTo: ${h('To')}\r\n\r\n`;
+  const textBody = `${note || ''}${forwardedHeader}${origBody}`;
+
+  // Pull the raw bytes of each attachment.
+  const attachments = [];
+  for (const part of collectAttachments(msg.payload).slice(0, 5)) {
+    if (!part.attachmentId) continue;
+    try {
+      const a = await gmail.users.messages.attachments.get({ userId: 'me', messageId, id: part.attachmentId });
+      attachments.push({ filename: part.filename, mimeType: part.mimeType, dataBase64: a.data.data });
+    } catch (_) { /* skip an attachment we can't fetch rather than fail the forward */ }
+  }
+
+  const subject = /^fwd:/i.test(h('Subject')) ? h('Subject') : `Fwd: ${h('Subject')}`;
+  const raw = buildRawMime({ to, subject, textBody, attachments });
+  const sent = await gmail.users.messages.send({ userId: 'me', requestBody: { raw } });
+  return { messageId: sent.data.id, to, subject, attachmentsForwarded: attachments.length };
+}
+
 /** Get the authenticated user's email address (for sender-self detection). */
 async function getProfile(user, account = null) {
   const gmail = gmailFor(user, account);
@@ -197,4 +271,4 @@ async function getProfile(user, account = null) {
   return { emailAddress: res.data.emailAddress };
 }
 
-module.exports = { listMessageIds, getMessage, sendMessage, extractBody, getProfile, accountsFor };
+module.exports = { listMessageIds, getMessage, sendMessage, forwardMessage, buildRawMime, extractBody, getProfile, accountsFor };

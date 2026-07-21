@@ -86,6 +86,22 @@ const gmailTools = [
       required: ['email_id', 'body'],
     },
   },
+  {
+    name: 'forward_email',
+    description:
+      'Forward an existing email to someone else, keeping its attachments. Get ' +
+      'the email id from list_recent_emails first, and resolve the recipient to a ' +
+      'real address (find_contact or ask). Only send when the user clearly asks to forward.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        email_id: { type: 'string', description: 'The Gmail message id to forward (from list_recent_emails).' },
+        to: { type: 'string', description: 'Recipient email address (a real address, not a name).' },
+        note: { type: 'string', description: 'Optional short note to add above the forwarded content.' },
+      },
+      required: ['email_id', 'to'],
+    },
+  },
 ];
 
 const gmailToolNames = new Set(gmailTools.map((t) => t.name));

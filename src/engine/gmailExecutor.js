@@ -131,6 +131,23 @@ async function executeGmailTool(user, toolUse) {
         return { sent: true, to, subject };
       }
 
+      case 'forward_email': {
+        const to = String(input.to || '').trim();
+        if (!EMAIL_RE.test(to)) return { error: 'INVALID_RECIPIENT', detail: `"${input.to}" is not a valid email address.` };
+
+        // Find which mailbox holds the message, then forward from that account.
+        let account = null;
+        for (const candidate of gmail.accountsFor(user)) {
+          try { await gmail.getMessage(user, input.email_id, candidate); account = candidate; break; }
+          catch (_) { /* try the next account */ }
+        }
+        if (account === null && gmail.accountsFor(user).length) return { error: 'EMAIL_NOT_FOUND', detail: 'That message was not found in any connected mailbox.' };
+
+        const r = await gmail.forwardMessage(user, { messageId: input.email_id, to, note: input.note || '', account });
+        try { contactsRepo.recordInteraction(user.id, { email: to, at: new Date().toISOString() }); } catch (_) {}
+        return { forwarded: true, to, subject: r.subject, attachments_included: r.attachmentsForwarded };
+      }
+
       default:
         return { error: `Unknown tool: ${name}` };
     }
