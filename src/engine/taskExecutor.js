@@ -57,6 +57,7 @@ async function executeTaskTool(user, toolUse) {
           },
           google_tasks_connected: googleTasks.isConnected(user),
           synced_to_google_tasks: !!sync.synced,
+          google_account_email: sync.accountEmail || null,
           sync_reason: sync.reason || null,
         };
       }
@@ -76,6 +77,7 @@ async function executeTaskTool(user, toolUse) {
             title: task.title,
           },
           synced_to_google_tasks: !!sync.synced,
+          google_account_email: sync.accountEmail || null,
           sync_reason: sync.reason || null,
         };
       }
@@ -97,6 +99,7 @@ async function executeTaskTool(user, toolUse) {
             due_label: updated.due_date ? `${t.dayLabel(updated.due_date, tz)} ${t.timeLabel(updated.due_date, tz)}` : null,
           },
           synced_to_google_tasks: !!sync.synced,
+          google_account_email: sync.accountEmail || null,
           sync_reason: sync.reason || null,
         };
       }

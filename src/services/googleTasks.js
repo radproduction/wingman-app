@@ -75,6 +75,22 @@ function normalizeDue(iso) {
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
 
+function resolvedTasklistId(requestedTasklist, responseData) {
+  if (requestedTasklist !== '@default') return requestedTasklist;
+  const selfLink = responseData && responseData.selfLink ? String(responseData.selfLink) : '';
+  const m = /\/lists\/([^/]+)\//.exec(selfLink);
+  return (m && m[1]) || '@default';
+}
+
+async function verifyRemoteTask(service, tasklistId, taskId) {
+  if (!taskId) return null;
+  const res = await service.tasks.get({
+    tasklist: tasklistId || '@default',
+    task: taskId,
+  });
+  return res && res.data ? res.data : null;
+}
+
 async function pushOneTask(user, account, task) {
   const service = tasksFor(user, account);
   const tasklist = task.google_tasklist_id || '@default';
@@ -89,12 +105,14 @@ async function pushOneTask(user, account, task) {
         completed: task.completed ? (task.completed_at || new Date().toISOString()) : undefined,
       },
     });
+    const tasklistId = resolvedTasklistId(tasklist, res.data);
+    const verified = await verifyRemoteTask(service, tasklistId, res.data.id).catch(() => null);
     return tasksRepo.updateSyncMeta(task.id, {
       googleTaskId: res.data.id,
-      googleTasklistId: tasklist === '@default' ? (res.data.selfLink && /\/lists\/([^/]+)\//.exec(res.data.selfLink || '')?.[1]) || '@default' : tasklist,
+      googleTasklistId: tasklistId,
       googleAccountId: account.id,
       googleUpdatedAt: res.data.updated || null,
-      syncState: 'synced',
+      syncState: verified ? 'synced' : 'pending_update',
     });
   }
 
@@ -110,12 +128,13 @@ async function pushOneTask(user, account, task) {
     task: task.google_task_id,
     requestBody,
   });
+  const verified = await verifyRemoteTask(service, tasklist, task.google_task_id).catch(() => null);
 
   return tasksRepo.updateSyncMeta(task.id, {
     googleTasklistId: tasklist,
     googleAccountId: account.id,
     googleUpdatedAt: res.data.updated || null,
-    syncState: 'synced',
+    syncState: verified ? 'synced' : (task.completed ? 'pending_complete' : 'pending_update'),
   });
 }
 
@@ -236,9 +255,13 @@ async function mirrorNewLocalTask(taskId) {
   tasksRepo.markLocalDirty(taskId, 'pending_create');
   const flush = await flushPendingLocalChanges(user);
   const fresh = tasksRepo.getById(taskId);
+  const account = fresh && fresh.google_account_id ? accountsRepo.getById(fresh.google_account_id) : primaryTasksAccount(user);
   return {
     synced: !!(fresh && fresh.sync_state === 'synced' && fresh.google_task_id),
-    reason: fresh && fresh.sync_state === 'synced' ? null : 'SYNC_PENDING',
+    reason: fresh && fresh.sync_state === 'synced'
+      ? null
+      : (flush && flush.skipped > 0 ? 'SYNC_FAILED' : 'SYNC_PENDING'),
+    accountEmail: account && account.email ? account.email : null,
     flush,
     task: fresh,
   };
@@ -252,9 +275,13 @@ async function mirrorTaskUpdate(taskId) {
   tasksRepo.markLocalDirty(taskId, task.google_task_id ? 'pending_update' : 'pending_create');
   const flush = await flushPendingLocalChanges(user);
   const fresh = tasksRepo.getById(taskId);
+  const account = fresh && fresh.google_account_id ? accountsRepo.getById(fresh.google_account_id) : primaryTasksAccount(user);
   return {
     synced: !!(fresh && fresh.sync_state === 'synced'),
-    reason: fresh && fresh.sync_state === 'synced' ? null : 'SYNC_PENDING',
+    reason: fresh && fresh.sync_state === 'synced'
+      ? null
+      : (flush && flush.skipped > 0 ? 'SYNC_FAILED' : 'SYNC_PENDING'),
+    accountEmail: account && account.email ? account.email : null,
     flush,
     task: fresh,
   };
@@ -268,9 +295,13 @@ async function mirrorTaskCompletion(taskId) {
   tasksRepo.markLocalDirty(taskId, task.google_task_id ? 'pending_complete' : 'pending_create');
   const flush = await flushPendingLocalChanges(user);
   const fresh = tasksRepo.getById(taskId);
+  const account = fresh && fresh.google_account_id ? accountsRepo.getById(fresh.google_account_id) : primaryTasksAccount(user);
   return {
     synced: !!(fresh && fresh.sync_state === 'synced'),
-    reason: fresh && fresh.sync_state === 'synced' ? null : 'SYNC_PENDING',
+    reason: fresh && fresh.sync_state === 'synced'
+      ? null
+      : (flush && flush.skipped > 0 ? 'SYNC_FAILED' : 'SYNC_PENDING'),
+    accountEmail: account && account.email ? account.email : null,
     flush,
     task: fresh,
   };
