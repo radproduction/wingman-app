@@ -22,6 +22,8 @@ const { healthTools, healthToolNames } = require('./healthTools');
 const { executeHealthTool } = require('./healthExecutor');
 const { workTools, workToolNames } = require('./workTools');
 const { executeWorkTool } = require('./workExecutor');
+const { automationTools, automationToolNames } = require('./automationTools');
+const { executeAutomationTool } = require('./automationExecutor');
 const { executeVoiceTool } = require('./voiceExecutor');
 const { executeWebmailTool } = require('./webmailExecutor');
 const { executeMapsTool } = require('./mapsExecutor');
@@ -236,6 +238,21 @@ async function runConversation(user, text) {
   return reply;
 }
 
+/**
+ * Execute a standing instruction (an automation) with the full tool set, in
+ * isolation from the chat history — so an automated run neither depends on nor
+ * pollutes the conversation. Returns the message to send the user, or null if
+ * the AI decided nothing needed sending.
+ */
+async function runAutomatedInstruction(user, instruction) {
+  const system = buildSystemPrompt(user) +
+    `\n\n--- AUTOMATED RUN ---\nThis is a scheduled standing instruction you set up earlier, firing now — the user did NOT just message you. Carry it out with your tools and reply with ONLY the message to send them: the result itself (e.g. the traffic update), briefly and naturally, as if you proactively reached out. Do not ask questions or say "let me know" — just do it. If for some reason it genuinely cannot be done right now, reply with a short honest note about that instead.`;
+
+  const messages = [{ role: 'user', content: `[Scheduled instruction firing now] ${instruction}` }];
+  const reply = await runToolLoop(user, messages, system);
+  return (reply || '').trim() || null;
+}
+
 async function runToolLoop(user, messages, system, maxRounds = 4) {
   const convo = [...messages];
 
@@ -255,6 +272,7 @@ async function runToolLoop(user, messages, system, maxRounds = 4) {
         ...voiceTools,
         ...healthTools,
         ...workTools,
+        ...automationTools,
       ],
       maxTokens: 1024,
     });
@@ -289,6 +307,8 @@ async function runToolLoop(user, messages, system, maxRounds = 4) {
           result = await executeHealthTool(user, { name: block.name, input: block.input });
         } else if (workToolNames.has(block.name)) {
           result = await executeWorkTool(user, { name: block.name, input: block.input });
+        } else if (automationToolNames.has(block.name)) {
+          result = await executeAutomationTool(user, { name: block.name, input: block.input });
         } else {
           result = await executeCalendarTool(user, { name: block.name, input: block.input });
         }
@@ -342,6 +362,7 @@ function parseWorkHours(text) {
 module.exports = {
   handleMessage,
   runConversation,
+  runAutomatedInstruction,
   isConnectCalendarIntent,
   buildConnectCalendarReply,
   isConnectEmailIntent,

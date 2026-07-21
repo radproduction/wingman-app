@@ -58,6 +58,8 @@ async function runBriefingTick(now = new Date()) {
     // The cross-domain proactive nudge — gated to a couple of local hours and
     // to days that actually have something time-sensitive.
     await require('./proactiveBrain').runDueUsers({ now });
+    // Standing instructions the user set up ("every morning send me traffic").
+    await require('./automations').runDueUsers({ now, windowMin: 15 });
   } catch (err) {
     console.warn('[scheduler] briefing tick error:', err.message);
   }

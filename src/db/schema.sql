@@ -348,3 +348,23 @@ CREATE TABLE IF NOT EXISTS wearable_accounts (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_wearable_user_provider
   ON wearable_accounts(user_id, provider);
+
+-- ─── Automations (standing instructions the AI fulfils on schedule) ──
+--   NOT to-do tasks (things the USER does). These are things WINGMAN does by
+--   itself at a time — "every morning at 7 send me the traffic to the office".
+--   The instruction is kept in natural language and executed by the AI with its
+--   tools, so any capability Wingman has can be scheduled without a bespoke rule.
+CREATE TABLE IF NOT EXISTS automations (
+  id TEXT PRIMARY KEY,
+  user_id TEXT REFERENCES users(id),
+  instruction TEXT,              -- "send a traffic update from office to home"
+  time TEXT,                     -- local HH:MM
+  kind TEXT,                     -- 'daily' | 'weekdays' | 'weekly' | 'once'
+  weekday INTEGER,               -- 0=Sun..6=Sat, for 'weekly'
+  run_date TEXT,                 -- 'YYYY-MM-DD', for 'once'
+  timezone TEXT,
+  last_run_date TEXT,            -- local day it last fired (dedupe)
+  active INTEGER DEFAULT 1,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_automations_user ON automations(user_id, active);
