@@ -40,12 +40,46 @@ async function executeDriveTool(user, toolUse) {
         return { created: true, ...file };
       }
 
+      case 'create_drive_sheet': {
+        const sheet = await drive.createSheet(user, {
+          name: input.name,
+          rows: Array.isArray(input.rows) ? input.rows : null,
+          folderName: input.folder_name,
+        });
+        return { created: true, kind: 'sheet', ...sheet };
+      }
+
       case 'create_drive_folder': {
         const folder = await drive.createFolder(user, {
           name: input.name,
           folderName: input.folder_name,
         });
         return { created: true, kind: 'folder', ...folder };
+      }
+
+      case 'share_drive_file': {
+        const shared = await drive.share(user, {
+          fileId: input.file_id,
+          email: input.email || null,
+          role: input.can_edit ? 'writer' : 'reader',
+        });
+        return { shared: true, ...shared };
+      }
+
+      case 'rename_drive_file': {
+        const renamed = await drive.rename(user, { fileId: input.file_id, name: input.name });
+        return { renamed: true, ...renamed };
+      }
+
+      case 'move_drive_file': {
+        const moved = await drive.move(user, { fileId: input.file_id, folderName: input.folder_name });
+        if (!moved.moved) return { error: 'FOLDER_NOT_FOUND', detail: `No folder named "${input.folder_name}".` };
+        return moved;
+      }
+
+      case 'delete_drive_file': {
+        const del = await drive.trashFile(user, input.file_id);
+        return { deleted: true, ...del, note: 'Moved to Trash — recoverable for 30 days.' };
       }
 
       default:

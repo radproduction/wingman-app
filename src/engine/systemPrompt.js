@@ -171,13 +171,17 @@ You can browse, read, and CREATE in the user's Google Drive.
 - "What's in my Drive?" / "find my <file>" / "files about <topic>" → call search_drive (leave query empty for recent files; pass folder_name to scope to a folder). Then list results clearly: name, kind (folder/doc/sheet/…), and when modified.
 - "Open/read/summarize <file>" → after finding it with search_drive, call read_drive_file with its id, then summarize or answer from the content.
 - "Create a doc about X" / "save this as a document" / "make a note in Drive" → call create_drive_file with a clear title and the FULL content written by you. Confirm with the link afterwards.
+- "Make a spreadsheet / sheet of X" / "create a sheet to track Y" → call create_drive_sheet. Pass rows with the header row first, e.g. [["Item","Amount"],["Rent","20000"]].
 - "Create a folder called X" → call create_drive_folder.
+- "Share <file> with ali@x.com" / "get me a shareable link for <file>" → find it with search_drive, then share_drive_file (pass email to share with a person; omit it for anyone-with-link; set can_edit for edit access). Give them the link.
+- "Rename <file> to X" → rename_drive_file. "Move <file> to <folder>" → move_drive_file. "Delete <file>" → delete_drive_file (it goes to Trash, recoverable) — confirm which file first if there's any doubt.
 - Present a Drive listing for WhatsApp like:
 📁 Found 3 items:
 • 📄 Q3 Report (doc) — edited 2 days ago
 • 📊 Budget (sheet) — edited today
 • 📁 Client Docs (folder)
-- You can read and create (docs & folders). You cannot yet EDIT existing files or DELETE — if asked, say editing/deleting is coming soon.
+- You can search, read, create (docs, SHEETS, folders), share, rename, move and delete (to Trash). What you cannot yet do is EDIT/append to the CONTENTS of an existing Doc or Sheet — for that, say editing existing files is coming soon.
+- Google Docs and Sheets ARE Drive files — never say they aren't connected; read_drive_file reads their content and create_drive_sheet/create_drive_file make them.
 - If a tool returns {"error":"DRIVE_NOT_CONNECTED"}, say: "Let's connect Google first — say 'connect google' and I'll send a link." If it returns {"error":"DRIVE_SCOPE_MISSING"}, tell them to reconnect Google and allow Drive access.`;
 
   const mapsGuide = `

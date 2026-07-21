@@ -158,4 +158,87 @@ async function createFolder(user, { name, folderName } = {}) {
   return { id: res.data.id, name: res.data.name, link: res.data.webViewLink };
 }
 
-module.exports = { search, readFile, createDoc, createFolder };
+/** Turn rows (array of arrays) into CSV Google will import into a Sheet. */
+function toCsv(rows) {
+  if (!Array.isArray(rows)) return '';
+  return rows.map((row) => (Array.isArray(row) ? row : [row])
+    .map((cell) => {
+      const s = String(cell == null ? '' : cell);
+      // Quote anything with a comma, quote or newline; double embedded quotes.
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    })
+    .join(',')).join('\n');
+}
+
+/**
+ * Create a native Google Sheet, optionally pre-filled with rows. Uploading CSV
+ * with the spreadsheet target mime type makes Drive convert it — no Sheets API
+ * scope needed, so this stays inside the Drive access the user already granted.
+ */
+async function createSheet(user, { name, rows, folderName } = {}) {
+  const drive = driveFor(user);
+  const parentId = await resolveFolderId(drive, folderName);
+  const requestBody = { name: name || 'Untitled', mimeType: 'application/vnd.google-apps.spreadsheet' };
+  if (parentId) requestBody.parents = [parentId];
+  const csv = rows && rows.length ? toCsv(rows) : '';
+  const res = await drive.files.create({
+    requestBody,
+    media: csv ? { mimeType: 'text/csv', body: csv } : undefined,
+    fields: 'id,name,webViewLink',
+  });
+  return { id: res.data.id, name: res.data.name, link: res.data.webViewLink };
+}
+
+/**
+ * Share a file. With an email, shares with that person (and emails them);
+ * without one, makes it viewable by anyone with the link. Returns the link.
+ */
+async function share(user, { fileId, email, role = 'reader', notify = true } = {}) {
+  const drive = driveFor(user);
+  const permission = email
+    ? { type: 'user', role, emailAddress: String(email).trim() }
+    : { type: 'anyone', role };
+  await drive.permissions.create({
+    fileId,
+    requestBody: permission,
+    sendNotificationEmail: !!email && notify,
+    fields: 'id',
+  });
+  const meta = await drive.files.get({ fileId, fields: 'name,webViewLink' });
+  return { name: meta.data.name, link: meta.data.webViewLink, sharedWith: email || 'anyone with the link', role };
+}
+
+/** Move a file to the trash (recoverable, not a hard delete). */
+async function trashFile(user, fileId) {
+  const drive = driveFor(user);
+  const meta = await drive.files.get({ fileId, fields: 'name' });
+  await drive.files.update({ fileId, requestBody: { trashed: true } });
+  return { name: meta.data.name };
+}
+
+/** Rename a file or folder. */
+async function rename(user, { fileId, name } = {}) {
+  const drive = driveFor(user);
+  const res = await drive.files.update({ fileId, requestBody: { name }, fields: 'id,name,webViewLink' });
+  return { id: res.data.id, name: res.data.name, link: res.data.webViewLink };
+}
+
+/** Move a file into a named folder (replaces its current parents). */
+async function move(user, { fileId, folderName } = {}) {
+  const drive = driveFor(user);
+  const parentId = await resolveFolderId(drive, folderName);
+  if (!parentId) return { moved: false, reason: 'FOLDER_NOT_FOUND', folderName };
+  const cur = await drive.files.get({ fileId, fields: 'parents,name,webViewLink' });
+  const res = await drive.files.update({
+    fileId,
+    addParents: parentId,
+    removeParents: (cur.data.parents || []).join(','),
+    fields: 'id,name,webViewLink',
+  });
+  return { moved: true, name: res.data.name, link: res.data.webViewLink, folderName };
+}
+
+module.exports = {
+  search, readFile, createDoc, createSheet, createFolder,
+  share, trashFile, rename, move,
+};

@@ -52,6 +52,26 @@ const driveTools = [
     },
   },
   {
+    name: 'create_drive_sheet',
+    description:
+      'Create a new Google Sheet, optionally pre-filled with rows. Use for ' +
+      '"make a spreadsheet of X", "create a sheet to track Y". Pass `rows` as a ' +
+      'list of rows, each a list of cell values, with the header row first.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Title of the spreadsheet.' },
+        rows: {
+          type: 'array',
+          items: { type: 'array', items: { type: 'string' } },
+          description: 'Rows of cells, header first — e.g. [["Item","Amount"],["Rent","20000"]]. Omit for a blank sheet.',
+        },
+        folder_name: { type: 'string', description: 'Optional: name of a folder to create it in.' },
+      },
+      required: ['name'],
+    },
+  },
+  {
     name: 'create_drive_folder',
     description: 'Create a new folder in the user\'s Drive. Optionally inside a named parent folder.',
     input_schema: {
@@ -61,6 +81,60 @@ const driveTools = [
         folder_name: { type: 'string', description: 'Optional: name of a parent folder to create it inside.' },
       },
       required: ['name'],
+    },
+  },
+  {
+    name: 'share_drive_file',
+    description:
+      'Share a Drive file/folder and get a link. With an email, shares with that ' +
+      'person and notifies them ("share the budget with ali@x.com"); without one, ' +
+      'makes it viewable by anyone with the link ("get me a shareable link"). Get ' +
+      'the file id from search_drive first.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        file_id: { type: 'string', description: 'The Drive file id.' },
+        email: { type: 'string', description: 'Optional: person to share with. Omit for anyone-with-link.' },
+        can_edit: { type: 'boolean', description: 'True to allow editing; default is view-only.' },
+      },
+      required: ['file_id'],
+    },
+  },
+  {
+    name: 'rename_drive_file',
+    description: 'Rename a Drive file or folder. Get the file id from search_drive first.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        file_id: { type: 'string', description: 'The Drive file id.' },
+        name: { type: 'string', description: 'The new name.' },
+      },
+      required: ['file_id', 'name'],
+    },
+  },
+  {
+    name: 'move_drive_file',
+    description: 'Move a Drive file into a named folder. Get the file id from search_drive first.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        file_id: { type: 'string', description: 'The Drive file id.' },
+        folder_name: { type: 'string', description: 'Name of the destination folder.' },
+      },
+      required: ['file_id', 'folder_name'],
+    },
+  },
+  {
+    name: 'delete_drive_file',
+    description:
+      'Move a Drive file/folder to the trash (recoverable). Use only when the user ' +
+      'clearly asks to delete something. Confirm which file first if unsure.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        file_id: { type: 'string', description: 'The Drive file id.' },
+      },
+      required: ['file_id'],
     },
   },
 ];
