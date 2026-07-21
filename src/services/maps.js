@@ -142,13 +142,25 @@ async function leaveBy(origin, destination, arriveBy) {
 
 /** Geocode an address and persist it as the user's home or office. */
 async function savePlace(userId, which, address) {
-  const geo = await geocode(address);
-  if (!geo) return null;
+  // Geocoding is an ENHANCEMENT (coordinates for precise traffic/leave-by), not
+  // a gatekeeper. The address is text the user typed — losing it because the
+  // Maps key is down or a place is slightly non-standard is the wrong trade.
+  // So we always store the text, and add coordinates when geocoding succeeds.
+  let geo = null;
+  try { geo = await geocode(address); }
+  catch (err) {
+    // A dead/denied key must not block saving; it only means no coordinates.
+    if (err.message !== 'MAPS_REQUEST_DENIED' && err.message !== 'MAPS_NOT_CONFIGURED') throw err;
+    console.warn('[maps] geocode unavailable, saving address text only:', err.message);
+  }
+
+  const finalAddress = (geo && geo.address) || address;
   const patch = which === 'home'
-    ? { home_address: geo.address, home_lat: geo.lat, home_lng: geo.lng }
-    : { office_address: geo.address, office_lat: geo.lat, office_lng: geo.lng };
+    ? { home_address: finalAddress, home_lat: geo ? geo.lat : null, home_lng: geo ? geo.lng : null }
+    : { office_address: finalAddress, office_lat: geo ? geo.lat : null, office_lng: geo ? geo.lng : null };
   usersRepo.update(userId, patch);
-  return geo;
+
+  return { address: finalAddress, lat: geo ? geo.lat : null, lng: geo ? geo.lng : null, geocoded: !!geo };
 }
 
 /** Has the user told us where home / office are? */
