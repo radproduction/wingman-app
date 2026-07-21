@@ -713,6 +713,7 @@ router.post('/google/accounts/:id/disconnect', (req, res) => {
   const cleanupResult = accounts.length
     ? cleanup.cleanupAccount(req.user.id, account)
     : cleanup.cleanupAllGoogleData(req.user.id);
+  if (accounts.length) cleanup.resyncPrimaryData(req.user.id).catch(() => {});
   res.json({
     cleanup: cleanupResult,
     accounts: accounts.map((a) => ({ id: a.id, email: a.email, is_primary: !!a.is_primary, connected_at: a.created_at })),
@@ -723,11 +724,15 @@ router.post('/google/accounts/:id/disconnect', (req, res) => {
 router.post('/google/accounts/:id/primary', (req, res) => {
   if (!req.user) return res.status(401).json({ error: 'Authentication required.' });
   const accountsRepo = require('../db/googleAccounts');
+  const cleanup = require('../services/googleDisconnectCleanup');
   if (!accountsRepo.getById(req.params.id)) return res.status(404).json({ error: 'Account not found.' });
   accountsRepo.setPrimary(req.user.id, req.params.id);
   syncPrimaryToLegacy(req.user.id);
+  const cleanupResult = cleanup.cleanupAllGoogleData(req.user.id);
+  cleanup.resyncPrimaryData(req.user.id).catch(() => {});
   const accounts = accountsRepo.listForUser(req.user.id);
   res.json({
+    cleanup: cleanupResult,
     accounts: accounts.map((a) => ({ id: a.id, email: a.email, is_primary: !!a.is_primary, connected_at: a.created_at })),
   });
 });

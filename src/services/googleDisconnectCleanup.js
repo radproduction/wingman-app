@@ -64,4 +64,17 @@ function cleanupAllGoogleData(userId) {
   };
 }
 
-module.exports = { cleanupAccount, cleanupAllGoogleData };
+async function resyncPrimaryData(userId) {
+  try { await require('./googleTasks').syncUser(userId); } catch (_) { /* best-effort */ }
+  try { await require('./emailScanner').scanUser(userId); } catch (_) { /* best-effort */ }
+  try {
+    const user = require('../db/users').getById(userId);
+    if (user && require('../auth/googleAuth').isConnected(user)) {
+      const from = new Date(Date.now() - 7 * 86400000).toISOString();
+      const to = new Date(Date.now() + 45 * 86400000).toISOString();
+      await require('./calendar').getEvents(userId, { from, to });
+    }
+  } catch (_) { /* best-effort */ }
+}
+
+module.exports = { cleanupAccount, cleanupAllGoogleData, resyncPrimaryData };

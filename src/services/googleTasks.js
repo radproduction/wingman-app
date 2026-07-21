@@ -20,7 +20,8 @@ function hasTasksScope(account) {
 function connectedAccounts(user) {
   if (!user || !user.id) return [];
   try {
-    return accountsRepo.listForUser(user.id).filter(hasTasksScope);
+    const primary = accountsRepo.getPrimary(user.id);
+    return primary && hasTasksScope(primary) ? [primary] : [];
   } catch (_) {
     return [];
   }

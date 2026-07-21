@@ -15,13 +15,14 @@ function calendarFor(user, account = null) {
 }
 
 /**
- * Every Google account linked to the user. Returns [null] when there are no
- * account rows so legacy single-account users keep working unchanged.
+ * The ONE Google account Wingman should actively use for Calendar features.
+ * This keeps dashboard/chat results consistent with the account the user chose
+ * as primary in Settings.
  */
 function accountsFor(user) {
   try {
-    const list = require('../db/googleAccounts').listForUser(user.id);
-    return list.length ? list : [null];
+    const primary = require('../db/googleAccounts').getPrimary(user.id);
+    return primary ? [primary] : [null];
   } catch (_) {
     return [null];
   }
@@ -148,9 +149,8 @@ async function getEvents(userId, dateRange = 'today') {
   const user = loadUser(userId);
   const { timeMin, timeMax, label } = resolveRange(user, dateRange);
 
-  // Pull from EVERY linked Google account and merge, so a user with a personal
-  // and a work account sees one combined schedule. A failing account is skipped
-  // rather than breaking the whole answer.
+  // Pull only from the chosen PRIMARY account so the app never mixes personal
+  // and work calendars unexpectedly.
   const accounts = accountsFor(user);
   const events = [];
   for (const account of accounts) {

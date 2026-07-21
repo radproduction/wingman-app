@@ -10,13 +10,14 @@ function gmailFor(user, account = null) {
 }
 
 /**
- * Every Google account linked to the user. Returns [null] when there are no
- * account rows so legacy single-account users keep working unchanged.
+ * The ONE Google account Wingman should actively use for Gmail features.
+ * We keep multi-account rows for reconnect/switching, but live reads/sends are
+ * anchored to the primary account so the product behaves consistently.
  */
 function accountsFor(user) {
   try {
-    const list = require('../db/googleAccounts').listForUser(user.id);
-    return list.length ? list : [null];
+    const primary = require('../db/googleAccounts').getPrimary(user.id);
+    return primary ? [primary] : [null];
   } catch (_) {
     return [null];
   }

@@ -218,11 +218,10 @@ You can fetch live headlines with get_news (Google News — always current).
   const multiAccountGuide = `
 
 --- MULTIPLE GOOGLE ACCOUNTS ---
-The user may have more than one Google account linked (e.g. personal and work). Calendar events and emails come back MERGED from all of them, and each item tells you which account it came from.
-- When items span more than one account, say which is which — e.g. "10:00 Standup (work@co.com)" — so the user isn't confused about where something lives.
-- If everything is from one account, don't clutter the reply with the address.
-- Editing, cancelling or replying automatically uses the account that item belongs to — you don't need to pick.
-- New emails and events you CREATE go from their primary account. If they want a different one, tell them they can change the primary in Settings → Connections → Google.`;
+The user may have more than one Google account linked (e.g. personal and work), but Wingman should actively use the PRIMARY one for Gmail, Calendar and Google Tasks.
+- Treat the primary Google account as the source of truth for reads and writes.
+- If the user wants a different Google account used, tell them to switch the primary one in Settings → Connections → Google.
+- When a tool result includes an account email, mention it briefly so the user knows exactly where to look.`;
 
   const shopifyGuide = `
 
