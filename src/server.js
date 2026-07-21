@@ -167,7 +167,9 @@ app.get('/_diag/briefing', async (req, res) => {
 });
 
 // ─── TEMPORARY diagnostic: is the Google Tasks scope actually granted? ──
-app.get('/_diag/tasks', (req, res) => {
+//   Add &test=1 to push a REAL task into the user's Google Tasks and report the
+//   actual result — the definitive proof that WhatsApp → Google sync works.
+app.get('/_diag/tasks', async (req, res) => {
   const admin = process.env.ADMIN_PASSWORD;
   if (admin && req.query.key !== admin) return res.status(403).json({ error: 'forbidden' });
 
@@ -180,7 +182,32 @@ app.get('/_diag/tasks', (req, res) => {
   const accountsRepo = require('./db/googleAccounts');
   const accounts = accountsRepo.listForUser(user.id);
 
+  // Actually create-and-push a test task, and report exactly what came back.
+  let liveTest;
+  if (req.query.test === '1') {
+    try {
+      const tasksRepo = require('./db/tasks');
+      const created = tasksRepo.create({
+        userId: user.id,
+        title: `✅ Wingman sync test — ${new Date().toISOString().slice(11, 16)} (safe to delete)`,
+        source: 'diag',
+      });
+      const sync = await googleTasks.mirrorNewLocalTask(created.id);
+      liveTest = {
+        pushed_to_google: !!sync.synced,
+        google_account: sync.accountEmail || null,
+        reason: sync.reason || null,
+        note: sync.synced
+          ? 'Look in your Google Tasks — this task is there now.'
+          : 'Push did NOT complete; see reason.',
+      };
+    } catch (err) {
+      liveTest = { pushed_to_google: false, error: err.message };
+    }
+  }
+
   res.json({
+    live_push_test: liveTest,
     tasks_connected: googleTasks.isConnected(user),
     needed_scope: googleTasks.TASKS_SCOPE,
     google_accounts: accounts.map((a) => ({
