@@ -26,12 +26,15 @@ function buildMessage(user, finding) {
     blood_oxygen: 'Worth re-taking when you are rested and still.',
   };
 
+  // No disclaimer here — the caller appends it once, whether the message came
+  // from the AI analyst or from this fallback.
   return [
     `❤️ Your ${finding.label} is ${dir} usual — ${finding.value}${finding.unit} at ${when}, against your typical ${finding.baseline}${finding.unit}.`,
     nudges[finding.metric] || '',
-    'Just something I noticed in your data — not medical advice.',
   ].filter(Boolean).join('\n\n');
 }
+
+const DISCLAIMER = 'Just something I noticed in your data — not medical advice.';
 
 /** Check one user and send at most one alert per metric per local day. */
 async function alertForUser(userId, { now = new Date(), send = true } = {}) {
@@ -46,27 +49,40 @@ async function alertForUser(userId, { now = new Date(), send = true } = {}) {
   const prefs = user.preferences || {};
   const alerted = prefs.healthAlerted || {};   // { metric: 'YYYY-MM-DD' }
 
-  const sent = [];
-  for (const f of findings) {
-    if (alerted[f.metric] === dayKey) continue;   // already mentioned today
-    const msg = buildMessage(user, f);
-    sent.push(msg);
-    if (send && wa().ready()) {
-      try { await wa().sendMessage(user.phone, msg); }
-      catch (err) { console.warn('[healthAlerts] send failed:', err.message); }
-    } else if (send) {
-      console.log('[healthAlerts] (WA not ready) would alert:', f.metric);
-    }
-    alerted[f.metric] = dayKey;
+  // Only what we haven't already flagged today (still at most one mention per
+  // metric per local day).
+  const fresh = findings.filter((f) => alerted[f.metric] !== dayKey);
+  if (!fresh.length) return { sent: [] };
+
+  // One coherent read of everything that drifted — the AI analyst explains the
+  // likely cause from the rest of the data. The fixed templates are only a
+  // fallback so an alert still goes out if the model call fails.
+  let body = null;
+  try {
+    body = await require('./healthInsight').explainAnomaly(userId, fresh, { name: user.name });
+  } catch (err) {
+    console.warn('[healthAlerts] insight failed, using fallback:', err.message);
+  }
+  if (!body) body = fresh.map((f) => buildMessage(user, f)).join('\n\n');
+
+  const msg = `${body}\n\n${DISCLAIMER}`;
+
+  if (send && wa().ready()) {
+    // Window-aware: delivers out of the 24h window too when a proactive
+    // template is configured, otherwise sends free-form in-window.
+    try { await wa().sendProactiveMessage(user, msg, { now, logLabel: 'health' }); }
+    catch (err) { console.warn('[healthAlerts] send failed:', err.message); }
+  } else if (send) {
+    console.log('[healthAlerts] (WA not ready) would alert:', fresh.map((f) => f.metric).join(', '));
   }
 
-  if (sent.length) {
-    const fresh = usersRepo.getById(userId) || user;
-    const p = fresh.preferences || {};
-    p.healthAlerted = alerted;
-    usersRepo.update(userId, { preferences: p });
-  }
-  return { sent };
+  for (const f of fresh) alerted[f.metric] = dayKey;
+  const stored = usersRepo.getById(userId) || user;
+  const p = stored.preferences || {};
+  p.healthAlerted = alerted;
+  usersRepo.update(userId, { preferences: p });
+
+  return { sent: [msg] };
 }
 
 async function runAllUsers({ now = new Date() } = {}) {

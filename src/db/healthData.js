@@ -18,6 +18,10 @@ const METRICS = {
   calories: { unit: 'kcal', label: 'Active calories' },
   weight: { unit: 'kg', label: 'Weight' },
   blood_oxygen: { unit: '%', label: 'Blood oxygen' },
+  // Activity load for the day (WHOOP strain 0–21, or a general exertion score).
+  // Lets the analyst connect a hard day to the next morning's numbers.
+  strain: { unit: '', label: 'Strain' },
+  recovery: { unit: '%', label: 'Recovery' },
 };
 
 /** Accept the aliases different sources use for the same metric. */
@@ -30,6 +34,8 @@ const ALIASES = {
   active_calories: 'calories', activeenergy: 'calories', active_energy: 'calories',
   spo2: 'blood_oxygen', oxygen_saturation: 'blood_oxygen',
   body_mass: 'weight',
+  day_strain: 'strain', exertion: 'strain',
+  recovery_score: 'recovery', readiness: 'recovery',
 };
 
 function canonicalMetric(name) {

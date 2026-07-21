@@ -57,7 +57,25 @@ async function fetchWhoop(accessToken, { since }) {
     if (Number.isFinite(Number(score.spo2_percentage))) {
       readings.push({ metric: 'blood_oxygen', value: Number(score.spo2_percentage), unit: '%', recordedAt: at });
     }
+    // Recovery % is WHOOP's own read on how ready the body is — a ready-made
+    // "how are you doing" signal the analyst can lean on.
+    if (Number.isFinite(Number(score.recovery_score))) {
+      readings.push({ metric: 'recovery', value: Number(score.recovery_score), unit: '%', recordedAt: at });
+    }
   }
+
+  // Day strain (0–21) — the activity load that explains why the next morning's
+  // resting HR or recovery moved. Best-effort: no cycles is not a failure.
+  try {
+    const cycles = await getJson(`${base}/v2/cycle?start=${start}&limit=25`, accessToken);
+    for (const c of (cycles && cycles.records) || []) {
+      const strain = c.score && c.score.strain;
+      const at = c.end || c.start || c.created_at;
+      if (at && Number.isFinite(Number(strain))) {
+        readings.push({ metric: 'strain', value: Math.round(Number(strain) * 10) / 10, unit: '', recordedAt: at });
+      }
+    }
+  } catch (_) { /* strain is a bonus, never a blocker */ }
 
   const sleep = await getJson(`${base}/v2/activity/sleep?start=${start}&limit=25`, accessToken);
   for (const rec of (sleep && sleep.records) || []) {

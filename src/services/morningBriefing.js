@@ -124,8 +124,12 @@ function format(user, agg) {
     lines.push('');
   }
 
-  // Health \u2014 a readable roll-up of the latest readings, not one raw metric.
-  if (agg.healthLine) {
+  // Health \u2014 the AI analyst's read when we have it (what the numbers mean for
+  // them today), falling back to the plain roll-up otherwise.
+  if (agg.healthInsight) {
+    lines.push(`\u2764\ufe0f ${agg.healthInsight}`);
+    lines.push('');
+  } else if (agg.healthLine) {
     lines.push(`\u2764\ufe0f Health: ${agg.healthLine}`);
     lines.push('');
   }
@@ -183,7 +187,9 @@ function templateParams(user, agg) {
   const extras = [];
   for (const b of agg.bills) extras.push(`💰 ${b.name} due`);
   for (const d of agg.deliveries.slice(0, 2)) extras.push(`📦 ${d.item_name || 'Order'}`);
-  if (agg.healthLine) extras.push(`❤️ ${agg.healthLine}`);
+  // Prefer the AI read; toTemplateParam flattens its lines to fit a template.
+  if (agg.healthInsight) extras.push(`❤️ ${agg.healthInsight}`);
+  else if (agg.healthLine) extras.push(`❤️ ${agg.healthLine}`);
 
   const hour = t.hourInTz(tz);
   const closing = hour < 12 ? 'Have a productive day!'
@@ -217,6 +223,19 @@ async function sendForUser(userId, { now = new Date(), send = true } = {}) {
   if (!user) return { text: '', sent: false, skipped: 'no_user' };
 
   const agg = await aggregate(user, now);
+
+  // The AI health read is computed here (not in aggregate) so only real morning
+  // sends pay for the Claude call — the briefing is already deduped to once per
+  // local day, which keeps it to one call per user per morning.
+  try {
+    const insight = require('./healthInsight');
+    if (insight.hasEnough(user.id)) {
+      agg.healthInsight = await insight.morningCheckin(user.id, { name: user.name });
+    }
+  } catch (err) {
+    console.warn('[morningBriefing] health insight skipped:', err.message);
+  }
+
   const text = format(user, agg);
 
   let sent = false;
