@@ -433,7 +433,7 @@ app.post('/send', async (req, res) => {
 });
 
 // ─── Manual proactive triggers (testing) ──────────────────────────
-//   POST /trigger/:job/:userId  where job = morning|wrap|bills|deliveries|followups|taskreminder|travel|meetingprep
+//   POST /trigger/:job/:userId  where job = morning|wrap|bills|deliveries|followups|taskreminder|taskdue|travel|meetingprep
 app.post('/trigger/:job/:userId', async (req, res) => {
   const { job, userId } = req.params;
   try {
@@ -445,6 +445,7 @@ app.post('/trigger/:job/:userId', async (req, res) => {
       case 'deliveries': out = await require('./services/deliveryAlerts').returnWindowCheck(userId); break;
       case 'followups': out = await require('./services/followupTracker').checkOverdue(userId); break;
       case 'taskreminder': out = await require('./engine/taskIntents').sendDailyReminder(userId); break;
+      case 'taskdue': out = await require('./services/taskDueAlerts').alertForUser(userId); break;
       case 'travel': out = await require('./services/travelAssistant').alertForUser(userId); break;
       case 'meetingprep': out = await require('./services/meetingPrep').prepForUser(userId); break;
       default: return res.status(400).json({ error: 'unknown job' });

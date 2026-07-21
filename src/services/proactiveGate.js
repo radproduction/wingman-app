@@ -33,6 +33,7 @@ const JOB_RULES = {
   work:         { minLevel: 'moderate' },
   webmail:      { minLevel: 'moderate' },
   taskreminder: { minLevel: 'high' },
+  taskdue:      { minLevel: 'moderate' },
   bills:        { minLevel: 'moderate', skill: 'bill_tracker' },
   deliveries:   { minLevel: 'high', skill: 'delivery_tracker' },
   followups:    { minLevel: 'high', skill: 'followup_tracker' },

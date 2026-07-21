@@ -15,6 +15,7 @@ const calendarSync = require('./calendarSync');
 const leaveByAlerts = require('./leaveByAlerts');
 const healthAlerts = require('./healthAlerts');
 const workAlerts = require('./workAlerts');
+const taskDueAlerts = require('./taskDueAlerts');
 
 const jobs = [];
 
@@ -77,6 +78,7 @@ async function runMeetingPrepTick(now = new Date()) {
     await require('./webmailAlerts').runAllUsers({});  // new customer mail
     await healthAlerts.runAllUsers({ now });     // readings drifting from the user's own normal
     await workAlerts.runAllUsers({ now });       // still clocked in past their usual finish
+    await taskDueAlerts.runAllUsers({ now });    // tasks due in ~15 minutes
   } catch (err) {
     console.warn('[scheduler] meeting tick error:', err.message);
   }
@@ -95,7 +97,7 @@ function init() {
   const brief = cron.schedule('*/15 * * * *', () => runBriefingTick(new Date()));
   jobs.push(brief);
 
-  console.log('[scheduler] registered hourly tick (alerts 09:00, travel) + every 15 min: calendar-sync/meeting-prep/meeting-complete and briefing/debrief at each user\'s own set time, per-user TZ');
+  console.log('[scheduler] registered hourly tick (alerts 09:00, travel) + every 15 min: calendar-sync/meeting-prep/meeting-complete/task-due and briefing/debrief at each user\'s own set time, per-user TZ');
   return jobs;
 }
 
