@@ -32,6 +32,9 @@ const JOB_RULES = {
   health:       { minLevel: 'moderate' },
   work:         { minLevel: 'moderate' },
   webmail:      { minLevel: 'moderate' },
+  // The cross-domain "chief of staff" nudge — the most proactive thing Wingman
+  // does, so only for users who've asked for that level of initiative.
+  brain:        { minLevel: 'high' },
   taskreminder: { minLevel: 'high' },
   taskdue:      { minLevel: 'moderate' },
   bills:        { minLevel: 'moderate', skill: 'bill_tracker' },
