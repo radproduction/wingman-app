@@ -52,8 +52,18 @@ const calendarTools = [
             'Email addresses of people to invite. Google emails each of them a calendar invitation. ' +
             'If the user names someone without an email, use find_contact to look it up, or ask.',
         },
+        recurrence: {
+          type: 'string',
+          description:
+            'For repeating events: "daily", "weekly", "monthly", "yearly", "weekdays", or a weekday name ' +
+            'like "monday" for "every Monday". Omit for a one-off event.',
+        },
+        all_day: {
+          type: 'boolean',
+          description: 'True for an all-day event (a birthday, a holiday, a leave day) — then time-of-day is ignored.',
+        },
       },
-      required: ['title', 'start_time', 'end_time', 'description'],
+      required: ['title', 'start_time', 'description'],
     },
   },
   {

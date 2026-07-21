@@ -36,13 +36,22 @@ async function executeCalendarTool(user, toolUse) {
       }
 
       case 'create_event': {
+        // Default a missing end to one hour after start for timed events, so
+        // "schedule X at 3pm" (no end) still works.
+        let endTime = input.end_time;
+        if (!endTime && !input.all_day && input.start_time) {
+          const s = new Date(input.start_time);
+          if (!Number.isNaN(s.getTime())) endTime = new Date(s.getTime() + 3600000).toISOString();
+        }
         const ev = await calendarService.createEvent(user.id, {
           title: input.title,
           startTime: input.start_time,
-          endTime: input.end_time,
+          endTime,
           description: input.description || '',
           location: input.location || '',
           attendees: input.attendees || [],
+          recurrence: input.recurrence || null,
+          allDay: !!input.all_day,
         });
         return {
           created: true,
@@ -50,6 +59,8 @@ async function executeCalendarTool(user, toolUse) {
           title: ev.title,
           start: ev.startTime,
           end: ev.endTime,
+          all_day: !!input.all_day,
+          recurring: input.recurrence || null,
           description: ev.description || '',
           attendees: ev.attendees || [],
           invites_emailed: (ev.attendees || []).length > 0,

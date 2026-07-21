@@ -188,7 +188,30 @@ async function getEvents(userId, dateRange = 'today') {
  * @param {Object} opts {title, startTime, endTime, description, location, timeZone}
  * @returns {Promise<Object>} normalized created event
  */
-async function createEvent(userId, { title, startTime, endTime, description = '', location = '', attendees = [], timeZone } = {}) {
+// Turn a plain word ("daily", "weekly", "every monday") into an RRULE Google
+// accepts. Returns null for anything we don't recognise, so a bad value just
+// makes a one-off event rather than failing the whole create.
+function nextDay(dateStr) {
+  const d = new Date(`${dateStr}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
+const WEEKDAYS = { sunday: 'SU', monday: 'MO', tuesday: 'TU', wednesday: 'WE', thursday: 'TH', friday: 'FR', saturday: 'SA' };
+function toRRule(recurrence) {
+  const r = String(recurrence || '').trim().toLowerCase();
+  if (!r) return null;
+  if (/^daily|every day$/.test(r)) return 'RRULE:FREQ=DAILY';
+  if (/^weekdays?$/.test(r) || r === 'every weekday') return 'RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR';
+  if (/^monthly|every month$/.test(r)) return 'RRULE:FREQ=MONTHLY';
+  if (/^yearly|annually|every year$/.test(r)) return 'RRULE:FREQ=YEARLY';
+  const day = Object.keys(WEEKDAYS).find((d) => r.includes(d));
+  if (day) return `RRULE:FREQ=WEEKLY;BYDAY=${WEEKDAYS[day]}`;
+  if (/^weekly|every week$/.test(r)) return 'RRULE:FREQ=WEEKLY';
+  return null;
+}
+
+async function createEvent(userId, { title, startTime, endTime, description = '', location = '', attendees = [], timeZone, recurrence = null, allDay = false } = {}) {
   const user = loadUser(userId);
   const cal = calendarFor(user);
   const tz = timeZone || user.timezone || 'Asia/Dubai';
@@ -198,9 +221,23 @@ async function createEvent(userId, { title, startTime, endTime, description = ''
     summary: title,
     description,
     location,
-    start: { dateTime: startTime, timeZone: tz },
-    end: { dateTime: endTime, timeZone: tz },
   };
+
+  // All-day events use a plain date (YYYY-MM-DD) with no time/timezone; the end
+  // date is exclusive, so a single day's end is the next day.
+  if (allDay) {
+    const startDate = String(startTime).slice(0, 10);
+    const endDate = endTime ? String(endTime).slice(0, 10) : nextDay(startDate);
+    requestBody.start = { date: startDate };
+    requestBody.end = { date: endDate };
+  } else {
+    requestBody.start = { dateTime: startTime, timeZone: tz };
+    requestBody.end = { dateTime: endTime, timeZone: tz };
+  }
+
+  const rrule = toRRule(recurrence);
+  if (rrule) requestBody.recurrence = [rrule];
+
   if (guests.length) requestBody.attendees = guests;
 
   const res = await cal.events.insert({
