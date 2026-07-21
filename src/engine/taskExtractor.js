@@ -49,6 +49,12 @@ Rules:
 function heuristicTask(messageText, user = {}) {
   const text = String(messageText || '').trim();
   const lower = text.toLowerCase();
+  const abilityQuestion =
+    (text.includes('?') || /\b(can you|could you|will you|are you able|able to|do you support|can u|will u)\b/.test(lower)) &&
+    /\b(task|tasks|google task|google tasks|reminder|todo|to-?do)\b/.test(lower);
+  if (abilityQuestion) {
+    return { isTask: false, title: null, dueDate: null, priority: 3 };
+  }
   const looksLikeTask =
     /\b(remind|reminder|task|todo|to-?do|follow up|follow-up|yaad|yaad\s+dil|bana do|banao)\b/.test(lower) ||
     /\b(call|pay|send|buy|book|check|reply|meeting|followup)\b/.test(lower);

@@ -84,10 +84,12 @@ async function handleMessage({ text, phoneNumber, meta = {} }) {
 
   if (isConnectGoogleIntent(text)) {
     reply = buildConnectGoogleReply(user, phoneNumber);
+  } else if (isTaskCapabilityQuestion(text)) {
+    reply = buildTaskCapabilityReply(user, phoneNumber, text);
   } else if (looksLikeCreateTaskIntent(text)) {
     reply = await buildCreateTaskReply(user, text);
   } else if (isGoogleTasksIntent(text)) {
-    reply = await buildGoogleTasksReply(user, phoneNumber);
+    reply = await buildGoogleTasksReply(user, phoneNumber, text);
   } else if (isConnectCalendarIntent(text)) {
     reply = buildConnectCalendarReply(user, phoneNumber);
   } else if (isConnectEmailIntent(text)) {
@@ -149,39 +151,89 @@ function isGoogleTasksIntent(text) {
   return /\b(show|check|see|list|open|where|kahan|dekh|dikha|sync|connected|access|reconnect|connect|task)\b/.test(t);
 }
 
+function isTaskCapabilityQuestion(text) {
+  const t = (text || '').toLowerCase().trim();
+  if (!t.includes('?') && !/\b(can you|could you|will you|are you able|able to|do you support|can u|will u)\b/.test(t)) return false;
+  return /\b(task|tasks|google task|google tasks|reminder|todo|to-?do)\b/.test(t);
+}
+
 function looksLikeCreateTaskIntent(text) {
   const t = (text || '').toLowerCase().trim();
+  if (isTaskCapabilityQuestion(t)) return false;
   return /\b(remind|reminder|task|todo|to-?do|yaad|yaad\s+dil|bana do|banao|follow up|follow-up)\b/.test(t);
 }
 
-async function buildGoogleTasksReply(user, phoneNumber) {
+function messageStyle(text, user) {
+  const raw = String(text || '').trim();
+  if (/[؀-ۿ]/.test(raw)) return 'arabic';
+  const lower = raw.toLowerCase();
+  const romanSignals = /\b(kya|kaise|mujhe|mera|meri|mere|kal|aaj|baje|kr|kar|karna|kar do|banao|yaad|dilana|hai|ho|haan|nahi|bhai|yar)\b/;
+  const englishSignals = /\b(can|could|will|would|create|add|task|tasks|reminder|tomorrow|today|call|write|show|please|able)\b/;
+  if (romanSignals.test(lower) && !englishSignals.test(lower)) return 'roman';
+  if (englishSignals.test(lower) && !romanSignals.test(lower)) return 'en';
+  return (user && user.language === 'ar') ? 'arabic' : (user && user.language === 'ur' ? 'roman' : 'en');
+}
+
+function buildTaskCapabilityReply(user, phoneNumber, text) {
+  const style = messageStyle(text, user);
+  const url = `${config.publicBaseUrl}/auth/google?phone=${encodeURIComponent(phoneNumber)}`;
+  const googleTasks = require('../services/googleTasks');
+  if (!googleTasks.isConnected(user)) {
+    return style === 'roman'
+      ? `Haan, me Google Tasks ke sath kaam kar sakta hoon, lekin pehle Google ko reconnect karna hoga: ${url}`
+      : `Yes, I can work with Google Tasks, but Google needs to be reconnected first: ${url}`;
+  }
+  return style === 'roman'
+    ? 'Haan — agar tum mujhe task do, me usay Wingman me bana kar Google Tasks me sync karne ki koshish karunga.'
+    : 'Yes — if you give me a task, I will create it in Wingman and sync it to Google Tasks.';
+}
+
+async function buildGoogleTasksReply(user, phoneNumber, text = '') {
+  const style = messageStyle(text, user);
   const googleTasks = require('../services/googleTasks');
   if (!googleTasks.isConnected(user)) {
     const url = `${config.publicBaseUrl}/auth/google?phone=${encodeURIComponent(phoneNumber)}`;
-    return `Google Tasks abhi connected nahi lag rahi. Is link se Google ko reconnect karo: ${url}\n\nUske baad Tasks page me sab tasks nazar aayengi.`;
+    if (style === 'roman') {
+      return `Google Tasks abhi connected nahi lag rahi. Is link se Google ko reconnect karo: ${url}\n\nUske baad Tasks page me sab tasks nazar aayengi.`;
+    }
+    return `Google Tasks doesn't look connected yet. Reconnect Google here: ${url}\n\nAfter that, your tasks will appear in the normal Tasks page.`;
   }
 
   try { await googleTasks.syncUser(user.id); } catch (_) { /* keep cached tasks */ }
 
   const tasks = tasksRepo.listForUser(user.id, { includeCompleted: false, limit: 8 });
   if (!tasks.length) {
-    return 'Google Tasks connected hai ✅\n\nAbhi koi pending task nazar nahi aa rahi. App me Tasks page kholo, ya Google Tasks me ek test task bana ke refresh karo.';
+    if (style === 'roman') {
+      return 'Google Tasks connected hai ✅\n\nAbhi koi pending task nazar nahi aa rahi. App me Tasks page kholo, ya Google Tasks me ek test task bana ke refresh karo.';
+    }
+    return 'Google Tasks is connected ✅\n\nI do not see any pending tasks yet. Open the Tasks page in Wingman, or create a test task in Google Tasks and refresh.';
   }
 
-  const lines = [
-    'Google Tasks connected hai ✅',
-    '',
-    'Google Tasks alag button me nahi aati — ye normal *Tasks* page me merged hoti hain.',
-    '',
-    '*Pending tasks:*',
-  ];
+  const lines = style === 'roman'
+    ? [
+        'Google Tasks connected hai ✅',
+        '',
+        'Google Tasks alag button me nahi aati — ye normal *Tasks* page me merged hoti hain.',
+        '',
+        '*Pending tasks:*',
+      ]
+    : [
+        'Google Tasks is connected ✅',
+        '',
+        'Google Tasks does not have a separate button here — it is merged into the normal *Tasks* page.',
+        '',
+        '*Pending tasks:*',
+      ];
   for (const task of tasks.slice(0, 5)) lines.push(`• ${task.title}`);
   lines.push('');
-  lines.push('Test ke liye Google Tasks app me ek task banao, phir Wingman me Tasks page refresh karo.');
+  lines.push(style === 'roman'
+    ? 'Test ke liye Google Tasks app me ek task banao, phir Wingman me Tasks page refresh karo.'
+    : 'For a quick test, create a task in Google Tasks, then refresh the Tasks page in Wingman.');
   return lines.join('\n');
 }
 
 async function buildCreateTaskReply(user, text) {
+  const style = messageStyle(text, user);
   const task = await extractTask(text, user);
   if (!task.isTask || !task.title) return await runConversation(user, text);
 
@@ -202,12 +254,18 @@ async function buildCreateTaskReply(user, text) {
     : '';
 
   if (sync.synced) {
-    return `Done bhai ✅\n\nTask bana di:\n• ${created.title}${due}\n\nYe Google Tasks me bhi sync ho gayi hai.`;
+    return style === 'roman'
+      ? `Done ✅\n\nTask bana di:\n• ${created.title}${due}\n\nYe Google Tasks me bhi sync ho gayi hai.`
+      : `Done ✅\n\nTask created:\n• ${created.title}${due}\n\nIt has also synced to Google Tasks.`;
   }
   if (sync.reason === 'NOT_CONNECTED') {
-    return `Done bhai ✅\n\nTask bana di:\n• ${created.title}${due}\n\nYe Wingman me save ho gayi hai. Google Tasks me bhejne ke liye Google ko reconnect karna hoga.`;
+    return style === 'roman'
+      ? `Done ✅\n\nTask bana di:\n• ${created.title}${due}\n\nYe Wingman me save ho gayi hai. Google Tasks me bhejne ke liye Google ko reconnect karna hoga.`
+      : `Done ✅\n\nTask created:\n• ${created.title}${due}\n\nIt was saved in Wingman, but Google needs to be reconnected before I can send it to Google Tasks.`;
   }
-  return `Done bhai ✅\n\nTask bana di:\n• ${created.title}${due}\n\nWingman me save ho gayi hai, lekin Google Tasks sync abhi pending lag rahi hai.`;
+  return style === 'roman'
+    ? `Done ✅\n\nTask bana di:\n• ${created.title}${due}\n\nWingman me save ho gayi hai, lekin Google Tasks sync abhi pending lag rahi hai.`
+    : `Done ✅\n\nTask created:\n• ${created.title}${due}\n\nIt was saved in Wingman, but Google Tasks sync still looks pending.`;
 }
 
 /** Detect an explicit "connect calendar" request (deterministic, no LLM). */
