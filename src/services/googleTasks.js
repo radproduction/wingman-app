@@ -234,8 +234,14 @@ async function mirrorNewLocalTask(taskId) {
   const user = usersRepo.getById(task.user_id);
   if (!isConnected(user)) return { synced: false, reason: 'NOT_CONNECTED' };
   tasksRepo.markLocalDirty(taskId, 'pending_create');
-  await flushPendingLocalChanges(user);
-  return { synced: true };
+  const flush = await flushPendingLocalChanges(user);
+  const fresh = tasksRepo.getById(taskId);
+  return {
+    synced: !!(fresh && fresh.sync_state === 'synced' && fresh.google_task_id),
+    reason: fresh && fresh.sync_state === 'synced' ? null : 'SYNC_PENDING',
+    flush,
+    task: fresh,
+  };
 }
 
 async function mirrorTaskUpdate(taskId) {
@@ -244,8 +250,14 @@ async function mirrorTaskUpdate(taskId) {
   const user = usersRepo.getById(task.user_id);
   if (!isConnected(user)) return { synced: false, reason: 'NOT_CONNECTED' };
   tasksRepo.markLocalDirty(taskId, task.google_task_id ? 'pending_update' : 'pending_create');
-  await flushPendingLocalChanges(user);
-  return { synced: true };
+  const flush = await flushPendingLocalChanges(user);
+  const fresh = tasksRepo.getById(taskId);
+  return {
+    synced: !!(fresh && fresh.sync_state === 'synced'),
+    reason: fresh && fresh.sync_state === 'synced' ? null : 'SYNC_PENDING',
+    flush,
+    task: fresh,
+  };
 }
 
 async function mirrorTaskCompletion(taskId) {
@@ -254,8 +266,14 @@ async function mirrorTaskCompletion(taskId) {
   const user = usersRepo.getById(task.user_id);
   if (!isConnected(user)) return { synced: false, reason: 'NOT_CONNECTED' };
   tasksRepo.markLocalDirty(taskId, task.google_task_id ? 'pending_complete' : 'pending_create');
-  await flushPendingLocalChanges(user);
-  return { synced: true };
+  const flush = await flushPendingLocalChanges(user);
+  const fresh = tasksRepo.getById(taskId);
+  return {
+    synced: !!(fresh && fresh.sync_state === 'synced'),
+    reason: fresh && fresh.sync_state === 'synced' ? null : 'SYNC_PENDING',
+    flush,
+    task: fresh,
+  };
 }
 
 module.exports = {

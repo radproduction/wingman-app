@@ -32,16 +32,67 @@ Rules:
     );
     const jsonStr = raw.trim().replace(/^```(json)?/i, '').replace(/```$/, '').trim();
     const parsed = JSON.parse(jsonStr);
-    return {
+    const result = {
       isTask: !!parsed.isTask,
       title: parsed.title || null,
       dueDate: parsed.dueDate || null,
       priority: Number.isFinite(parsed.priority) ? parsed.priority : 3,
     };
+    if (result.isTask && result.title) return result;
+    return heuristicTask(messageText, user);
   } catch (err) {
     // Fail safe: never break the conversation over extraction issues
+    return heuristicTask(messageText, user);
+  }
+}
+
+function heuristicTask(messageText, user = {}) {
+  const text = String(messageText || '').trim();
+  const lower = text.toLowerCase();
+  const looksLikeTask =
+    /\b(remind|reminder|task|todo|to-?do|follow up|follow-up|yaad|yaad\s+dil|bana do|banao)\b/.test(lower) ||
+    /\b(call|pay|send|buy|book|check|reply|meeting|followup)\b/.test(lower);
+
+  if (!looksLikeTask) {
     return { isTask: false, title: null, dueDate: null, priority: 3 };
   }
+
+  let title = text
+    .replace(/\b(remind me|set (?:a )?reminder|add (?:a )?task|make (?:a )?task|create (?:a )?task|task banao|task bnao|ek task banao|mujhe yaad dilana|mujhe reminder (?:karwa|krwa) dena)\b/gi, ' ')
+    .replace(/\b(kal|tomorrow|aaj|today|next week|5 bje|5 बजे|5pm|5 pm|\d{1,2}(?::\d{2})?\s*(am|pm)?|at \d{1,2}(?::\d{2})?\s*(am|pm)?|ko)\b/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  title = title.replace(/^(mera|meri|mere|mujhe|please|plz)\s+/i, '').trim();
+  if (!title) title = text;
+  title = title.charAt(0).toUpperCase() + title.slice(1);
+
+  const dueDate = parseLooseDueDate(text, user.timezone || 'Asia/Karachi');
+  return { isTask: true, title, dueDate, priority: 3 };
+}
+
+function parseLooseDueDate(text, timezone) {
+  const lower = String(text || '').toLowerCase();
+  const dayOffset = /\b(kal|tomorrow)\b/.test(lower) ? 1 : /\b(aaj|today)\b/.test(lower) ? 0 : null;
+  const timeMatch = lower.match(/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b/);
+  if (dayOffset == null && !timeMatch) return null;
+
+  let hour = 9;
+  let minute = 0;
+  if (timeMatch) {
+    hour = Number(timeMatch[1]);
+    minute = timeMatch[2] ? Number(timeMatch[2]) : 0;
+    const mer = timeMatch[3];
+    if (mer === 'pm' && hour < 12) hour += 12;
+    if (mer === 'am' && hour === 12) hour = 0;
+  }
+
+  const { startOfDayISO } = require('../utils/time');
+  const start = startOfDayISO(timezone, dayOffset == null ? 0 : dayOffset, new Date());
+  const hh = String(hour).padStart(2, '0');
+  const mm = String(minute).padStart(2, '0');
+  const datePart = start.slice(0, 10);
+  const offset = start.slice(19);
+  return `${datePart}T${hh}:${mm}:00${offset}`;
 }
 
 module.exports = { extractTask };

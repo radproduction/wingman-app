@@ -84,6 +84,8 @@ async function handleMessage({ text, phoneNumber, meta = {} }) {
 
   if (isConnectGoogleIntent(text)) {
     reply = buildConnectGoogleReply(user, phoneNumber);
+  } else if (looksLikeCreateTaskIntent(text)) {
+    reply = await buildCreateTaskReply(user, text);
   } else if (isGoogleTasksIntent(text)) {
     reply = await buildGoogleTasksReply(user, phoneNumber);
   } else if (isConnectCalendarIntent(text)) {
@@ -147,6 +149,11 @@ function isGoogleTasksIntent(text) {
   return /\b(show|check|see|list|open|where|kahan|dekh|dikha|sync|connected|access|reconnect|connect|task)\b/.test(t);
 }
 
+function looksLikeCreateTaskIntent(text) {
+  const t = (text || '').toLowerCase().trim();
+  return /\b(remind|reminder|task|todo|to-?do|yaad|yaad\s+dil|bana do|banao|follow up|follow-up)\b/.test(t);
+}
+
 async function buildGoogleTasksReply(user, phoneNumber) {
   const googleTasks = require('../services/googleTasks');
   if (!googleTasks.isConnected(user)) {
@@ -172,6 +179,35 @@ async function buildGoogleTasksReply(user, phoneNumber) {
   lines.push('');
   lines.push('Test ke liye Google Tasks app me ek task banao, phir Wingman me Tasks page refresh karo.');
   return lines.join('\n');
+}
+
+async function buildCreateTaskReply(user, text) {
+  const task = await extractTask(text, user);
+  if (!task.isTask || !task.title) return await runConversation(user, text);
+
+  const created = tasksRepo.create({
+    userId: user.id,
+    title: task.title,
+    source: 'whatsapp',
+    priority: task.priority,
+    dueDate: task.dueDate,
+  });
+
+  let sync = { synced: false, reason: 'NOT_CONNECTED' };
+  try { sync = await require('../services/googleTasks').mirrorNewLocalTask(created.id); }
+  catch (err) { sync = { synced: false, reason: err.message || 'SYNC_FAILED' }; }
+
+  const due = task.dueDate
+    ? `\n• Time: ${t.dayLabel(task.dueDate, user.timezone || 'Asia/Karachi')} ${t.timeLabel(task.dueDate, user.timezone || 'Asia/Karachi')}`
+    : '';
+
+  if (sync.synced) {
+    return `Done bhai ✅\n\nTask bana di:\n• ${created.title}${due}\n\nYe Google Tasks me bhi sync ho gayi hai.`;
+  }
+  if (sync.reason === 'NOT_CONNECTED') {
+    return `Done bhai ✅\n\nTask bana di:\n• ${created.title}${due}\n\nYe Wingman me save ho gayi hai. Google Tasks me bhejne ke liye Google ko reconnect karna hoga.`;
+  }
+  return `Done bhai ✅\n\nTask bana di:\n• ${created.title}${due}\n\nWingman me save ho gayi hai, lekin Google Tasks sync abhi pending lag rahi hai.`;
 }
 
 /** Detect an explicit "connect calendar" request (deterministic, no LLM). */
