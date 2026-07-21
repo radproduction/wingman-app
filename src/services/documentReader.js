@@ -1,7 +1,7 @@
 'use strict';
 
 const path = require('path');
-const pdfParse = require('pdf-parse');
+const { PDFParse } = require('pdf-parse');
 const mammoth = require('mammoth');
 const XLSX = require('xlsx');
 
@@ -102,8 +102,13 @@ async function extractTextFromBuffer(buffer, { filename, mimeType } = {}) {
 
   try {
     if (kind === 'pdf') {
-      const parsed = await pdfParse(buffer);
-      rawText = parsed && parsed.text ? parsed.text : '';
+      const parser = new PDFParse({ data: buffer });
+      try {
+        const parsed = await parser.getText();
+        rawText = parsed && parsed.text ? parsed.text : '';
+      } finally {
+        await parser.destroy().catch(() => {});
+      }
     } else if (kind === 'docx') {
       const parsed = await mammoth.extractRawText({ buffer });
       rawText = parsed && parsed.value ? parsed.value : '';
