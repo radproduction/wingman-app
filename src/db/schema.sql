@@ -283,8 +283,6 @@ CREATE INDEX IF NOT EXISTS idx_reminders_trigger      ON reminders(trigger_at, s
 CREATE INDEX IF NOT EXISTS idx_followups_user         ON followups(user_id, status);
 CREATE INDEX IF NOT EXISTS idx_otp_phone               ON otp_codes(phone, consumed);
 CREATE INDEX IF NOT EXISTS idx_sessions_user           ON sessions(user_id);
-CREATE INDEX IF NOT EXISTS idx_tasks_google_ref       ON tasks(user_id, google_account_id, google_tasklist_id, google_task_id);
-
 -- Google accounts linked to a Wingman user. A user may connect several
 -- (personal + work); exactly one is flagged is_primary and drives sends/creates.
 CREATE TABLE IF NOT EXISTS google_accounts (

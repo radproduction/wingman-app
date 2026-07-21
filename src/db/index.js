@@ -22,7 +22,19 @@ db.pragma('foreign_keys = ON');
 function initSchema() {
   const schemaPath = path.join(__dirname, 'schema.sql');
   const schema = fs.readFileSync(schemaPath, 'utf8');
-  db.exec(schema);
+  try {
+    db.exec(schema);
+  } catch (e) {
+    // Existing databases can be older than the current schema. If the schema
+    // file now contains an index over columns that do not exist yet, SQLite
+    // aborts here before additive migrations run. Continue and let the
+    // migration/index step below bring the DB forward safely.
+    if (String(e && e.message || '').includes('no such column:')) {
+      console.warn('[db] schema apply deferred to additive migrations:', e.message);
+    } else {
+      throw e;
+    }
+  }
   applyMigrations();
   // Move any pre-multi-account Google connection into google_accounts. Required
   // after the tables exist, and safe to run on every boot (it is a no-op once done).
