@@ -22,17 +22,22 @@ const DRIVE_SCOPES = [
   'https://www.googleapis.com/auth/drive',
 ];
 
+// Google Tasks (read + write).
+const TASKS_SCOPES = [
+  'https://www.googleapis.com/auth/tasks',
+];
+
 // Identity — lets us label each linked account with its Google address so a
 // user can tell their personal and work accounts apart (and disconnect one).
 const IDENTITY_SCOPES = [
   'https://www.googleapis.com/auth/userinfo.email',
 ];
 
-// We request all scopes together so a single consent connects Calendar, Gmail
-// and Drive. Tokens live in google_accounts (one row per linked account); the
+// We request all scopes together so a single consent connects Calendar, Gmail,
+// Drive and Google Tasks. Tokens live in google_accounts (one row per linked account); the
 // PRIMARY account is mirrored into users.calendar_token / users.gmail_token so
 // every pre-existing code path keeps working unchanged.
-const SCOPES = [...CALENDAR_SCOPES, ...GMAIL_SCOPES, ...DRIVE_SCOPES, ...IDENTITY_SCOPES];
+const SCOPES = [...CALENDAR_SCOPES, ...GMAIL_SCOPES, ...DRIVE_SCOPES, ...TASKS_SCOPES, ...IDENTITY_SCOPES];
 
 // Google Health API (read-only) — sleep, heart rate, steps and body metrics
 // from Android, Pixel Watch, Fitbit and anything else that syncs to Google.
@@ -323,6 +328,7 @@ module.exports = {
   CALENDAR_SCOPES,
   GMAIL_SCOPES,
   DRIVE_SCOPES,
+  TASKS_SCOPES,
   HEALTH_SCOPES,
   getHealthAuthUrl,
   handleHealthCallback,

@@ -8,7 +8,7 @@ const router = express.Router();
 
 /**
  * GET /auth/google?phone=9715XXXXXXX
- * Redirects the user to Google's consent screen (combined calendar + gmail).
+ * Redirects the user to Google's consent screen (calendar + gmail + drive + tasks).
  */
 router.get('/auth/google', (req, res) => {
   const phone = (req.query.phone || '').toString();
@@ -95,6 +95,9 @@ router.get('/auth/google/callback', async (req, res) => {
 
     const calConnected = googleAuth.isConnected(user);
     const emailConnected = googleAuth.isEmailConnected(user);
+    let taskSync = null;
+    try { taskSync = await require('../services/googleTasks').syncUser(user.id); }
+    catch (e) { console.warn('[auth] initial Google Tasks sync failed:', e.message); }
 
     // Best-effort WhatsApp confirmations
     try {
@@ -104,6 +107,9 @@ router.get('/auth/google/callback', async (req, res) => {
         }
         if (emailConnected) {
           await wa.sendMessage(phone, "Email connected! \u2713 I'll start scanning your inbox now.");
+        }
+        if (taskSync && (taskSync.imported || taskSync.updated || taskSync.completed)) {
+          await wa.sendMessage(phone, `Google Tasks connected! \u2713 Imported ${taskSync.imported} task(s).`);
         }
       }
     } catch (waErr) {
@@ -125,7 +131,7 @@ router.get('/auth/google/callback', async (req, res) => {
     res.send(`
       <html><body style="font-family:sans-serif;text-align:center;padding:60px;">
         <h2>✅ Google account connected!</h2>
-        <p>${calConnected ? 'Calendar' : ''}${calConnected && emailConnected ? ' &amp; ' : ''}${emailConnected ? 'Gmail' : ''} linked to Wingman.</p>
+        <p>${calConnected ? 'Calendar' : ''}${calConnected && emailConnected ? ' &amp; ' : ''}${emailConnected ? 'Gmail' : ''}${(calConnected || emailConnected) && taskSync ? ' &amp; ' : ''}${taskSync ? 'Google Tasks' : ''} linked to Wingman.</p>
         <p>You can close this tab and head back to WhatsApp.</p>
       </body></html>
     `);

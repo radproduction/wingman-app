@@ -33,6 +33,7 @@ const jobs = [];
  */
 async function runHourlyTick(now = new Date()) {
   try {
+    await require('./googleTasks').syncAllUsers({ now });
     await taskIntents.runDailyReminders({ hour: 9, now });
     await billAlerts.runDueUsers({ hour: 9, now });
     await deliveryAlerts.runDueUsers({ hour: 9, now });

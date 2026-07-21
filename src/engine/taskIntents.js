@@ -38,8 +38,12 @@ function cleanPhrase(p) {
 /**
  * Handle a detected task intent. Returns a WhatsApp reply string.
  */
-function handle(user, intent, now = new Date()) {
+async function handle(user, intent, now = new Date()) {
   const tz = user.timezone || 'Asia/Karachi';
+  try {
+    const googleTasks = require('../services/googleTasks');
+    if (googleTasks.isConnected(user)) await googleTasks.syncUser(user.id);
+  } catch (_) { /* best-effort */ }
 
   if (intent.type === 'list') {
     const tasks = tasksRepo.listForUser(user.id, { includeCompleted: false });
@@ -62,6 +66,7 @@ function handle(user, intent, now = new Date()) {
     const task = tasksRepo.findByTitle(user.id, intent.phrase);
     if (!task) return `I couldn't find a task matching "${intent.phrase}". Try "what are my tasks?" to see the list.`;
     tasksRepo.complete(task.id);
+    try { await require('../services/googleTasks').mirrorTaskCompletion(task.id); } catch (_) { /* best-effort */ }
     return `Marked *${task.title}* as done. \u2705`;
   }
 
@@ -73,6 +78,7 @@ function handle(user, intent, now = new Date()) {
     const start = t.startOfDayISO(tz, dayOffset, now); // midnight local
     const due = start.replace('T00:00:00', 'T09:00:00');
     tasksRepo.updateDueDate(task.id, due);
+    try { await require('../services/googleTasks').mirrorTaskUpdate(task.id); } catch (_) { /* best-effort */ }
     return `Moved *${task.title}* to ${intent.when} (${t.dayLabel(due, tz)} 09:00). \ud83d\udcc5`;
   }
 

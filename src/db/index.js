@@ -90,6 +90,15 @@ function applyMigrations() {
       ['news_city', 'TEXT'],
       ['news_country', 'TEXT'],
     ],
+    tasks: [
+      ['completed_at', 'TEXT'],
+      ['google_task_id', 'TEXT'],
+      ['google_tasklist_id', 'TEXT'],
+      ['google_account_id', 'TEXT'],
+      ['google_updated_at', 'TEXT'],
+      ["sync_state", "TEXT DEFAULT 'local_only'"],
+      ['updated_at', 'TEXT DEFAULT CURRENT_TIMESTAMP'],
+    ],
   };
   for (const [table, cols] of Object.entries(additions)) {
     let existing;
@@ -103,6 +112,10 @@ function applyMigrations() {
       }
     }
   }
+
+  try {
+    db.exec('CREATE INDEX IF NOT EXISTS idx_tasks_google_ref ON tasks(user_id, google_account_id, google_tasklist_id, google_task_id)');
+  } catch (_) { /* ignore */ }
 }
 
 /**

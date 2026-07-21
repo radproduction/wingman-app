@@ -387,7 +387,7 @@ function GoogleAccountsRow({ user }: { user: Me }) {
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-body text-white">Google</p>
-          <p className="text-caption text-gray">Calendar, Gmail &amp; Drive</p>
+          <p className="text-caption text-gray">Calendar, Gmail, Drive &amp; Tasks</p>
         </div>
         {hasAny && (
           <span className="flex items-center gap-1 text-success text-caption font-medium shrink-0">

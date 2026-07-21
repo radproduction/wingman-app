@@ -97,7 +97,14 @@ CREATE TABLE IF NOT EXISTS tasks (
   priority INTEGER DEFAULT 3,
   due_date TEXT,
   completed INTEGER DEFAULT 0,
+  completed_at TEXT,
   recurring TEXT,
+  google_task_id TEXT,
+  google_tasklist_id TEXT,
+  google_account_id TEXT,
+  google_updated_at TEXT,
+  sync_state TEXT DEFAULT 'local_only',
+  updated_at TEXT DEFAULT (datetime('now')),
   created_at TEXT DEFAULT (datetime('now'))
 );
 
@@ -276,6 +283,7 @@ CREATE INDEX IF NOT EXISTS idx_reminders_trigger      ON reminders(trigger_at, s
 CREATE INDEX IF NOT EXISTS idx_followups_user         ON followups(user_id, status);
 CREATE INDEX IF NOT EXISTS idx_otp_phone               ON otp_codes(phone, consumed);
 CREATE INDEX IF NOT EXISTS idx_sessions_user           ON sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_tasks_google_ref       ON tasks(user_id, google_account_id, google_tasklist_id, google_task_id);
 
 -- Google accounts linked to a Wingman user. A user may connect several
 -- (personal + work); exactly one is flagged is_primary and drives sends/creates.

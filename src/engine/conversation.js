@@ -111,7 +111,7 @@ async function handleMessage({ text, phoneNumber, meta = {} }) {
   } else if (has('people_crm') && peopleCRM.isTopContactsQuery(text)) {
     reply = peopleCRM.buildTopContactsReply(user);
   } else if (taskIntents.detect(text)) {
-    reply = taskIntents.handle(user, taskIntents.detect(text));
+    reply = await taskIntents.handle(user, taskIntents.detect(text));
   } else {
     reply = await runConversation(user, text);
   }
@@ -127,16 +127,16 @@ async function handleMessage({ text, phoneNumber, meta = {} }) {
   return { reply, user };
 }
 
-/** Detect a "connect google / drive" request → combined consent (incl. Drive). */
+/** Detect a "connect google / drive" request → combined consent (incl. Drive + Tasks). */
 function isConnectGoogleIntent(text) {
   const t = (text || '').toLowerCase().trim();
   return /\b(connect|reconnect|link)\b/.test(t) && /\b(google|drive)\b/.test(t);
 }
 
-/** Build the WhatsApp reply with the combined Google OAuth link (incl. Drive). */
+/** Build the WhatsApp reply with the combined Google OAuth link (incl. Drive + Tasks). */
 function buildConnectGoogleReply(user, phoneNumber) {
   const url = `${config.publicBaseUrl}/auth/google?phone=${encodeURIComponent(phoneNumber)}`;
-  return `Tap this to connect Google — Calendar, Gmail & Drive: ${url}`;
+  return `Tap this to connect Google — Calendar, Gmail, Drive & Tasks: ${url}`;
 }
 
 /** Detect an explicit "connect calendar" request (deterministic, no LLM). */
@@ -273,13 +273,14 @@ async function runConversation(user, text) {
   try {
     const task = await extractTask(text, user);
     if (task.isTask && task.title) {
-      tasksRepo.create({
+      const created = tasksRepo.create({
         userId: user.id,
         title: task.title,
         source: 'whatsapp',
         priority: task.priority,
         dueDate: task.dueDate,
       });
+      try { await require('../services/googleTasks').mirrorNewLocalTask(created.id); } catch (_) { /* best-effort */ }
     }
   } catch (_) {
     // non-fatal

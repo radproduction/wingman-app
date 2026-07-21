@@ -142,9 +142,12 @@ router.get('/emails', (req, res) => {
 });
 
 // ── /api/tasks ──────────────────────────────────────────────────────
-router.get('/tasks', (req, res) => {
+router.get('/tasks', async (req, res) => {
   const u = resolveUser(req);
   const repo = requireRepo('tasks');
+  if (u) {
+    try { await require('../services/googleTasks').syncUser(u.id); } catch (_) { /* keep local copy */ }
+  }
   const { data, mock: isMock } = safe(() => {
     if (!u || !repo || !repo.listForUser) return null;
     return repo.listForUser(u.id, { includeCompleted: true, limit: 200 });
@@ -260,8 +263,11 @@ router.get('/briefings', (req, res) => {
 });
 
 // ── /api/dashboard (aggregate for Home) ─────────────────────────────
-router.get('/dashboard', (req, res) => {
+router.get('/dashboard', async (req, res) => {
   const u = resolveUser(req);
+  if (u) {
+    try { await require('../services/googleTasks').syncUser(u.id); } catch (_) { /* keep cached tasks */ }
+  }
 
   function pull(name, key, fallback) {
     const repo = requireRepo(name);
@@ -326,7 +332,10 @@ router.post('/tasks/:id/complete', (req, res) => {
   const u = resolveUser(req);
   const repo = requireRepo('tasks');
   try {
-    if (u && repo && repo.complete) repo.complete(req.params.id);
+    if (u && repo && repo.complete) {
+      repo.complete(req.params.id);
+      require('../services/googleTasks').mirrorTaskCompletion(req.params.id).catch(() => {});
+    }
   } catch (_) { /* ignore for mock */ }
   res.json({ ok: true, id: req.params.id, completed: true });
 });
@@ -614,8 +623,15 @@ router.post('/places', async (req, res) => {
   try {
     const maps = require('../services/maps');
     const geo = await maps.savePlace(req.user.id, which, address);
-    if (!geo) return res.status(400).json({ error: `Could not find "${address}" on the map. Try a simpler version — street and city is usually enough.` });
-    res.json({ saved: true, which, address: geo.address });
+    if (!geo) return res.status(400).json({ error: `Could not save "${address}". Please try again.` });
+    res.json({
+      saved: true,
+      which,
+      address: geo.address,
+      geocoded: geo.geocoded,
+      // Saved either way; only precise traffic timing needs the coordinates.
+      note: geo.geocoded ? null : 'Saved. Traffic timing for this place is limited until the map lookup is working.',
+    });
   } catch (err) {
     const msg = (err && err.message) || '';
     // Collapsing every failure into "could not look up that address" blamed the

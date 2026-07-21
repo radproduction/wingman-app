@@ -10,6 +10,13 @@ import type { Task } from '../types';
 
 const PRIORITY_COLOR = ['bg-gray', 'bg-danger', 'bg-warning', 'bg-accent', 'bg-gray'];
 
+function sourceLabel(source?: string | null) {
+  if (!source || source === 'manual') return null;
+  if (source === 'google_tasks') return 'Google Tasks';
+  if (source === 'whatsapp') return 'WhatsApp';
+  return source.replace(/_/g, ' ');
+}
+
 export default function Tasks() {
   const { data, loading, refresh, setData } = useAsync(() => api.tasks(), []);
   const [completing, setCompleting] = useState<Set<string>>(new Set());
@@ -30,7 +37,6 @@ export default function Tasks() {
 
   async function complete(t: Task) {
     setCompleting((s) => new Set(s).add(t.id));
-    // optimistic update
     setData((d) => d ? { ...d, tasks: d.tasks.map((x) => x.id === t.id ? { ...x, completed: true } : x) } : d);
     try { await api.completeTask(t.id); } catch { /* keep optimistic */ }
   }
@@ -82,6 +88,7 @@ function Group({
 }
 
 function TaskCard({ task, done, onTapCheck }: { task: Task; done: boolean; onTapCheck: () => void }) {
+  const source = sourceLabel(task.source);
   return (
     <div className="card flex items-center gap-3 min-h-[60px]">
       <button onClick={onTapCheck} className="shrink-0 w-11 h-11 -my-2 -ml-2 flex items-center justify-center">
@@ -94,7 +101,7 @@ function TaskCard({ task, done, onTapCheck }: { task: Task; done: boolean; onTap
         <p className={`text-body ${done ? 'text-gray line-through' : 'text-white'} truncate`}>{task.title}</p>
         <p className="text-caption text-gray mt-0.5">
           {task.due_date ? `Due ${relativeDays(task.due_date)} · ${fmtDay(task.due_date)}` : 'No due date'}
-          {task.source && task.source !== 'manual' ? ` · from ${task.source}` : ''}
+          {source ? ` · from ${source}` : ''}
         </p>
       </div>
     </div>
