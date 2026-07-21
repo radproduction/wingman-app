@@ -115,4 +115,18 @@ function listEndingBetween(userId, fromIso, toIso) {
   `).all(userId, fromIso, toIso);
 }
 
-module.exports = { upsert, cacheEvents, removeByGcalId, listCached, listStartingBetween, listForUser, listEndingBetween, findByGcalId };
+function deleteByAccount(userId, accountId) {
+  return db.prepare(`
+    DELETE FROM calendar_events
+    WHERE user_id = ? AND account_id = ?
+  `).run(userId, accountId).changes;
+}
+
+function deleteAllForUser(userId) {
+  return db.prepare('DELETE FROM calendar_events WHERE user_id = ?').run(userId).changes;
+}
+
+module.exports = {
+  upsert, cacheEvents, removeByGcalId, listCached, listStartingBetween,
+  listForUser, listEndingBetween, findByGcalId, deleteByAccount, deleteAllForUser,
+};

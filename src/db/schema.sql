@@ -113,6 +113,8 @@ CREATE TABLE IF NOT EXISTS email_items (
   id TEXT PRIMARY KEY,
   user_id TEXT REFERENCES users(id),
   gmail_id TEXT,
+  account_id TEXT,
+  account_email TEXT,
   subject TEXT,
   sender TEXT,
   category TEXT,

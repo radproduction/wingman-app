@@ -95,6 +95,8 @@ async function scanUser(userId, { maxResults = 50 } = {}) {
     // Persist the analyzed email
     const emailItemId = emailItemsRepo.upsert(userId, {
       gmailId: msg.gmailId,
+      accountId: account && account.id ? account.id : null,
+      accountEmail: account && account.email ? account.email : null,
       subject: msg.subject,
       sender: msg.sender,
       category: analysis.category,

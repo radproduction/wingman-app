@@ -3,6 +3,7 @@
 const claude = require('../llm/claude');
 const usersRepo = require('../db/users');
 const t = require('../utils/time');
+const memoryRepo = require('../db/userMemory');
 
 /**
  * The proactive brain — the difference between a data screen and an assistant.
@@ -124,6 +125,23 @@ function snapshot(user, now = new Date()) {
   return { tz, signals, context, hasSignals: signals.length > 0 };
 }
 
+function policyFor(user) {
+  return [
+    `Name: ${user.name || 'User'}`,
+    `Timezone: ${user.timezone || 'Asia/Karachi'}`,
+    `Work hours: ${user.work_hours_start || '?'}-${user.work_hours_end || '?'}`,
+    `Tone: ${user.tone || 'friendly'}`,
+    `Style: ${user.communication_style || 'concise'}`,
+    `Proactiveness: ${user.proactiveness_level || 'high'}`,
+  ].join('\n');
+}
+
+function memoryBlock(userId) {
+  const facts = memoryRepo.listForUser(userId, 10);
+  if (!facts.length) return '';
+  return facts.map((f) => `- (${f.category}) ${f.fact}`).join('\n');
+}
+
 // ── The think pass ───────────────────────────────────────────────────
 
 const SYSTEM = `You are the user's sharp, trusted chief of staff, messaging them on WhatsApp. You see their whole picture — calendar, tasks, bills, promises they've made, health, work hours, customer mail — and your job is to flag what genuinely needs them RIGHT NOW, and connect things a single reminder would miss.
@@ -167,7 +185,10 @@ async function think(userId, { now = new Date() } = {}) {
   // The cheap guard: no time-sensitive signal → no model call, no message.
   if (!snap.hasSignals) return { insights: [], skipped: 'quiet' };
 
-  const prompt = `Here is everything about ${user.name || 'the user'} right now.\n\n` +
+  const memories = memoryBlock(userId);
+  const prompt = `USER POLICY:\n${policyFor(user)}\n\n` +
+    (memories ? `WHAT YOU ALREADY KNOW ABOUT THEM:\n${memories}\n\n` : '') +
+    `Here is everything about ${user.name || 'the user'} right now.\n\n` +
     `NEEDS ATTENTION:\n${snap.signals.map((s) => `- ${s}`).join('\n')}\n\n` +
     (snap.context.length ? `CONTEXT (use only if it helps connect dots):\n${snap.context.map((c) => `- ${c}`).join('\n')}\n\n` : '') +
     `What, if anything, should you tell them right now?`;

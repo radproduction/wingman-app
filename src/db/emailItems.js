@@ -14,6 +14,8 @@ function upsert(userId, item) {
   const row = {
     user_id: userId,
     gmail_id: item.gmailId,
+    account_id: item.accountId || null,
+    account_email: item.accountEmail || null,
     subject: item.subject || null,
     sender: item.sender || null,
     category: item.category || 'fyi',
@@ -28,6 +30,7 @@ function upsert(userId, item) {
   if (existing) {
     db.prepare(`
       UPDATE email_items SET
+        account_id=COALESCE(@account_id, account_id), account_email=COALESCE(@account_email, account_email),
         subject=@subject, sender=@sender, category=@category, summary=@summary,
         action_needed=@action_needed, replied=@replied, draft_reply=@draft_reply,
         detected_type=@detected_type, extracted_data=@extracted_data
@@ -39,10 +42,10 @@ function upsert(userId, item) {
   const id = uuid();
   db.prepare(`
     INSERT INTO email_items
-      (id, user_id, gmail_id, subject, sender, category, summary,
+      (id, user_id, gmail_id, account_id, account_email, subject, sender, category, summary,
        action_needed, replied, draft_reply, detected_type, extracted_data)
     VALUES
-      (@id, @user_id, @gmail_id, @subject, @sender, @category, @summary,
+      (@id, @user_id, @gmail_id, @account_id, @account_email, @subject, @sender, @category, @summary,
        @action_needed, @replied, @draft_reply, @detected_type, @extracted_data)
   `).run({ ...row, id });
   return id;
@@ -125,7 +128,23 @@ function listByType(userId, type) {
     .all(userId, type);
 }
 
+function listIdsByAccount(userId, accountId) {
+  return db.prepare(`
+    SELECT id FROM email_items
+    WHERE user_id = ? AND account_id = ?
+  `).all(userId, accountId).map((r) => r.id);
+}
+
+function deleteByAccount(userId, accountId) {
+  return db.prepare('DELETE FROM email_items WHERE user_id = ? AND account_id = ?').run(userId, accountId).changes;
+}
+
+function deleteAllForUser(userId) {
+  return db.prepare('DELETE FROM email_items WHERE user_id = ?').run(userId).changes;
+}
+
 module.exports = {
   upsert, existsByGmailId, listForUser, groupedByCategory,
   countsSince, countReplied, countPending, searchByKeyword, listByType,
+  listIdsByAccount, deleteByAccount, deleteAllForUser,
 };

@@ -229,8 +229,50 @@ function upsertFromGoogle(userId, task) {
   });
 }
 
+function clearGoogleSyncByAccount(userId, accountId) {
+  return db.prepare(`
+    UPDATE tasks
+    SET google_task_id = NULL,
+        google_tasklist_id = NULL,
+        google_account_id = NULL,
+        google_updated_at = NULL,
+        sync_state = 'local_only',
+        updated_at = ${nowSqlite()}
+    WHERE user_id = ? AND google_account_id = ? AND source != 'google_tasks'
+  `).run(userId, accountId).changes;
+}
+
+function removeGoogleImportedByAccount(userId, accountId) {
+  return db.prepare(`
+    DELETE FROM tasks
+    WHERE user_id = ? AND google_account_id = ? AND source = 'google_tasks'
+  `).run(userId, accountId).changes;
+}
+
+function clearAllGoogleSync(userId) {
+  return db.prepare(`
+    UPDATE tasks
+    SET google_task_id = NULL,
+        google_tasklist_id = NULL,
+        google_account_id = NULL,
+        google_updated_at = NULL,
+        sync_state = 'local_only',
+        updated_at = ${nowSqlite()}
+    WHERE user_id = ? AND source != 'google_tasks'
+  `).run(userId).changes;
+}
+
+function removeAllGoogleImported(userId) {
+  return db.prepare(`
+    DELETE FROM tasks
+    WHERE user_id = ? AND source = 'google_tasks'
+  `).run(userId).changes;
+}
+
 module.exports = {
   create, getById, getByGoogleRef, listForUser, listPendingSync, complete,
   listDueBetween, listOverdue, countCompleted, countAll,
   findByTitle, updateDueDate, updateSyncMeta, markLocalDirty, upsertFromGoogle,
+  clearGoogleSyncByAccount, removeGoogleImportedByAccount,
+  clearAllGoogleSync, removeAllGoogleImported,
 };

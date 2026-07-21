@@ -77,8 +77,8 @@ router.get('/me', (req, res) => {
     tone: u.tone,
     communication_style: u.communication_style,
     health_connected: !!u.health_connected,
-    gmail_connected: !!u.gmail_token,
-    calendar_connected: !!u.calendar_token,
+    gmail_connected: require('../auth/googleAuth').isEmailConnected(u),
+    calendar_connected: require('../auth/googleAuth').isConnected(u),
     wingman_number: config.wingmanNumber || null,
     whatsapp_connected: whatsappConnected,
     mock: false,
@@ -102,6 +102,7 @@ router.get('/calendar', async (req, res) => {
   }
   const { data, mock: isMock } = safe(() => {
     if (!u || !repo || !repo.listForUser) return null;
+    if (!require('../auth/googleAuth').isConnected(u)) return [];
     return repo.listForUser(u.id);
   }, mock.calendar, !u);
   const norm = data.map((e) => ({
@@ -124,6 +125,7 @@ router.get('/emails', (req, res) => {
   const repo = requireRepo('emailItems');
   const { data, mock: isMock } = safe(() => {
     if (!u || !repo || !repo.listForUser) return null;
+    if (!require('../auth/googleAuth').isEmailConnected(u)) return [];
     return repo.listForUser(u.id, 100);
   }, mock.emails, !u);
   const norm = data.map((e) => ({
@@ -701,11 +703,18 @@ router.get('/google/accounts', async (req, res) => {
 router.post('/google/accounts/:id/disconnect', (req, res) => {
   if (!req.user) return res.status(401).json({ error: 'Authentication required.' });
   const accountsRepo = require('../db/googleAccounts');
+  const cleanup = require('../services/googleDisconnectCleanup');
+  const account = accountsRepo.getById(req.params.id);
+  if (!account || account.user_id !== req.user.id) return res.status(404).json({ error: 'Account not found.' });
   const result = accountsRepo.remove(req.user.id, req.params.id);
   if (!result.removed) return res.status(404).json({ error: 'Account not found.' });
   syncPrimaryToLegacy(req.user.id);
   const accounts = accountsRepo.listForUser(req.user.id);
+  const cleanupResult = accounts.length
+    ? cleanup.cleanupAccount(req.user.id, account)
+    : cleanup.cleanupAllGoogleData(req.user.id);
   res.json({
+    cleanup: cleanupResult,
     accounts: accounts.map((a) => ({ id: a.id, email: a.email, is_primary: !!a.is_primary, connected_at: a.created_at })),
   });
 });

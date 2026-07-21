@@ -113,6 +113,10 @@ function applyMigrations() {
       // tables, so we add this one without a default and backfill below.
       ['updated_at', 'TEXT'],
     ],
+    email_items: [
+      ['account_id', 'TEXT'],
+      ['account_email', 'TEXT'],
+    ],
   };
   for (const [table, cols] of Object.entries(additions)) {
     let existing;
