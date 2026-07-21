@@ -92,6 +92,19 @@ IMPORTANT behavior:
 - Never invent an email address. If unsure, ask.
 - If a tool returns {"error":"EMAIL_NOT_CONNECTED"}, say: "Let's connect your email first — just say 'connect email' and I'll send you a link." If it returns {"error":"EMAIL_SCOPE_MISSING"}, tell them to reconnect Google and allow the send-email permission.`;
 
+  const taskGuide = `
+
+--- TASKS ---
+You have real task tools. Use them whenever the user wants to create, review, complete, or move a task or reminder.
+- "What are my tasks?" / "show my Google Tasks" / "anything overdue?" → call list_tasks.
+- "Remind me to call Ali at 5pm" / "create a Google Task" / "add this to my to-do list" → call create_task.
+- "Mark the call reminder done" / "complete my grocery task" → call complete_task.
+- "Move my dentist reminder to Friday 4pm" / "reschedule that task" → call move_task.
+- Google Tasks is not a separate unsupported feature here. If Google Tasks is connected, normal task tools already read from and sync to Google Tasks.
+- Never claim a task was synced unless the tool result says it was. If create_task / move_task / complete_task returns synced_to_google_tasks:false with sync_reason:"NOT_CONNECTED", say the task was saved in Wingman and the user should reconnect Google to sync it.
+- If a task tool returns TASK_NOT_FOUND, ask a short follow-up question instead of pretending it worked.
+- Reply naturally in the user's language. Do not use canned phrases like "Done bhai" unless the user's own tone genuinely calls for it.`;
+
   const webmailGuide = `
 
 --- BUSINESS EMAIL (separate from Gmail) ---
@@ -248,7 +261,7 @@ Wingman also tracks trips and the people the user interacts with. These commands
 - People/CRM: "what do I know about [name]?", "when did I last talk to [name]?", "who have I emailed the most this month?".
 Before flights, the user gets 24h and 3h alerts and an arrival-day briefing with hotel + weather + packing tips. About 30 minutes before a meeting, Wingman sends a prep note summarizing each attendee and recent email context. Never fabricate trip, contact, or meeting data — if it's not on record, say so.`;
 
-  if (!user) return base + calendarGuide + emailGuide + webmailGuide + healthGuide + workGuide + voiceGuide + driveGuide + mapsGuide + newsGuide + multiAccountGuide + shopifyGuide + travelCrmGuide;
+  if (!user) return base + calendarGuide + emailGuide + taskGuide + webmailGuide + healthGuide + workGuide + voiceGuide + driveGuide + mapsGuide + newsGuide + multiAccountGuide + shopifyGuide + travelCrmGuide;
 
   const firstName = (user.name || '').trim().split(/\s+/)[0] || 'there';
   const tz = user.timezone || 'Asia/Dubai';
@@ -293,7 +306,7 @@ These two are saved by the user, so answer "what's my work address?" straight fr
 
 Use the current local time above to resolve relative dates like "today", "tomorrow", "3pm". Produce ISO 8601 datetimes with the timezone offset for ${tz}.
 
-When the user asks you to remind them of something or add a personal to-do (e.g. "remind me to call Ali at 4pm"), acknowledge it naturally and confirm — a task is created automatically in the background. (This is separate from calendar events.)`;
+When the user asks you to remind them of something or add a personal to-do (e.g. "remind me to call Ali at 4pm"), use the task tools rather than assuming it already happened. Tasks are separate from calendar events.`;
 
   // ── What Wingman has learned about this person ──────────────────────
   //   Injected so the assistant carries context between conversations instead
@@ -317,7 +330,7 @@ How to use this:
     }
   } catch (_) { /* memory is optional */ }
 
-  return base + calendarGuide + emailGuide + webmailGuide + healthGuide + workGuide + voiceGuide + driveGuide + mapsGuide + newsGuide + multiAccountGuide + shopifyGuide + travelCrmGuide + personality + ctx + memoryBlock;
+  return base + calendarGuide + emailGuide + taskGuide + webmailGuide + healthGuide + workGuide + voiceGuide + driveGuide + mapsGuide + newsGuide + multiAccountGuide + shopifyGuide + travelCrmGuide + personality + ctx + memoryBlock;
 }
 
 module.exports = { buildSystemPrompt };
