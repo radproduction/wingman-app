@@ -155,7 +155,7 @@ async function syncUser(userId, { days = DEFAULT_DAYS } = {}) {
 async function syncAllUsers({ days = DEFAULT_DAYS } = {}) {
   const { db } = require('../db');
   const rows = db.prepare(
-    'SELECT id FROM users WHERE google_health_token IS NOT NULL AND google_health_token != ""'
+    "SELECT id FROM users WHERE google_health_token IS NOT NULL AND google_health_token != ''"
   ).all();
 
   const results = [];
