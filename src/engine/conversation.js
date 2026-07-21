@@ -84,6 +84,8 @@ async function handleMessage({ text, phoneNumber, meta = {} }) {
 
   if (isConnectGoogleIntent(text)) {
     reply = buildConnectGoogleReply(user, phoneNumber);
+  } else if (isGoogleTasksIntent(text)) {
+    reply = await buildGoogleTasksReply(user, phoneNumber);
   } else if (isConnectCalendarIntent(text)) {
     reply = buildConnectCalendarReply(user, phoneNumber);
   } else if (isConnectEmailIntent(text)) {
@@ -137,6 +139,39 @@ function isConnectGoogleIntent(text) {
 function buildConnectGoogleReply(user, phoneNumber) {
   const url = `${config.publicBaseUrl}/auth/google?phone=${encodeURIComponent(phoneNumber)}`;
   return `Tap this to connect Google — Calendar, Gmail, Drive & Tasks: ${url}`;
+}
+
+function isGoogleTasksIntent(text) {
+  const t = (text || '').toLowerCase().trim();
+  if (!/\bgoogle tasks?\b/.test(t) && !/\btask app\b/.test(t)) return false;
+  return /\b(show|check|see|list|open|where|kahan|dekh|dikha|sync|connected|access|reconnect|connect|task)\b/.test(t);
+}
+
+async function buildGoogleTasksReply(user, phoneNumber) {
+  const googleTasks = require('../services/googleTasks');
+  if (!googleTasks.isConnected(user)) {
+    const url = `${config.publicBaseUrl}/auth/google?phone=${encodeURIComponent(phoneNumber)}`;
+    return `Google Tasks abhi connected nahi lag rahi. Is link se Google ko reconnect karo: ${url}\n\nUske baad Tasks page me sab tasks nazar aayengi.`;
+  }
+
+  try { await googleTasks.syncUser(user.id); } catch (_) { /* keep cached tasks */ }
+
+  const tasks = tasksRepo.listForUser(user.id, { includeCompleted: false, limit: 8 });
+  if (!tasks.length) {
+    return 'Google Tasks connected hai ✅\n\nAbhi koi pending task nazar nahi aa rahi. App me Tasks page kholo, ya Google Tasks me ek test task bana ke refresh karo.';
+  }
+
+  const lines = [
+    'Google Tasks connected hai ✅',
+    '',
+    'Google Tasks alag button me nahi aati — ye normal *Tasks* page me merged hoti hain.',
+    '',
+    '*Pending tasks:*',
+  ];
+  for (const task of tasks.slice(0, 5)) lines.push(`• ${task.title}`);
+  lines.push('');
+  lines.push('Test ke liye Google Tasks app me ek task banao, phir Wingman me Tasks page refresh karo.');
+  return lines.join('\n');
 }
 
 /** Detect an explicit "connect calendar" request (deterministic, no LLM). */

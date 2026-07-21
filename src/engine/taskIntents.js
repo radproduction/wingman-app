@@ -17,7 +17,7 @@ function detect(text) {
   if (/\b(what('| i)?s?\s+overdue|overdue tasks?|anything overdue)\b/.test(s)) {
     return { type: 'overdue' };
   }
-  if (/\b(what are my tasks|my tasks|list tasks|show( me)? (my )?tasks|to-?do list|todos?)\b/.test(s)) {
+  if (/\b(what are my tasks|my tasks|list tasks|show( me)? (my )?tasks|to-?do list|todos?|google tasks?|task app)\b/.test(s)) {
     return { type: 'list' };
   }
 
