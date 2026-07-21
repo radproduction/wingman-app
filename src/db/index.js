@@ -109,7 +109,9 @@ function applyMigrations() {
       ['google_account_id', 'TEXT'],
       ['google_updated_at', 'TEXT'],
       ["sync_state", "TEXT DEFAULT 'local_only'"],
-      ['updated_at', 'TEXT DEFAULT CURRENT_TIMESTAMP'],
+      // SQLite rejects ADD COLUMN with CURRENT_TIMESTAMP on older existing
+      // tables, so we add this one without a default and backfill below.
+      ['updated_at', 'TEXT'],
     ],
   };
   for (const [table, cols] of Object.entries(additions)) {
@@ -124,6 +126,13 @@ function applyMigrations() {
       }
     }
   }
+
+  try {
+    const taskCols = new Set(db.prepare('PRAGMA table_info(tasks)').all().map((r) => r.name));
+    if (taskCols.has('updated_at')) {
+      db.exec("UPDATE tasks SET updated_at = COALESCE(updated_at, created_at, datetime('now'))");
+    }
+  } catch (_) { /* ignore */ }
 
   try {
     db.exec('CREATE INDEX IF NOT EXISTS idx_tasks_google_ref ON tasks(user_id, google_account_id, google_tasklist_id, google_task_id)');
