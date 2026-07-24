@@ -4,14 +4,17 @@ const maps = require('../services/maps');
 const config = require('../config');
 const usersRepo = require('../db/users');
 
-/** Resolve "home"/"office" to a saved place, otherwise treat the text as an address. */
+/** Resolve "home"/"office"/"current" to a place, otherwise treat text as an address. */
 function resolvePlace(user, value) {
   const v = String(value || '').trim();
   const key = v.toLowerCase();
-  if (key === 'home' || key === 'office') {
+  if (key === 'home' || key === 'office' || key === 'current') {
     const place = maps.savedPlace(user, key);
-    if (!place) return { error: 'PLACE_NOT_SET', which: key };
-    return { query: place.query, label: key, address: place.address };
+    if (!place) {
+      // "current" not set means the app hasn't captured a location yet.
+      return { error: key === 'current' ? 'CURRENT_LOCATION_UNKNOWN' : 'PLACE_NOT_SET', which: key };
+    }
+    return { query: place.query, label: key, address: place.address, updatedAt: place.updatedAt || null };
   }
   return v ? { query: v, label: v, address: v } : { error: 'MISSING_PLACE' };
 }

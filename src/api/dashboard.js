@@ -405,6 +405,58 @@ router.get('/health/connect', (req, res) => {
 });
 
 /**
+ * Capture the user's current location from the app (browser geolocation).
+ * A web app can only read this while it's open, so we store the LAST KNOWN
+ * position and refresh it whenever the app is opened; traffic requests use it
+ * as the "current" origin.
+ */
+router.post('/location', async (req, res) => {
+  if (!req.user) return res.status(401).json({ error: 'Authentication required.' });
+  const lat = Number((req.body || {}).lat);
+  const lng = Number((req.body || {}).lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+    return res.status(400).json({ error: 'Valid lat and lng are required.' });
+  }
+  try {
+    // Reverse-geocode for a readable label when Maps is configured; the raw
+    // coordinates are stored regardless so traffic still works without it.
+    let label = null;
+    if (config.maps.enabled) {
+      try { ({ label } = await require('../services/maps').setCurrentLocation(req.user.id, { lat, lng })); }
+      catch (_) { /* fall through to storing coords only */ }
+    }
+    if (label == null) {
+      usersRepo.update(req.user.id, {
+        current_lat: lat, current_lng: lng, current_location_at: new Date().toISOString(),
+      });
+    }
+    res.json({ ok: true, label });
+  } catch (err) {
+    console.error('[location] save failed:', err.message);
+    res.status(500).json({ error: 'Could not save location.' });
+  }
+});
+
+/**
+ * Reverse-geocode coordinates into a full address, so the app can offer a
+ * "use my current location" button that fills in the home/office field.
+ */
+router.post('/location/reverse', async (req, res) => {
+  if (!req.user) return res.status(401).json({ error: 'Authentication required.' });
+  if (!config.maps.enabled) return res.status(503).json({ error: 'Maps is not configured on the server yet.' });
+  const lat = Number((req.body || {}).lat);
+  const lng = Number((req.body || {}).lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return res.status(400).json({ error: 'Valid lat and lng are required.' });
+  try {
+    const address = await require('../services/maps').reverseGeocodeAddress(lat, lng);
+    if (!address) return res.status(404).json({ error: 'Could not resolve that location to an address.' });
+    res.json({ address });
+  } catch (err) {
+    res.status(500).json({ error: 'Could not look up that location.' });
+  }
+});
+
+/**
  * Google Health — the one-click path (Android, Pixel Watch, Fitbit, Wear OS).
  * Returns the consent URL rather than redirecting, so the SPA can open it.
  */

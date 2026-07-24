@@ -1,4 +1,6 @@
+import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { captureLocation } from './lib/location';
 import Sidebar from './components/Sidebar';
 import BottomNav from './components/BottomNav';
 import { useAuth } from './lib/auth';
@@ -55,6 +57,13 @@ function AppShell() {
 function Root() {
   const { loading, authed, onboarded } = useAuth();
   const location = useLocation();
+
+  // Refresh the user's current location each time they open the app, so
+  // "route to X" starts from where they actually are. Silent + non-blocking;
+  // a denied permission just leaves the last known location in place.
+  useEffect(() => {
+    if (authed && onboarded) captureLocation();
+  }, [authed, onboarded]);
 
   if (loading) {
     return (

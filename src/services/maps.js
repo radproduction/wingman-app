@@ -49,7 +49,7 @@ function coordString(lat, lng) {
   return `${lat},${lng}`;
 }
 
-/** A saved place ("home" | "office") as an origin/destination string. */
+/** A saved place ("home" | "office" | "current") as an origin/destination string. */
 function savedPlace(user, which) {
   if (which === 'home' && user.home_lat != null && user.home_lng != null) {
     return { label: 'home', query: coordString(user.home_lat, user.home_lng), address: user.home_address };
@@ -57,8 +57,63 @@ function savedPlace(user, which) {
   if (which === 'office' && user.office_lat != null && user.office_lng != null) {
     return { label: 'office', query: coordString(user.office_lat, user.office_lng), address: user.office_address };
   }
-  const raw = which === 'home' ? user.home_address : user.office_address;
+  // The user's current location — captured by the app (browser geolocation).
+  // It's the LAST KNOWN position, not live, since a web app can't track in the
+  // background; the caller decides how to phrase that.
+  if (which === 'current' && user.current_lat != null && user.current_lng != null) {
+    return {
+      label: 'current',
+      query: coordString(user.current_lat, user.current_lng),
+      address: user.current_location_label || 'your current location',
+      updatedAt: user.current_location_at || null,
+    };
+  }
+  const raw = which === 'home' ? user.home_address : (which === 'office' ? user.office_address : null);
   return raw ? { label: which, query: raw, address: raw } : null;
+}
+
+/** Reverse-geocode coordinates into a short human label ("Clifton, Karachi"). */
+async function reverseGeocode(lat, lng) {
+  try {
+    const data = await apiGet('geocode/json', { latlng: `${lat},${lng}` });
+    const hit = (data.results || [])[0];
+    if (!hit) return null;
+    // Prefer a neighbourhood/locality over the full formatted address.
+    const comp = hit.address_components || [];
+    const pick = (type) => {
+      const c = comp.find((x) => (x.types || []).includes(type));
+      return c ? c.long_name : null;
+    };
+    const area = pick('sublocality') || pick('neighborhood') || pick('locality');
+    const city = pick('locality') || pick('administrative_area_level_2');
+    const label = [area, city && area !== city ? city : null].filter(Boolean).join(', ');
+    return label || hit.formatted_address || null;
+  } catch (_) {
+    return null;
+  }
+}
+
+/** Reverse-geocode to the FULL formatted address (for filling an address field). */
+async function reverseGeocodeAddress(lat, lng) {
+  try {
+    const data = await apiGet('geocode/json', { latlng: `${lat},${lng}` });
+    const hit = (data.results || [])[0];
+    return hit ? hit.formatted_address : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+/** Store the user's current location (from the app), with a readable label. */
+async function setCurrentLocation(userId, { lat, lng }) {
+  const label = await reverseGeocode(lat, lng);
+  usersRepo.update(userId, {
+    current_lat: lat,
+    current_lng: lng,
+    current_location_at: new Date().toISOString(),
+    current_location_label: label,
+  });
+  return { lat, lng, label };
 }
 
 function fmtMinutes(seconds) {
@@ -172,5 +227,6 @@ function missingPlaces(user) {
 }
 
 module.exports = {
-  geocode, directions, leaveBy, savePlace, savedPlace, missingPlaces, fmtMinutes,
+  geocode, reverseGeocode, reverseGeocodeAddress, directions, leaveBy, savePlace, savedPlace,
+  setCurrentLocation, missingPlaces, fmtMinutes,
 };

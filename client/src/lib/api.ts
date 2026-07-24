@@ -106,6 +106,12 @@ export const api = {
   healthWearableDisconnect: (provider: string) =>
     send<{ ok: boolean }>('POST', `/health/wearables/${provider}/disconnect`),
 
+  // ── Current location (browser geolocation → traffic origin) ──
+  saveLocation: (lat: number, lng: number) =>
+    send<{ ok: boolean; label: string | null }>('POST', '/location', { lat, lng }),
+  reverseGeocode: (lat: number, lng: number) =>
+    send<{ address: string }>('POST', '/location/reverse', { lat, lng }),
+
   // ── Work clock (attendance / HRMS) ──
   workConnect: () =>
     get<{

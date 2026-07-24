@@ -24,12 +24,14 @@ const mapsTools = [
     name: 'get_travel_time',
     description:
       'Live driving time and best route between two places, using current traffic. ' +
-      'Use for "how long to the office?", "traffic kaisa hai?", "how far is X from home?". ' +
-      'Use "home" or "office" to refer to their saved places.',
+      'Use for "how long to the office?", "traffic kaisa hai?", "I want to go to Saddar — best route?". ' +
+      'For `from`, use "current" to start from where the user is NOW (their app-captured ' +
+      'location) — this is the default when they name only a destination ("I want to go to X"). ' +
+      '"home"/"office" refer to their saved places.',
     input_schema: {
       type: 'object',
       properties: {
-        from: { type: 'string', description: '"home", "office", or an address.' },
+        from: { type: 'string', description: '"current" (where they are now — the default), "home", "office", or an address.' },
         to: { type: 'string', description: '"home", "office", or an address.' },
         depart_at: {
           type: 'string',
@@ -48,7 +50,7 @@ const mapsTools = [
     input_schema: {
       type: 'object',
       properties: {
-        from: { type: 'string', description: '"home", "office", or an address. Defaults to home.' },
+        from: { type: 'string', description: '"current", "home", "office", or an address. Defaults to "current".' },
         to: { type: 'string', description: '"home", "office", or the destination address.' },
         arrive_by: { type: 'string', description: 'ISO 8601 arrival time WITH the user timezone offset.' },
       },

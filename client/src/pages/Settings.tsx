@@ -288,6 +288,7 @@ function PlacesCard({ user }: { user: Me }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [savedWhich, setSavedWhich] = useState<string | null>(null);
+  const [locating, setLocating] = useState<string | null>(null);
 
   async function save(which: 'home' | 'office', address: string) {
     if (!address.trim()) return;
@@ -304,6 +305,28 @@ function PlacesCard({ user }: { user: Me }) {
     }
   }
 
+  // Fill the field from where the user is right now — one tap instead of typing.
+  function useCurrent(which: 'home' | 'office') {
+    setError(null); setLocating(which);
+    if (!navigator.geolocation) {
+      setError('Your browser can’t share location.'); setLocating(null); return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          const { address } = await api.reverseGeocode(pos.coords.latitude, pos.coords.longitude);
+          if (which === 'home') setHome(address); else setOffice(address);
+          // Save straight away so it's not lost if they navigate off.
+          await save(which, address);
+        } catch (e) {
+          setError(e instanceof Error ? e.message : 'Could not read your location.');
+        } finally { setLocating(null); }
+      },
+      () => { setError('Location permission was blocked — type the address instead.'); setLocating(null); },
+      { enableHighAccuracy: true, timeout: 10000 },
+    );
+  }
+
   return (
     <div className="card">
       <p className="text-caption text-gray mb-3">
@@ -312,23 +335,41 @@ function PlacesCard({ user }: { user: Me }) {
       <div className="flex flex-col gap-3">
         <div>
           <Field label="Home address" value={home} onChange={setHome} placeholder="e.g. DHA Phase 6, Karachi" />
-          <button
-            onClick={() => save('home', home)}
-            disabled={busy === 'home' || !home.trim() || home === user.home_address}
-            className="mt-2 h-9 px-4 rounded-full bg-accent/15 text-accent text-body font-semibold disabled:opacity-40"
-          >
-            {busy === 'home' ? 'Saving…' : savedWhich === 'home' ? 'Saved ✓' : 'Save home'}
-          </button>
+          <div className="flex gap-2 mt-2">
+            <button
+              onClick={() => save('home', home)}
+              disabled={busy === 'home' || !home.trim() || home === user.home_address}
+              className="h-9 px-4 rounded-full bg-accent/15 text-accent text-body font-semibold disabled:opacity-40"
+            >
+              {busy === 'home' ? 'Saving…' : savedWhich === 'home' ? 'Saved ✓' : 'Save home'}
+            </button>
+            <button
+              onClick={() => useCurrent('home')}
+              disabled={locating === 'home' || busy === 'home'}
+              className="h-9 px-4 rounded-full bg-white/5 text-gray text-body font-semibold disabled:opacity-40"
+            >
+              {locating === 'home' ? 'Locating…' : '📍 Use current location'}
+            </button>
+          </div>
         </div>
         <div>
           <Field label="Office address" value={office} onChange={setOffice} placeholder="e.g. Shahrah-e-Faisal, Karachi" />
-          <button
-            onClick={() => save('office', office)}
-            disabled={busy === 'office' || !office.trim() || office === user.office_address}
-            className="mt-2 h-9 px-4 rounded-full bg-accent/15 text-accent text-body font-semibold disabled:opacity-40"
-          >
-            {busy === 'office' ? 'Saving…' : savedWhich === 'office' ? 'Saved ✓' : 'Save office'}
-          </button>
+          <div className="flex gap-2 mt-2">
+            <button
+              onClick={() => save('office', office)}
+              disabled={busy === 'office' || !office.trim() || office === user.office_address}
+              className="h-9 px-4 rounded-full bg-accent/15 text-accent text-body font-semibold disabled:opacity-40"
+            >
+              {busy === 'office' ? 'Saving…' : savedWhich === 'office' ? 'Saved ✓' : 'Save office'}
+            </button>
+            <button
+              onClick={() => useCurrent('office')}
+              disabled={locating === 'office' || busy === 'office'}
+              className="h-9 px-4 rounded-full bg-white/5 text-gray text-body font-semibold disabled:opacity-40"
+            >
+              {locating === 'office' ? 'Locating…' : '📍 Use current location'}
+            </button>
+          </div>
         </div>
       </div>
       {error && <p className="text-caption text-danger mt-3">{error}</p>}
