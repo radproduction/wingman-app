@@ -354,7 +354,7 @@ async function sendOtp(phoneNumber, code) {
  */
 async function sendProactiveMessage(user, text, {
   now = new Date(),
-  templateName = config.whatsappCloud.proactiveTemplate,
+  templateName = null,       // the caller's SPECIFIC template; null → use the generic one
   templateLang = config.whatsappCloud.proactiveTemplateLang,
   useTemplate = config.whatsappCloud.proactiveUseTemplate,
   templateParams = null,
@@ -367,19 +367,36 @@ async function sendProactiveMessage(user, text, {
     return sendMessage(digits, text);
   }
 
-  if (isWithinCustomerWindow(user, now) || !useTemplate || !templateName) {
+  // Inside the 24h window a free-form message delivers (and is richer), so use it.
+  if (isWithinCustomerWindow(user, now) || !useTemplate) {
     return sendMessage(digits, text);
   }
 
-  // Structured params keep the template's formatting; a single flattened blob
-  // is the fallback for short one-topic alerts that have no template of their own.
-  const values = (Array.isArray(templateParams) && templateParams.length)
+  // Outside the window ONLY an approved template delivers (Meta 131047 otherwise).
+  // Prefer the caller's specific template with its structured params; if that
+  // isn't configured, fall back to the GENERIC one-variable template carrying the
+  // flattened message — so a single approved template makes EVERY proactive
+  // message (briefing, wrap, alerts, automations) deliver, formatting aside.
+  let name = templateName;
+  let values = (Array.isArray(templateParams) && templateParams.length)
     ? templateParams.map(toTemplateParam)
     : [toTemplateParam(text)];
 
+  if (!name) {
+    name = config.whatsappCloud.proactiveTemplate;
+    values = [toTemplateParam(text)];   // the generic template has a single {{1}}
+  }
+
+  if (!name) {
+    // Nothing configured at all — it genuinely cannot go out of the window.
+    // Say so loudly rather than silently dropping (this is what 131047 was).
+    console.warn(`[whatsapp:cloud] ${logLabel} to ${digits} DROPPED — outside the 24h window and NO template is configured (set PROACTIVE_TEMPLATE_NAME).`);
+    return null;
+  }
+
   const sent = await cloudApi.sendTemplate(
     digits,
-    templateName,
+    name,
     templateLang,
     [{ type: 'body', parameters: values.map((v) => ({ type: 'text', text: v })) }],
   );
@@ -393,7 +410,7 @@ async function sendProactiveMessage(user, text, {
     mediaType: 'template',
   });
 
-  console.log(`[whatsapp:cloud] >> ${logLabel} template to ${digits}`);
+  console.log(`[whatsapp:cloud] >> ${logLabel} template (${name}) to ${digits}`);
   return sent;
 }
 
