@@ -394,12 +394,26 @@ async function sendProactiveMessage(user, text, {
     return null;
   }
 
-  const sent = await cloudApi.sendTemplate(
-    digits,
-    name,
-    templateLang,
-    [{ type: 'body', parameters: values.map((v) => ({ type: 'text', text: v })) }],
-  );
+  const bodyOf = (vals) => [{ type: 'body', parameters: vals.map((v) => ({ type: 'text', text: v })) }];
+
+  let sent;
+  let usedName = name;
+  try {
+    sent = await cloudApi.sendTemplate(digits, name, templateLang, bodyOf(values));
+  } catch (err) {
+    // A specific template that fails — not yet approved, wrong language, wrong
+    // variable count — must not silently drop the message. Fall back to the
+    // generic one-variable template (flattened) when it's a DIFFERENT template,
+    // so the user still gets it while the specific one is being sorted.
+    const generic = config.whatsappCloud.proactiveTemplate;
+    if (generic && generic !== name) {
+      console.warn(`[whatsapp:cloud] template ${name} failed (${err.message}); falling back to ${generic}`);
+      usedName = generic;
+      sent = await cloudApi.sendTemplate(digits, generic, templateLang, bodyOf([toTemplateParam(text)]));
+    } else {
+      throw err;
+    }
+  }
 
   conversations.logOutbound({
     userId: user.id,
@@ -410,7 +424,7 @@ async function sendProactiveMessage(user, text, {
     mediaType: 'template',
   });
 
-  console.log(`[whatsapp:cloud] >> ${logLabel} template (${name}) to ${digits}`);
+  console.log(`[whatsapp:cloud] >> ${logLabel} template (${usedName}) to ${digits}`);
   return sent;
 }
 
