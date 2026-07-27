@@ -54,6 +54,48 @@ app.get('/health', (req, res) => {
   res.json({ ok: true, whatsappReady: wa.ready() });
 });
 
+// ─── TEMPORARY diagnostic: do the WhatsApp templates actually deliver? ──
+//   Sends a REAL template message (notify / briefing / wrap) with the exact
+//   parameter counts the code uses, so a mismatch between the approved template
+//   and the code shows up as Meta's own error BEFORE we rely on it.
+app.get('/_diag/template', async (req, res) => {
+  const admin = process.env.ADMIN_PASSWORD;
+  if (admin && req.query.key !== admin) return res.status(403).json({ error: 'forbidden' });
+
+  const digits = String(req.query.phone || '').replace(/[^0-9]/g, '');
+  if (!digits) return res.status(400).json({ error: 'pass ?phone=<digits>&which=notify|briefing|wrap' });
+  const which = String(req.query.which || 'notify');
+
+  const config = require('./config');
+  const cloudApi = require('./whatsapp/cloudApi');
+  const cfg = config.whatsappCloud;
+
+  const templates = {
+    notify: { name: cfg.proactiveTemplate, params: ['✅ Wingman template test — this is the notify template working.'] },
+    briefing: {
+      name: cfg.briefingTemplate,
+      params: ['Good morning, Fayyaz!', 'Karachi: 31°C, Clear', '09:00 — Standup • 14:00 — Client call', '2 urgent, 3 need reply', 'Send invoice • Call Amir', 'Have a productive day!'],
+    },
+    wrap: {
+      name: cfg.wrapTemplate,
+      params: ["That's a wrap, Fayyaz!", '3/5 tasks', 'replied to 4, 2 pending', '3', 'Review contract • Send the deck', '1 meeting • 17:00 — Board sync', 'Good night! 💤'],
+    },
+  };
+
+  const t = templates[which];
+  if (!t) return res.status(400).json({ error: 'which must be notify, briefing or wrap' });
+  if (!t.name) return res.status(400).json({ error: `No template name configured for ${which} (set the env var).` });
+
+  try {
+    const sent = await cloudApi.sendTemplate(digits, t.name, cfg.proactiveTemplateLang, [
+      { type: 'body', parameters: t.params.map((p) => ({ type: 'text', text: p })) },
+    ]);
+    res.json({ ok: true, which, template: t.name, param_count: t.params.length, messageId: sent && sent.messages && sent.messages[0] && sent.messages[0].id });
+  } catch (err) {
+    res.json({ ok: false, which, template: t.name, param_count: t.params.length, error: err.message });
+  }
+});
+
 // ─── TEMPORARY diagnostic ───────────────────────────────────────────
 //   Reports this server's outbound IP and whether it can actually reach a
 //   mail host from Railway — used to prove a datacenter-IP firewall block on
