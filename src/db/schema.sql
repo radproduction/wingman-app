@@ -364,6 +364,8 @@ CREATE TABLE IF NOT EXISTS automations (
   run_date TEXT,                 -- 'YYYY-MM-DD', for 'once'
   timezone TEXT,
   last_run_date TEXT,            -- local day it last fired (dedupe)
+  anchor TEXT,                   -- e.g. 'usual_finish' → fire time tracks a learned behaviour (null = fixed time)
+  lead_minutes INTEGER,          -- minutes BEFORE the anchor to fire (e.g. 25)
   active INTEGER DEFAULT 1,
   created_at TEXT DEFAULT (datetime('now'))
 );

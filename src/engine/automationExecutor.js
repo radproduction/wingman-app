@@ -9,7 +9,8 @@ function describe(a) {
     : a.kind === 'weekdays' ? 'every weekday'
       : a.kind === 'weekly' ? `every ${WEEKDAYS[a.weekday] || 'week'}`
         : a.run_date ? `on ${a.run_date}` : 'once';
-  return `${a.instruction} — ${when} at ${a.time}`;
+  const tuned = a.anchor === 'usual_finish' ? ' (auto-adjusts to your usual finish time)' : '';
+  return `${a.instruction} — ${when} at ${a.time}${tuned}`;
 }
 
 /** Execute an automation tool. Never throws — errors become {error}. */
@@ -31,6 +32,14 @@ async function executeAutomationTool(user, toolUse) {
           : null;
         if (kind === 'once' && !runDate) return { error: 'MISSING_DATE', detail: 'For a one-off, give the date as YYYY-MM-DD.' };
 
+        // Optional: anchor the fire time to a learned behaviour so it self-tunes.
+        const anchor = input.anchor === 'usual_finish' ? 'usual_finish' : null;
+        let leadMinutes = null;
+        if (anchor) {
+          const n = Number(input.lead_minutes);
+          leadMinutes = Number.isFinite(n) && n >= 0 && n <= 120 ? Math.round(n) : 20;
+        }
+
         const a = automationsRepo.create(user.id, {
           instruction: input.instruction,
           time,
@@ -38,6 +47,8 @@ async function executeAutomationTool(user, toolUse) {
           weekday: weekday != null && weekday >= 0 ? weekday : null,
           runDate,
           timezone: user.timezone || 'Asia/Karachi',
+          anchor,
+          leadMinutes,
         });
         return { created: true, id: a.id, summary: describe(a) };
       }

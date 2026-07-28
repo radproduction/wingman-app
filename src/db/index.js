@@ -121,6 +121,12 @@ function applyMigrations() {
       ['account_id', 'TEXT'],
       ['account_email', 'TEXT'],
     ],
+    automations: [
+      // Anchor a fire time to a learned behaviour (e.g. the user's usual finish),
+      // so the reminder self-adjusts as that behaviour drifts. Null → fixed time.
+      ['anchor', 'TEXT'],
+      ['lead_minutes', 'INTEGER'],
+    ],
   };
   for (const [table, cols] of Object.entries(additions)) {
     let existing;

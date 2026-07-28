@@ -40,6 +40,20 @@ const automationTools = [
           description: 'For kind="weekly", which day.',
         },
         date: { type: 'string', description: 'For kind="once", the date as YYYY-MM-DD.' },
+        anchor: {
+          type: 'string',
+          enum: ['usual_finish'],
+          description:
+            'Set this ONLY when the fire time should track a LEARNED behaviour rather than a fixed clock time — e.g. ' +
+            '"remind me before I usually leave for home", "traffic update before I usually finish work". ' +
+            'Use "usual_finish" for those: the system then keeps the time in sync with when the user actually finishes ' +
+            'work (learned from their clock-outs), so it self-adjusts if their routine drifts. Leave it out for a fixed ' +
+            'time like "every day at 7am".',
+        },
+        lead_minutes: {
+          type: 'number',
+          description: 'With anchor="usual_finish": how many minutes BEFORE the usual finish to fire (e.g. 25). Default 20 if omitted.',
+        },
       },
       required: ['instruction', 'time', 'kind'],
     },

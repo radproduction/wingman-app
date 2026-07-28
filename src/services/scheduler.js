@@ -59,6 +59,9 @@ async function runBriefingTick(now = new Date()) {
     // to days that actually have something time-sensitive.
     await require('./proactiveBrain').runDueUsers({ now });
     // Standing instructions the user set up ("every morning send me traffic").
+    // Retune behaviour-anchored ones (e.g. "before I usually leave") FIRST so
+    // today's fire uses the freshly-learned time, then sweep and fire.
+    await require('./automations').retuneAnchored({ now });
     await require('./automations').runDueUsers({ now, windowMin: 15 });
   } catch (err) {
     console.warn('[scheduler] briefing tick error:', err.message);

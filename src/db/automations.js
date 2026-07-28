@@ -11,11 +11,11 @@ const { db, uuid } = require('./index');
  * fires, so anything Wingman can do can be scheduled without a bespoke rule.
  */
 
-function create(userId, { instruction, time, kind = 'daily', weekday = null, runDate = null, timezone }) {
+function create(userId, { instruction, time, kind = 'daily', weekday = null, runDate = null, timezone, anchor = null, leadMinutes = null }) {
   const id = uuid();
   db.prepare(`
-    INSERT INTO automations (id, user_id, instruction, time, kind, weekday, run_date, timezone)
-    VALUES (@id, @user_id, @instruction, @time, @kind, @weekday, @run_date, @timezone)
+    INSERT INTO automations (id, user_id, instruction, time, kind, weekday, run_date, timezone, anchor, lead_minutes)
+    VALUES (@id, @user_id, @instruction, @time, @kind, @weekday, @run_date, @timezone, @anchor, @lead_minutes)
   `).run({
     id,
     user_id: userId,
@@ -25,6 +25,8 @@ function create(userId, { instruction, time, kind = 'daily', weekday = null, run
     weekday: weekday == null ? null : Number(weekday),
     run_date: runDate || null,
     timezone: timezone || null,
+    anchor: anchor || null,
+    lead_minutes: leadMinutes == null ? null : Number(leadMinutes),
   });
   return getById(id);
 }
@@ -45,8 +47,18 @@ function listAllActive() {
   return db.prepare('SELECT * FROM automations WHERE active = 1').all();
 }
 
+/** Active automations whose fire time tracks a learned behaviour (for retuning). */
+function listAnchored() {
+  return db.prepare("SELECT * FROM automations WHERE active = 1 AND anchor IS NOT NULL AND anchor != ''").all();
+}
+
 function markRun(id, localDay) {
   db.prepare('UPDATE automations SET last_run_date = ? WHERE id = ?').run(localDay, id);
+}
+
+/** Update only the fire time (used by the anchor retuner). */
+function updateTime(id, time) {
+  db.prepare('UPDATE automations SET time = ? WHERE id = ?').run(time, id);
 }
 
 function deactivate(id) {
@@ -61,4 +73,4 @@ function cancelForUser(userId, id) {
   return true;
 }
 
-module.exports = { create, getById, listForUser, listAllActive, markRun, deactivate, cancelForUser };
+module.exports = { create, getById, listForUser, listAllActive, listAnchored, markRun, updateTime, deactivate, cancelForUser };

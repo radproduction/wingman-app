@@ -208,7 +208,7 @@ STARTING POINT — default to where they are NOW:
 - If a tool returns {"error":"CURRENT_LOCATION_UNKNOWN"}, it means the app hasn't captured their location yet. Say so and offer two ways: open the Wingman app once (it will pick up their location), or share their live location here on WhatsApp. Do NOT silently fall back to home — that could send them the wrong route.
 - Only default \`from\` to "home"/"office" when they clearly mean it (e.g. "how long from home to the office?").
 
-"Remind me with a traffic update before I usually leave for home" and similar standing requests → this is an AUTOMATION (create_automation), not a one-off. The instruction to your future self should be "get the driving time from the user's current location to home with live traffic and send it". For the time, use ~20–30 minutes before their usual finish — from their work hours in the context above, or what you know of their routine; if you truly don't know, ask once what time they usually leave.
+"Remind me with a traffic update before I usually leave for home" and similar standing requests → this is an AUTOMATION (create_automation), not a one-off. The instruction to your future self should be "get the driving time from the user's current location to home with live traffic and send it". Because the time depends on when they usually finish, set anchor="usual_finish" and lead_minutes (≈20–30) — the system then keeps the fire time in sync with their real finish as it drifts, so you never have to redo it. For the initial \`time\`, use their "Usual finish (learned…)" from the context above minus the lead; if that says "(not enough data yet)", fall back to their work hours, or ask once what time they usually leave. (Only anchor to usual_finish when the request is genuinely tied to their finishing/leaving — a plain "at 7am" stays a fixed time.)
 
 Shared location pins: when someone forwards a location, it arrives as "[Shared location] <name> (coordinates: lat,lng)". Use those coordinates verbatim as the destination — do NOT try to re-guess the address. Then proactively offer the journey time and, if they have a meeting there, the leave-by time.
 
@@ -310,6 +310,19 @@ Tone: ${toneMap[tone] || toneMap.friendly}
 Communication style: ${styleMap[style] || styleMap.concise}
 Match this tone and style in every reply, overriding the default tone above where they differ.`;
 
+  // When Wingman has enough real clock-in/out history, it knows roughly when the
+  // user actually finishes — learned from behaviour, not the configured hours.
+  // Surfaced here so time-anchored automations ("before I usually leave") use it.
+  let learnedFinish = null;
+  try {
+    const mins = require('../db/workSessions').typicalEndMinutes(user.id, { timezone: tz });
+    if (mins != null) {
+      const h = Math.floor(mins / 60) % 24;
+      const m = mins % 60;
+      learnedFinish = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    }
+  } catch (_) { /* no clock data yet — fall back to configured hours */ }
+
   const ctx = `
 
 --- USER CONTEXT ---
@@ -317,6 +330,7 @@ First name: ${firstName}
 Timezone: ${tz}
 Current local time: ${nowLocal}
 Work hours: ${user.work_hours_start || '?'}–${user.work_hours_end || '?'}
+Usual finish (learned from actual clock-outs): ${learnedFinish || '(not enough data yet)'}
 Language preference: ${user.language || 'en'}
 Google Calendar connected: ${connected ? 'yes' : 'no'}
 Home address: ${user.home_address || '(not set)'}

@@ -67,6 +67,52 @@ async function fire(a, { now = new Date(), send = true } = {}) {
   return { sent: message };
 }
 
+/** Minutes-past-midnight → "HH:MM" (24h, wraps within a day). */
+function minutesToHHMM(mins) {
+  const m = ((Math.round(mins) % 1440) + 1440) % 1440;
+  const h = Math.floor(m / 60);
+  return `${String(h).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+}
+
+/**
+ * Keep behaviour-anchored automations in sync with what they track. Right now the
+ * only anchor is 'usual_finish' — the time is recomputed as (learned finish −
+ * lead_minutes) so a "traffic update before I usually leave" reminder self-adjusts
+ * as the user's real finishing time drifts, with no need to re-ask.
+ *
+ * Deliberately conservative and safe to run every tick:
+ *   - fixed-time automations (anchor null) are NEVER touched;
+ *   - if there isn't enough clock data yet, the current time is left as-is;
+ *   - it only writes when the time actually changed.
+ */
+async function retuneAnchored({ now = new Date() } = {}) {
+  const sessions = require('../db/workSessions');
+  const anchored = automationsRepo.listAnchored();
+  let changed = 0;
+  for (const a of anchored) {
+    try {
+      if (a.anchor !== 'usual_finish') continue;
+      const user = usersRepo.getById(a.user_id);
+      if (!user) continue;
+      const tz = a.timezone || user.timezone || 'Asia/Karachi';
+      const weekday = a.kind === 'weekly' && a.weekday != null ? Number(a.weekday) : null;
+      const end = sessions.typicalEndMinutes(a.user_id, { timezone: tz, weekday });
+      if (end == null) continue;                       // not enough data — leave as-is
+      const lead = a.lead_minutes == null ? 20 : Number(a.lead_minutes);
+      const target = minutesToHHMM(end - lead);
+      if (target !== a.time) {
+        automationsRepo.updateTime(a.id, target);
+        changed++;
+        console.log(`[automations] retuned ${a.id}: ${a.time} → ${target} (usual finish ${minutesToHHMM(end)} − ${lead}m)`);
+      }
+    } catch (err) {
+      console.warn('[automations] retune failed for', a.id, err.message);
+    }
+  }
+  if (changed) console.log('[automations] retuned', changed, 'anchored automation(s)');
+  return { changed };
+}
+
 /** Sweep all active automations and fire those that are due. */
 async function runDueUsers({ now = new Date(), windowMin = 15, send = true } = {}) {
   const all = automationsRepo.listAllActive();
@@ -84,4 +130,4 @@ async function runDueUsers({ now = new Date(), windowMin = 15, send = true } = {
   return results;
 }
 
-module.exports = { isDue, fire, runDueUsers, localWeekday };
+module.exports = { isDue, fire, runDueUsers, retuneAnchored, localWeekday };
