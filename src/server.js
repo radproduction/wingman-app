@@ -423,6 +423,36 @@ app.post('/webhook', (req, res) => {
         const phoneNumber = String(m.from || '').replace(/[^0-9]/g, '');
         if (!phoneNumber) continue;
 
+        // Quick-reply button on a TEMPLATE (e.g. dormant user tapping "Show my
+        // briefing"). The tap itself opens the 24h window, so we log it as an
+        // inbound message and then send the FULL rich free-form briefing/wrap —
+        // which now delivers because the window is open. This is how a dormant
+        // user receives the complete version (news + health + formatting) that a
+        // template variable could never carry.
+        if (m.type === 'button') {
+          const payload = (m.button && (m.button.payload || m.button.text)) || '';
+          const usersRepo = require('./db/users');
+          const u = usersRepo.getByPhone(phoneNumber);
+          if (!u || !usersRepo.isOnboarded(u)) {
+            console.log(`[webhook] -- (${phoneNumber}) button tap [unregistered, silent]`);
+            continue;
+          }
+          // Record the tap so the customer-service window is open for the send.
+          try {
+            conversations.logInbound({ userId: u.id, content: payload || '[button tap]', phoneNumber, waMessageId: m.id });
+          } catch (_) { /* non-fatal */ }
+          try {
+            const rich = /wrap/i.test(payload)
+              ? require('./services/endOfDayWrap')
+              : require('./services/morningBriefing');
+            await rich.sendForUser(u.id, { now: new Date() });
+            console.log(`[webhook] ▶ (${phoneNumber}) button "${payload}" → rich send`);
+          } catch (err) {
+            console.warn('[webhook] button rich send failed:', err.message);
+          }
+          continue;
+        }
+
         // Voice notes: transcribe first, then treat exactly like a typed
         // message — so every tool works by voice too.
         let wasVoice = false;

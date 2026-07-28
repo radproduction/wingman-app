@@ -76,6 +76,13 @@ const config = {
     // counts differ — they must never fall back to one another.
     briefingTemplate: process.env.BRIEFING_TEMPLATE_NAME || '',
     wrapTemplate: process.env.WRAP_TEMPLATE_NAME || '',
+    // "Ready nudge" template WITH a quick-reply button. Sent to dormant users
+    // (outside the 24h window) instead of the flattened content template: the
+    // user taps the button, which OPENS the window, and the webhook then sends
+    // the FULL rich free-form briefing/wrap (news + health + formatting). A
+    // template variable cannot carry newlines, so this button hop is the only
+    // way a dormant user receives the complete version. Empty → old behavior.
+    briefingReadyTemplate: process.env.BRIEFING_READY_TEMPLATE_NAME || '',
     proactiveTemplate: process.env.PROACTIVE_TEMPLATE_NAME || '',
     proactiveTemplateLang: process.env.PROACTIVE_TEMPLATE_LANG || 'en_US',
     proactiveUseTemplate: process.env.PROACTIVE_USE_TEMPLATE !== '0',

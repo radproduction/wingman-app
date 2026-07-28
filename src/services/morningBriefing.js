@@ -248,6 +248,10 @@ async function sendForUser(userId, { now = new Date(), send = true } = {}) {
           logLabel: 'briefing',
           templateName: require('../config').whatsappCloud.briefingTemplate,
           templateParams: templateParams(user, agg),
+          // Dormant users get a "tap to see it" nudge; the tap opens the window
+          // and the webhook re-sends this exact rich text free-form.
+          readyPayload: 'SHOW_BRIEFING',
+          readyParams: [user.name || 'there', 'morning briefing'],
         });
         sent = true;
       } else console.log('[morningBriefing] (WA not ready) briefing for', user.phone);

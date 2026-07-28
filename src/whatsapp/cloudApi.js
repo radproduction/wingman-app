@@ -162,11 +162,17 @@ function parseIncoming(body) {
         if (m.type === 'text') {
           out.push({ ...base, text: (m.text && m.text.body) || '' });
         } else if (m.type === 'interactive') {
-          // Button / list replies
+          // Button / list replies (session interactive messages)
           const ir = m.interactive || {};
-          const title = (ir.button_reply && ir.button_reply.title) ||
-                        (ir.list_reply && ir.list_reply.title) || '';
-          out.push({ ...base, text: title });
+          const br = ir.button_reply || ir.list_reply || {};
+          const title = br.title || '';
+          out.push({ ...base, button: { payload: br.id || '', text: title }, text: title });
+        } else if (m.type === 'button') {
+          // Quick-reply button on a TEMPLATE message (e.g. "Show my briefing").
+          // Tapping it counts as an inbound message, which opens the 24h window —
+          // the handler uses button.payload to send the full rich version back.
+          const b = m.button || {};
+          out.push({ ...base, button: { payload: b.payload || '', text: b.text || '' }, text: b.text || '' });
         } else if (m.type === 'audio' || m.type === 'voice') {
           // Voice note: carry the media id so the handler can fetch + transcribe it.
           const a = m.audio || m.voice || {};

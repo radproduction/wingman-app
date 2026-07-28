@@ -358,6 +358,9 @@ async function sendProactiveMessage(user, text, {
   templateLang = config.whatsappCloud.proactiveTemplateLang,
   useTemplate = config.whatsappCloud.proactiveUseTemplate,
   templateParams = null,
+  readyTemplate = config.whatsappCloud.briefingReadyTemplate, // nudge template WITH a quick-reply button
+  readyPayload = null,       // caller opts in by passing a button payload (e.g. 'SHOW_BRIEFING')
+  readyParams = null,        // body params for the nudge (e.g. [name, 'morning briefing'])
   logLabel = 'proactive',
 } = {}) {
   if (!user || !user.phone) throw new Error('user with phone is required');
@@ -370,6 +373,37 @@ async function sendProactiveMessage(user, text, {
   // Inside the 24h window a free-form message delivers (and is richer), so use it.
   if (isWithinCustomerWindow(user, now) || !useTemplate) {
     return sendMessage(digits, text);
+  }
+
+  // Outside the window, when a "ready nudge" template (with a quick-reply button)
+  // is configured AND the caller opts in with a payload, send the nudge instead
+  // of the flattened content template. The user taps the button → the 24h window
+  // opens → the webhook sends the FULL rich free-form version (news + health +
+  // formatting). A template variable can't carry newlines, so this button hop is
+  // the only way a dormant user gets the complete briefing/wrap. Falls through to
+  // the structured/flattened template below if the nudge send fails.
+  if (readyTemplate && readyPayload) {
+    const rp = (Array.isArray(readyParams) && readyParams.length) ? readyParams : [user.name || 'there'];
+    const comps = [
+      { type: 'body', parameters: rp.map((v) => ({ type: 'text', text: toTemplateParam(v) })) },
+      { type: 'button', sub_type: 'quick_reply', index: '0', parameters: [{ type: 'payload', payload: readyPayload }] },
+    ];
+    try {
+      const sent = await cloudApi.sendTemplate(digits, readyTemplate, templateLang, comps);
+      conversations.logOutbound({
+        userId: user.id,
+        waMessageId: sent && sent.messages && sent.messages[0] ? sent.messages[0].id : null,
+        chatId: `${digits}@c.us`,
+        phoneNumber: digits,
+        content: text,
+        mediaType: 'template',
+      });
+      console.log(`[whatsapp:cloud] >> ${logLabel} ready-nudge (${readyTemplate}) to ${digits}`);
+      return sent;
+    } catch (err) {
+      console.warn(`[whatsapp:cloud] ready-nudge ${readyTemplate} failed (${err.message}); falling back to content template`);
+      // fall through to the structured/flattened template below
+    }
   }
 
   // Outside the window ONLY an approved template delivers (Meta 131047 otherwise).

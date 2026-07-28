@@ -143,6 +143,10 @@ async function sendForUser(userId, { now = new Date(), send = true } = {}) {
           logLabel: 'wrap',
           templateName: require('../config').whatsappCloud.wrapTemplate,
           templateParams: templateParams(user, agg),
+          // Dormant users get a "tap to see it" nudge; the tap opens the window
+          // and the webhook re-sends this exact rich wrap free-form.
+          readyPayload: 'SHOW_WRAP',
+          readyParams: [user.name || 'there', "day's wrap"],
         });
         sent = true;
       }
