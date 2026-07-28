@@ -96,6 +96,43 @@ app.get('/_diag/template', async (req, res) => {
   }
 });
 
+// ─── TEMPORARY diagnostic: the "tap to open" briefing nudge ─────────
+//   Sends the wingman_briefing_ready template (with its quick-reply button) on
+//   demand, so the whole flow can be tested WITHOUT waiting for a user to be
+//   dormant 24h. Tap the button on the phone → the real /webhook fires → it
+//   sends the full rich free-form briefing/wrap. Gated by ADMIN_PASSWORD.
+app.get('/_diag/ready-nudge', async (req, res) => {
+  const admin = process.env.ADMIN_PASSWORD;
+  if (admin && req.query.key !== admin) return res.status(403).json({ error: 'forbidden' });
+
+  const digits = String(req.query.phone || '').replace(/[^0-9]/g, '');
+  if (!digits) return res.status(400).json({ error: 'pass ?phone=<digits>&which=briefing|wrap' });
+  const which = String(req.query.which || 'briefing');
+
+  const config = require('./config');
+  const cloudApi = require('./whatsapp/cloudApi');
+  const usersRepo = require('./db/users');
+  const cfg = config.whatsappCloud;
+
+  const name = cfg.briefingReadyTemplate;
+  if (!name) return res.status(400).json({ error: 'set BRIEFING_READY_TEMPLATE_NAME first' });
+
+  const user = usersRepo.getByPhone(digits) || usersRepo.getByPhone(`+${digits}`);
+  const who = (user && user.name) || 'there';
+  const payload = which === 'wrap' ? 'SHOW_WRAP' : 'SHOW_BRIEFING';
+  const label = which === 'wrap' ? "day's wrap" : 'morning briefing';
+
+  try {
+    const sent = await cloudApi.sendTemplate(digits, name, cfg.proactiveTemplateLang, [
+      { type: 'body', parameters: [{ type: 'text', text: who }, { type: 'text', text: label }] },
+      { type: 'button', sub_type: 'quick_reply', index: '0', parameters: [{ type: 'payload', payload }] },
+    ]);
+    res.json({ ok: true, which, template: name, payload, hint: 'Now tap the button on WhatsApp — the full rich briefing should follow.', messageId: sent && sent.messages && sent.messages[0] && sent.messages[0].id });
+  } catch (err) {
+    res.json({ ok: false, which, template: name, error: err.message });
+  }
+});
+
 // ─── TEMPORARY diagnostic ───────────────────────────────────────────
 //   Reports this server's outbound IP and whether it can actually reach a
 //   mail host from Railway — used to prove a datacenter-IP firewall block on
