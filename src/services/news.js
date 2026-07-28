@@ -62,7 +62,23 @@ function localeFor(user) {
 // about the town their family is in, or the one they are flying to next week.
 const MAX_CITIES = 5;
 
-/** Every city the user follows. Always a list; falls back to their timezone. */
+/**
+ * The city the user is physically in right now, from their app-captured location.
+ * The stored label is "Area, City" (reverse-geocoded), so the city is the last
+ * segment. Null until the app has captured a location. This is what makes local
+ * news follow the user — when they travel, they get news for where they are.
+ */
+function currentCity(user) {
+  const label = String((user && user.current_location_label) || '').trim();
+  if (!label) return null;
+  const parts = label.split(',').map((s) => s.trim()).filter(Boolean);
+  return parts.length ? parts[parts.length - 1] : null;
+}
+
+/**
+ * Every city the user follows, LED BY where they currently are so local news is
+ * mapped to their real location. Always a list; falls back to their timezone.
+ */
 function citiesFor(user) {
   let list = user && user.news_city;
   if (typeof list === 'string') {
@@ -71,10 +87,18 @@ function citiesFor(user) {
   }
   if (!Array.isArray(list)) list = list ? [list] : [];
 
-  const clean = list
+  const followed = list
     .map((c) => String(c || '').trim())
-    .filter(Boolean)
-    .slice(0, MAX_CITIES);
+    .filter(Boolean);
+
+  // Put the user's current location first (deduped), then the cities they follow.
+  const here = currentCity(user);
+  const merged = [];
+  if (here) merged.push(here);
+  for (const c of followed) {
+    if (!merged.some((m) => m.toLowerCase() === c.toLowerCase())) merged.push(c);
+  }
+  const clean = merged.slice(0, MAX_CITIES);
 
   if (clean.length) return clean;
   const fallback = defaultsForTz((user && user.timezone) || 'Asia/Karachi').city;
@@ -221,6 +245,6 @@ function formatBulletin(bul, { perTopic = 2 } = {}) {
 
 module.exports = {
   ALL_TOPICS, DEFAULT_TOPICS, TOPIC_LABELS, TOPIC_SECTIONS,
-  topicsFor, cityFor, citiesFor, headlinesForCity, localeFor, defaultsForTz,
+  topicsFor, cityFor, citiesFor, currentCity, headlinesForCity, localeFor, defaultsForTz,
   headlines, bulletin, formatBulletin, parseFeed,
 };

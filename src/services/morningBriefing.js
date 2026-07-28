@@ -34,9 +34,14 @@ async function aggregate(user, now = new Date()) {
 
   const events = calendarEventsRepo.listStartingBetween(user.id, todayStart, tomorrowStart);
 
-  // Emails in the last 24h
+  // Emails in the last 24h — ONLY when a mailbox is actually connected. After a
+  // user disconnects their email, its data must stop appearing in updates; with
+  // multiple mailboxes connected, the counts naturally cover all of them.
+  const emailConnected = require('../auth/googleAuth').isEmailConnected(user);
   const since24 = new Date(now.getTime() - 24 * 3600 * 1000).toISOString();
-  const emailCounts = emailItemsRepo.countsSince(user.id, since24);
+  const emailCounts = emailConnected
+    ? emailItemsRepo.countsSince(user.id, since24)
+    : { urgent: 0, needsReply: 0 };
 
   const tasksDue = tasksRepo.listDueBetween(user.id, todayStart, tomorrowStart);
 
@@ -59,7 +64,7 @@ async function aggregate(user, now = new Date()) {
   }
 
   return {
-    tz, weather: w, events, emailCounts, tasksDue, bills, deliveries, health,
+    tz, weather: w, events, emailConnected, emailCounts, tasksDue, bills, deliveries, health,
     healthLine: (() => { try { return require('./health').summaryLine(user.id); } catch (_) { return null; } })(),
     news: newsBulletin,
     todayStart, tomorrowStart,
@@ -92,9 +97,11 @@ function format(user, agg) {
   }
   lines.push('');
 
-  // Email
-  lines.push(`\ud83d\udce7 Email: ${agg.emailCounts.urgent} urgent, ${agg.emailCounts.needsReply} need reply`);
-  lines.push('');
+  // Email \u2014 only when a mailbox is connected (no email data once disconnected).
+  if (agg.emailConnected) {
+    lines.push(`\ud83d\udce7 Email: ${agg.emailCounts.urgent} urgent, ${agg.emailCounts.needsReply} need reply`);
+    lines.push('');
+  }
 
   // Tasks
   lines.push(`\u2705 *Tasks Due Today:*`);
@@ -176,7 +183,9 @@ function templateParams(user, agg) {
     }))
     : 'No meetings — open runway for deep work';
 
-  const email = `${agg.emailCounts.urgent} urgent, ${agg.emailCounts.needsReply} need reply`;
+  const email = agg.emailConnected
+    ? `${agg.emailCounts.urgent} urgent, ${agg.emailCounts.needsReply} need reply`
+    : 'No mailbox connected';
 
   const tasks = agg.tasksDue.length
     ? join(agg.tasksDue.map((x) => x.title))

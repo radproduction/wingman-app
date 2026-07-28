@@ -25,8 +25,11 @@ function aggregate(user, now = new Date()) {
   const completedTasks = completedToday; // "completed today" per spec
   const incomplete = tasksRepo.listForUser(user.id, { includeCompleted: false });
 
-  const repliedEmails = emailItemsRepo.countReplied(user.id);
-  const pendingEmails = emailItemsRepo.countPending(user.id);
+  // Email figures only when a mailbox is connected — once the user disconnects
+  // their email, its data must not surface in the wrap either.
+  const emailConnected = require('../auth/googleAuth').isEmailConnected(user);
+  const repliedEmails = emailConnected ? emailItemsRepo.countReplied(user.id) : 0;
+  const pendingEmails = emailConnected ? emailItemsRepo.countPending(user.id) : 0;
 
   // Meetings today (attended = happened before now today)
   const todaysEvents = calendarEventsRepo.listStartingBetween(user.id, todayStart, tomorrowStart);
@@ -44,7 +47,7 @@ function aggregate(user, now = new Date()) {
 
   return {
     tz, totalTasks, completedTasks, incomplete,
-    repliedEmails, pendingEmails,
+    emailConnected, repliedEmails, pendingEmails,
     meetingsAttended: todaysEvents.length,
     tomorrowEvents, billsTomorrow, openFollowups, tomorrowDate,
   };
@@ -57,7 +60,9 @@ function format(user, agg) {
   lines.push(`That's a wrap, ${name}! \ud83c\udf19`);
   lines.push('');
   lines.push(`\u2705 Completed: ${agg.completedTasks}/${agg.totalTasks} tasks`);
-  lines.push(`\ud83d\udce7 Emails handled: replied to ${agg.repliedEmails}, ${agg.pendingEmails} still pending`);
+  if (agg.emailConnected) {
+    lines.push(`\ud83d\udce7 Emails handled: replied to ${agg.repliedEmails}, ${agg.pendingEmails} still pending`);
+  }
   lines.push(`\ud83d\udcc5 Meetings attended: ${agg.meetingsAttended}`);
   lines.push('');
 
@@ -118,7 +123,7 @@ function templateParams(user, agg) {
   return [
     `That's a wrap, ${user.name || 'there'}!`,
     `${agg.completedTasks}/${agg.totalTasks} tasks`,
-    `replied to ${agg.repliedEmails}, ${agg.pendingEmails} still pending`,
+    agg.emailConnected ? `replied to ${agg.repliedEmails}, ${agg.pendingEmails} still pending` : 'No mailbox connected',
     String(agg.meetingsAttended),
     pending.length ? join(pending) : 'Nothing left over',
     join(tomorrow),
