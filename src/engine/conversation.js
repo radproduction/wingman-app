@@ -24,6 +24,8 @@ const { workTools, workToolNames } = require('./workTools');
 const { executeWorkTool } = require('./workExecutor');
 const { automationTools, automationToolNames } = require('./automationTools');
 const { executeAutomationTool } = require('./automationExecutor');
+const { agentTools, agentToolNames } = require('./agentTools');
+const { executeAgentTool } = require('./agentExecutor');
 const { executeVoiceTool } = require('./voiceExecutor');
 const { executeWebmailTool } = require('./webmailExecutor');
 const { executeMapsTool } = require('./mapsExecutor');
@@ -273,6 +275,7 @@ async function runToolLoop(user, messages, system, maxRounds = 4) {
         ...healthTools,
         ...workTools,
         ...automationTools,
+        ...agentTools,
       ],
       maxTokens: 1024,
     });
@@ -309,6 +312,8 @@ async function runToolLoop(user, messages, system, maxRounds = 4) {
           result = await executeWorkTool(user, { name: block.name, input: block.input });
         } else if (automationToolNames.has(block.name)) {
           result = await executeAutomationTool(user, { name: block.name, input: block.input });
+        } else if (agentToolNames.has(block.name)) {
+          result = await executeAgentTool(user, { name: block.name, input: block.input });
         } else {
           result = await executeCalendarTool(user, { name: block.name, input: block.input });
         }
