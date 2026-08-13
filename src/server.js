@@ -138,33 +138,6 @@ app.get('/_diag/ready-nudge', async (req, res) => {
 //   mail host from Railway — used to prove a datacenter-IP firewall block on
 //   shared hosting. Guarded by ADMIN_PASSWORD and refuses private targets so
 //   it can't be used as an internal port scanner. Remove once webmail works.
-
-// ─── TEMPORARY: consistent DB snapshot for the Railway→droplet migration ──
-//   Streams a point-in-time SQLite backup (safe even under WAL — no torn copy).
-//   Gated by ADMIN_PASSWORD. REMOVE right after the one-time migration.
-app.get('/_diag/db-export', async (req, res) => {
-  const admin = process.env.ADMIN_PASSWORD;
-  if (admin && req.query.key !== admin) return res.status(403).json({ error: 'forbidden' });
-  const { db } = require('./db');
-  const fs = require('fs');
-  const os = require('os');
-  const path = require('path');
-  const tmp = path.join(os.tmpdir(), `wingman-snapshot-${process.pid}.db`);
-  const cleanup = () => { try { fs.unlinkSync(tmp); } catch (_) {} };
-  try {
-    await db.backup(tmp);                       // consistent snapshot of the live DB
-    res.setHeader('Content-Type', 'application/octet-stream');
-    res.setHeader('Content-Disposition', 'attachment; filename="wingman.db"');
-    const stream = fs.createReadStream(tmp);
-    stream.on('close', cleanup);
-    stream.on('error', () => { cleanup(); if (!res.headersSent) res.status(500).end(); });
-    stream.pipe(res);
-  } catch (err) {
-    cleanup();
-    if (!res.headersSent) res.status(500).json({ error: err.message });
-  }
-});
-
 app.get('/_diag/net', async (req, res) => {
   const admin = process.env.ADMIN_PASSWORD;
   if (admin && req.query.key !== admin) return res.status(403).json({ error: 'forbidden' });
