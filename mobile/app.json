@@ -1,0 +1,26 @@
+{
+  "expo": {
+    "name": "Wingman",
+    "slug": "wingman",
+    "scheme": "wingman",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "jsEngine": "hermes",
+    "backgroundColor": "#f0eee8",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "ai.imyourwingman.app",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "ai.imyourwingman.app"
+    },
+    "extra": {
+      "apiBaseUrl": "https://imyourwingman.ai"
+    }
+  }
+}
