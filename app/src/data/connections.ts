@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import { connectors as seed, type Connector, type ConnectorStatus } from './mock'
+import { api } from './api'
 
 type Overrides = Record<string, boolean>
 
@@ -66,3 +67,22 @@ const snapshot = () => {
 }
 
 export const useConnections = () => useSyncExternalStore(subscribe, snapshot)
+
+/**
+ * Reflect the REAL connection state from the backend (/api/me): Gmail, Google
+ * Calendar and Health. These override the seed's optimistic "connected", so a
+ * connector only shows connected when the OAuth actually happened. Best-effort.
+ */
+export const hydrateConnections = async (): Promise<void> => {
+  try {
+    const me = (await api.me()) as Record<string, unknown>
+    write({
+      ...current,
+      gmail: !!me.gmail_connected,
+      gcal: !!me.calendar_connected,
+      health: !!me.health_connected,
+    })
+  } catch {
+    /* keep what we have */
+  }
+}

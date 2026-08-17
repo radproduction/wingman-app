@@ -68,6 +68,7 @@ import { useNavRoute, replaceRoute, type NavDir } from './shell/nav'
 import { useSession, completeOnboarding } from './data/session'
 import { hydrateProfile } from './data/store'
 import { hydrateTasks } from './data/tasks'
+import { hydrateConnections } from './data/connections'
 import { useDragScroll } from './shell/useDragScroll'
 import { installTapFeedback } from './shell/feedback'
 import './picker.css'
@@ -215,6 +216,7 @@ const App = () => {
     if (signedIn) {
       void hydrateProfile()
       void hydrateTasks()
+      void hydrateConnections()
     }
   }, [signedIn])
 
