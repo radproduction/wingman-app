@@ -131,7 +131,7 @@ export const Onboarding = ({ onDone }: { onDone: () => void }) => {
   const ob = useOnboarding()
   const {
     state, set, go, toggleSkill, toggleInterest, connect, fullPhone, phoneValid, codeComplete, nameValid, preview,
-    busy, sendCode, verifyCode, finish,
+    busy, sendCode, verifyCode, finish, openConnect, refreshConnections,
   } = ob
   const { msg, show, toast } = useToast()
   const resend = useResendTimer(state.screen === 'verify')
@@ -145,6 +145,15 @@ export const Onboarding = ({ onDone }: { onDone: () => void }) => {
     const input = rootRef.current?.querySelector<HTMLInputElement>('input:not([type="time"])')
     input?.focus({ preventScroll: true })
   }, [state.screen])
+
+  // Returning from a Google OAuth tab (window regains focus) → refresh the real
+  // connection state so a button only turns green once it actually connected.
+  useEffect(() => {
+    const onFocus = () => void refreshConnections()
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const onPaneScroll = () => {
     const el = panesRef.current
@@ -693,8 +702,8 @@ export const Onboarding = ({ onDone }: { onDone: () => void }) => {
                     <button
                       className="st"
                       onClick={() => {
-                        connect(name)
-                        toast(t('{service} connected', { service: name }))
+                        openConnect(name)
+                        toast(t('Opening {service} — finish there, then come back', { service: name }))
                       }}
                     >
                       {t('Connect')}

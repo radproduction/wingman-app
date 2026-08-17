@@ -103,6 +103,21 @@ export const api = {
   followups: () => get<{ followups: unknown[]; mock?: boolean }>('/followups'),
   briefings: () => get<{ briefings: unknown[]; mock?: boolean }>('/briefings'),
 
+  // ── Connections ──
+  // One Google consent connects Calendar + Gmail + Tasks + Drive together
+  // (the backend's combined scopes). The flow is keyed by phone.
+  googleConnectUrl: (phone: string) =>
+    `${BASE}/auth/google?phone=${encodeURIComponent(phone.replace(/\D/g, ''))}`,
+  // Real connection state, read from /me.
+  connections: async () => {
+    const me = await get<Record<string, unknown>>('/me')
+    return {
+      calendar: !!me.calendar_connected,
+      gmail: !!me.gmail_connected,
+      health: !!me.health_connected,
+    }
+  },
+
   // ── Places (home / office — separate from the settings allow-list) ──
   savePlace: (which: 'home' | 'office', address: string) =>
     req<{ saved: boolean; which: string; address: string }>('POST', '/places', { which, address }),

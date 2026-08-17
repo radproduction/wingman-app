@@ -269,10 +269,36 @@ export function useOnboarding() {
     }
   }
 
+  // Start a REAL connection. Google (Calendar/Gmail) opens the backend OAuth in
+  // a new tab — one consent connects Calendar + Gmail + Tasks + Drive together.
+  // Health/Shopify keep the local mark for now (wired in the connections step).
+  const openConnect = (service: string) => {
+    if (service === 'Google Calendar' || service === 'Gmail') {
+      window.open(api.googleConnectUrl(phoneE164()), '_blank', 'noopener,noreferrer')
+      return
+    }
+    connect(service)
+  }
+
+  // Pull the REAL connection state from the backend and reflect it in the flow,
+  // so a button only shows "Connected" once the OAuth actually completed.
+  const refreshConnections = async () => {
+    try {
+      const c = await api.connections()
+      const now: string[] = []
+      if (c.calendar) now.push('Google Calendar')
+      if (c.gmail) now.push('Gmail')
+      if (c.health) now.push('Apple Health & Google Fit')
+      if (now.length) setState((s) => ({ ...s, connected: [...new Set([...s.connected, ...now])] }))
+    } catch {
+      /* ignore */
+    }
+  }
+
   return {
     state, set, go, toggleSkill, toggleInterest, connect,
     fullPhone, phoneValid, codeComplete, nameValid, preview,
-    busy, sendCode, verifyCode, finish,
+    busy, sendCode, verifyCode, finish, openConnect, refreshConnections,
   }
 }
 
