@@ -195,18 +195,35 @@ export function useOnboarding() {
     }
   }
 
-  // Verify the code. On success the token is stored; `onboarded` says whether
-  // this is a returning user who can skip straight into the app.
-  const verifyCode = async (): Promise<{ error: string | null; onboarded: boolean }> => {
+  const cap = (v: unknown): string =>
+    typeof v === 'string' && v ? v.charAt(0).toUpperCase() + v.slice(1) : ''
+
+  // Verify the code (stores the token) and PREFILL the flow with whatever the
+  // backend already knows, so onboarding always runs but is never a blank form
+  // for someone who has been here before. Returns an error message or null.
+  const verifyCode = async (): Promise<string | null> => {
     setBusy(true)
     try {
       const res = await api.verifyOtp(phoneE164(), state.code.join(''))
-      const u = res.user as { onboarding_complete?: boolean | number; name?: string } | null
-      if (u?.name && !state.name.trim()) set('name', u.name)
-      const onboarded = !!(u && (u.onboarding_complete === true || u.onboarding_complete === 1))
-      return { error: null, onboarded }
+      const u = res.user as Record<string, unknown> | null
+      if (u) {
+        setState((s) => ({
+          ...s,
+          name: (u.name as string) || s.name,
+          tz: (u.timezone as string) || s.tz,
+          times: {
+            brief: (u.briefing_time as string) || s.times.brief,
+            start: (u.work_hours_start as string) || s.times.start,
+            end: (u.work_hours_end as string) || s.times.end,
+            wrap: (u.debrief_time as string) || s.times.wrap,
+          },
+          proactivity: cap(u.proactiveness_level) || s.proactivity,
+          tone: cap(u.tone) || s.tone,
+        }))
+      }
+      return null
     } catch (e) {
-      return { error: e instanceof ApiError ? e.message : 'That code did not work.', onboarded: false }
+      return e instanceof ApiError ? e.message : 'That code did not work.'
     } finally {
       setBusy(false)
     }

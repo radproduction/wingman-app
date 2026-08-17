@@ -246,10 +246,9 @@ export const Onboarding = ({ onDone }: { onDone: () => void }) => {
           body={t('Sent on WhatsApp to {phone}.', { phone: fullPhone })}
           back={() => go('phone')}
           next={async () => {
-            const r = await verifyCode()
-            if (r.error) toast(r.error)
-            else if (r.onboarded) onDone() // returning user — skip the rest, go in
-            else go('name')
+            const err = await verifyCode()
+            if (err) toast(err)
+            else go('name') // always walk the onboarding; fields come prefilled
           }}
           nextDisabled={!codeComplete || busy}
         >
