@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import { isSignedIn, setToken } from './api'
 
 export type Session = { onboarded: boolean; signedIn: boolean }
 
@@ -9,7 +10,9 @@ const FRESH: Session = { onboarded: false, signedIn: false }
 const read = (): Session => {
   try {
     const raw = localStorage.getItem(KEY)
-    return raw ? { ...FRESH, ...JSON.parse(raw) } : FRESH
+    const s = raw ? { ...FRESH, ...(JSON.parse(raw) as Partial<Session>) } : FRESH
+    // A stored auth token means we're signed in, even on a fresh load.
+    return { ...s, signedIn: s.signedIn || isSignedIn() }
   } catch {
     return FRESH
   }
@@ -40,6 +43,9 @@ export const completeOnboarding = () => write({ onboarded: true, signedIn: true 
 
 export const signIn = () => write({ signedIn: true })
 
-export const signOut = () => write({ signedIn: false })
+export const signOut = () => {
+  setToken(null)
+  write({ signedIn: false })
+}
 
 export const startFresh = () => write({ onboarded: false, signedIn: false })

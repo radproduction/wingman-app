@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { IconName } from '../app/icons'
+import { api, ApiError } from '../data/api'
 
 export type Screen =
   | 'splash'
@@ -174,7 +175,72 @@ export function useOnboarding() {
   const nameValid = state.name.trim().length >= 2
   const preview = VOICE_PREVIEW[`${state.tone}|${state.detail}`]
 
-  return { state, set, go, toggleSkill, toggleInterest, connect, fullPhone, phoneValid, codeComplete, nameValid, preview }
+  // ── Real auth against the Wingman backend (via src/data/api) ──────────
+  const [busy, setBusy] = useState(false)
+
+  // E.164 digits: country code + number, minus a stray leading zero.
+  const phoneE164 = () =>
+    state.cc.replace(/\D/g, '') + state.phone.replace(/\D/g, '').replace(/^0+/, '')
+
+  // Ask the backend to send the WhatsApp OTP. Returns an error message or null.
+  const sendCode = async (): Promise<string | null> => {
+    setBusy(true)
+    try {
+      await api.requestOtp(phoneE164())
+      return null
+    } catch (e) {
+      return e instanceof ApiError ? e.message : 'Could not send the code. Check the number.'
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // Verify the code. On success the token is stored; `onboarded` says whether
+  // this is a returning user who can skip straight into the app.
+  const verifyCode = async (): Promise<{ error: string | null; onboarded: boolean }> => {
+    setBusy(true)
+    try {
+      const res = await api.verifyOtp(phoneE164(), state.code.join(''))
+      const u = res.user as { onboarding_complete?: boolean | number; name?: string } | null
+      if (u?.name && !state.name.trim()) set('name', u.name)
+      const onboarded = !!(u && (u.onboarding_complete === true || u.onboarding_complete === 1))
+      return { error: null, onboarded }
+    } catch (e) {
+      return { error: e instanceof ApiError ? e.message : 'That code did not work.', onboarded: false }
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // Save the profile the onboarding collected. Best-effort — a hiccup here must
+  // never trap the user on the last screen.
+  const finish = async (): Promise<void> => {
+    const patch: Record<string, unknown> = {
+      name: state.name.trim(),
+      timezone: state.tz,
+      briefing_time: state.times.brief,
+      debrief_time: state.times.wrap,
+      work_hours_start: state.times.start,
+      work_hours_end: state.times.end,
+      tone: state.tone.toLowerCase(),
+      communication_style: state.detail.toLowerCase(),
+      proactiveness_level: state.proactivity.toLowerCase(),
+      news_topics: state.interests,
+    }
+    if (state.places.home.trim()) patch.home_address = state.places.home.trim()
+    if (state.places.office.trim()) patch.office_address = state.places.office.trim()
+    try {
+      await api.completeOnboarding(patch)
+    } catch {
+      /* best-effort */
+    }
+  }
+
+  return {
+    state, set, go, toggleSkill, toggleInterest, connect,
+    fullPhone, phoneValid, codeComplete, nameValid, preview,
+    busy, sendCode, verifyCode, finish,
+  }
 }
 
 export function useSplashAdvance(screen: Screen, go: (s: Screen) => void, ms: number) {

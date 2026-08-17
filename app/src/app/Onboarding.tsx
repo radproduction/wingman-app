@@ -129,7 +129,10 @@ const INTRO = [
 
 export const Onboarding = ({ onDone }: { onDone: () => void }) => {
   const ob = useOnboarding()
-  const { state, set, go, toggleSkill, toggleInterest, connect, fullPhone, phoneValid, codeComplete, nameValid, preview } = ob
+  const {
+    state, set, go, toggleSkill, toggleInterest, connect, fullPhone, phoneValid, codeComplete, nameValid, preview,
+    busy, sendCode, verifyCode, finish,
+  } = ob
   const { msg, show, toast } = useToast()
   const resend = useResendTimer(state.screen === 'verify')
   const code = useCodeBoxes(state.code, (c) => set('code', c))
@@ -204,9 +207,13 @@ export const Onboarding = ({ onDone }: { onDone: () => void }) => {
           screen="phone"
           title="What's your WhatsApp number?"
           body="I'll text you a 6-digit code there to make sure it's you."
-          next={() => go('verify')}
+          next={async () => {
+            const err = await sendCode()
+            if (err) toast(err)
+            else go('verify')
+          }}
           nextLabel="Send my code"
-          nextDisabled={!phoneValid}
+          nextDisabled={!phoneValid || busy}
         >
           <div className="wg-field">
             <select aria-label={t('Country code')} value={state.cc} onChange={(e) => set('cc', e.target.value)}>
@@ -238,8 +245,13 @@ export const Onboarding = ({ onDone }: { onDone: () => void }) => {
           title="Enter your code"
           body={t('Sent on WhatsApp to {phone}.', { phone: fullPhone })}
           back={() => go('phone')}
-          next={() => go('name')}
-          nextDisabled={!codeComplete}
+          next={async () => {
+            const r = await verifyCode()
+            if (r.error) toast(r.error)
+            else if (r.onboarded) onDone() // returning user — skip the rest, go in
+            else go('name')
+          }}
+          nextDisabled={!codeComplete || busy}
         >
           <div className="wg-code" onPaste={code.onPaste}>
             {state.code.map((d, i) => (
@@ -258,9 +270,10 @@ export const Onboarding = ({ onDone }: { onDone: () => void }) => {
             {resend.canResend ? (
               <button
                 className="wg-btn-text"
-                onClick={() => {
+                onClick={async () => {
                   resend.restart()
-                  toast('Code re-sent on WhatsApp')
+                  const err = await sendCode()
+                  toast(err || 'Code re-sent on WhatsApp')
                 }}
               >
                 {t('Resend code')}
@@ -715,10 +728,23 @@ export const Onboarding = ({ onDone }: { onDone: () => void }) => {
             </div>
           </div>
           <div className="wg-actions" style={{ flexDirection: 'column', gap: 'var(--space-8)' }}>
-            <button className="wg-btn full" onClick={onDone}>
+            <button
+              className="wg-btn full"
+              disabled={busy}
+              onClick={async () => {
+                await finish()
+                onDone()
+              }}
+            >
               {t('Go to Wingman')}
             </button>
-            <button className="wg-btn-text" onClick={onDone}>
+            <button
+              className="wg-btn-text"
+              onClick={async () => {
+                await finish()
+                onDone()
+              }}
+            >
               {t("I'll connect these later")}
             </button>
           </div>
