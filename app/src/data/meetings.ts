@@ -1040,6 +1040,10 @@ export const hydrateMeetings = async (): Promise<void> => {
   }
 }
 
+// Bridges for other stores that derive from meetings (e.g. action items).
+export const subscribeMeetings = subscribe
+export const meetingsLoaded = () => serverMeetings !== null
+
 
 export type ActionDecision = 'pending' | 'approved' | 'rejected' | 'saved'
 

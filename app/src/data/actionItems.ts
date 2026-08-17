@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import { allMeetings, subscribeMeetings, meetingsLoaded } from './meetings'
 
 
 export type ActionPriority = 'High' | 'Medium' | 'Low'
@@ -178,17 +179,62 @@ const persist = (next: Persisted) => {
   listeners.forEach((fn) => fn())
 }
 
+// The base list is derived from the user's REAL meetings once they've loaded —
+// each meeting summary's action items — falling back to the seed until then.
+const parseDue = (due: string): number => {
+  const d = due.trim().toLowerCase()
+  if (!d || d.includes('no date')) return NO_DUE
+  if (d.includes('today')) return 0
+  if (d.includes('tomorrow')) return 1
+  if (d.includes('week')) return d.includes('next') ? 7 : 3
+  return NO_DUE
+}
+
+const deriveFromMeetings = (): ActionItem[] | null => {
+  if (!meetingsLoaded()) return null // seed until real meetings arrive
+  const out: ActionItem[] = []
+  let seq = 5000
+  for (const m of allMeetings()) {
+    ;(m.summary?.actions ?? []).forEach((a, i) => {
+      out.push({
+        id: `${m.id}-a${i}`,
+        title: a.task,
+        owner: a.owner || '',
+        due: a.due || 'No date',
+        dueIn: parseDue(a.due || ''),
+        priority: a.priority,
+        status: 'open',
+        meetingId: m.id,
+        meeting: m.title,
+        seq: seq--,
+      })
+    })
+  }
+  return out
+}
+
+const baseItems = (): ActionItem[] => deriveFromMeetings() ?? SEED
+
 const project = (s: Persisted): ActionItem[] =>
-  [...SEED.filter((a) => !s.removed[a.id]).map((a) => ({ ...a, ...s.patch[a.id] })), ...s.created].sort(
+  [...baseItems().filter((a) => !s.removed[a.id]).map((a) => ({ ...a, ...s.patch[a.id] })), ...s.created].sort(
     (a, b) => b.seq - a.seq,
   )
 
+// Re-derive when the meetings store changes (real meetings load / a summary lands).
+let mtgTick = 0
+subscribeMeetings(() => {
+  mtgTick++
+  listeners.forEach((fn) => fn())
+})
+
 let view = project(state)
 let seen = state
+let seenTick = mtgTick
 const snapshot = () => {
-  if (seen !== state) {
+  if (seen !== state || seenTick !== mtgTick) {
     view = project(state)
     seen = state
+    seenTick = mtgTick
   }
   return view
 }

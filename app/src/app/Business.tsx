@@ -2,6 +2,9 @@ import { SubScreen, SetRow } from './SubScreen'
 import { Icon, IconChevronR, IconSpark, IconWhatsapp } from './icons'
 import { businessHeads as businessHeadsSeed, businessCenter as bcSeed } from '../data/mock'
 import { approvals, useDecisions } from '../data/approvals'
+import { useFollowups } from '../data/followups'
+import { useTasks } from '../data/tasks'
+import { allMeetings, useMeetingState } from '../data/meetings'
 import { useProfile } from '../data/store'
 import { localize, t } from '../i18n'
 import { navigate } from '../shell/nav'
@@ -17,6 +20,22 @@ export const Business = () => {
   const businessHeads = localize(businessHeadsSeed)
   const bc = localize(bcSeed)
   const first = useProfile().name.split(' ')[0]
+
+  // Real counts for the tiles the user actually has data for.
+  const followups = useFollowups()
+  const { openCount } = useTasks()
+  useMeetingState()
+  const meetingsToday = allMeetings().filter((m) => m.today && m.status !== 'cancelled').length
+  const cardValue = (c: { key: string; value: string; sub: string }): { value: string; sub: string } => {
+    if (c.key === 'tasks') return { value: t('{n} open', { n: openCount }), sub: c.sub }
+    if (c.key === 'meetings') return { value: t('{n} today', { n: meetingsToday }), sub: c.sub }
+    if (c.key === 'followups' && followups)
+      return {
+        value: t('{n} active', { n: followups.active }),
+        sub: followups.overdue ? t('{n} overdue', { n: followups.overdue }) : t('None overdue'),
+      }
+    return { value: c.value, sub: c.sub }
+  }
 
   return (
     <SubScreen title="Business Center" back="home" className="wg-mod" feedback="header">
@@ -45,18 +64,21 @@ export const Business = () => {
 
       {}
       <div className="wg-grid">
-        {bc.cards.map((c) => (
-          <button className="wg-card wg-card-line" key={c.key} onClick={() => navigate(c.route)}>
-            <span className="wg-card__head">
-              <span className={`wg-chip ${c.tone} sm`}>
-                <Icon name={c.icon} size={24} variant="duotone" />
+        {bc.cards.map((c) => {
+          const v = cardValue(c)
+          return (
+            <button className="wg-card wg-card-line" key={c.key} onClick={() => navigate(c.route)}>
+              <span className="wg-card__head">
+                <span className={`wg-chip ${c.tone} sm`}>
+                  <Icon name={c.icon} size={24} variant="duotone" />
+                </span>
+                <span className="wg-card__label">{c.label}</span>
               </span>
-              <span className="wg-card__label">{c.label}</span>
-            </span>
-            <span className="wg-card__val">{c.value}</span>
-            <span className="wg-card__sub">{c.sub}</span>
-          </button>
-        ))}
+              <span className="wg-card__val">{v.value}</span>
+              <span className="wg-card__sub">{v.sub}</span>
+            </button>
+          )
+        })}
       </div>
 
       {}
