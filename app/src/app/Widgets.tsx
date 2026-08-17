@@ -8,6 +8,7 @@ import { routeByKey, usePlaces } from '../data/mobility'
 import { useConnections } from '../data/connections'
 import { useWaiting } from '../data/approvals'
 import { useTasks, toggleTask } from '../data/tasks'
+import { useHomeStats } from '../data/homeStats'
 import {
   useActionItems,
   toggleActionItem,
@@ -481,6 +482,7 @@ const COUNT_CONNECTOR: Record<string, string> = { email: 'gmail', cal: 'gcal' }
 const CountsWidget = ({ size }: { size: WidgetSize }) => {
   const DAY = localize(homeSeed)
   const { openCount, progress } = useTasks()
+  const stats = useHomeStats()
   const conn = useConnections()
   const ready = useFillRamp()
 
@@ -489,8 +491,18 @@ const CountsWidget = ({ size }: { size: WidgetSize }) => {
         {DAY.metrics.map((m, i) => {
           const key = COUNT_CONNECTOR[m.key]
           const on = !key || conn.items.find((c) => c.key === key)?.status === 'connected'
-          const value = m.key === 'tasks' ? String(openCount) : m.value
-          const fill = m.key === 'tasks' ? progress : m.fill
+          // Tasks is live from useTasks; Email/Calendar from the real dashboard
+          // aggregate once loaded; otherwise the seed value.
+          const value =
+            m.key === 'tasks' ? String(openCount)
+            : m.key === 'email' && stats ? String(stats.emailToReply)
+            : m.key === 'cal' && stats ? String(stats.calToday)
+            : m.value
+          const fill =
+            m.key === 'tasks' ? progress
+            : m.key === 'email' && stats ? Math.min(1, stats.emailToReply / 12)
+            : m.key === 'cal' && stats ? Math.min(1, stats.calToday / 10)
+            : m.fill
           return (
             <button
               className={`wg-metric ${m.tone}${on ? '' : ' off'}`}

@@ -71,6 +71,7 @@ import { hydrateTasks } from './data/tasks'
 import { hydrateConnections } from './data/connections'
 import { hydrateEmails } from './data/emails'
 import { hydrateCalendar } from './data/day'
+import { hydrateHomeStats } from './data/homeStats'
 import { useDragScroll } from './shell/useDragScroll'
 import { installTapFeedback } from './shell/feedback'
 import './picker.css'
@@ -221,6 +222,7 @@ const App = () => {
       void hydrateConnections()
       void hydrateEmails()
       void hydrateCalendar()
+      void hydrateHomeStats()
     }
   }, [signedIn])
 
