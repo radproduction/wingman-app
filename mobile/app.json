@@ -21,6 +21,11 @@
     },
     "extra": {
       "apiBaseUrl": "https://imyourwingman.ai"
-    }
+    },
+    "plugins": [
+      "expo-font",
+      "expo-secure-store",
+      "expo-status-bar"
+    ]
   }
 }
