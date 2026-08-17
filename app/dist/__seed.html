@@ -1,0 +1,17 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>seed</title>
+<script>
+  try {
+    localStorage.setItem('wingman.session', JSON.stringify({ onboarded: true, signedIn: true }))
+    var m = location.search.match(/[?&]theme=(light|dark|system)/)
+    if (m) {
+      var raw = localStorage.getItem('wingman.prefs')
+      var prefs = raw ? JSON.parse(raw) : {}
+      prefs.theme = m[1]
+      localStorage.setItem('wingman.prefs', JSON.stringify(prefs))
+    }
+  } catch (e) {}
+  var to = location.hash && location.hash.length > 1 ? location.hash : '#/bills'
+  location.replace('/' + to)
+</script>
