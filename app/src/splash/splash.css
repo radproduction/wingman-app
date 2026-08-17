@@ -1,0 +1,118 @@
+
+.splash {
+  position: absolute;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--home-surface, #ffffff);
+  transition: opacity var(--duration-medium, 350ms) var(--ease-smooth-out, cubic-bezier(0.22, 1, 0.36, 1));
+}
+
+.splash-leave {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.splash-logo {
+  width: min(64vw, 340px);
+  aspect-ratio: 2125 / 526;
+  height: auto;
+  overflow: visible;
+}
+
+.wg-splash__wordmark path {
+  fill: var(--ink);
+}
+
+
+.wg-splash__mark {
+  animation: wg-splash-settle var(--splash-settle) var(--splash-ease-settle) var(--splash-settle-delay) both;
+}
+
+.wg-splash__wordmark {
+  animation:
+    wg-splash-settle var(--splash-settle) var(--splash-ease-settle) var(--splash-settle-delay) both,
+    wg-splash-in var(--splash-word) var(--splash-ease-draw) var(--splash-settle-delay) both;
+}
+
+.wg-splash__wfill {
+  animation: wg-splash-in var(--splash-fill) var(--splash-ease-draw) var(--splash-fill-delay) both;
+}
+
+.wg-splash__wtrace {
+  stroke-dasharray: 1;
+  animation:
+    wg-splash-draw var(--splash-draw) var(--splash-ease-draw) both,
+    wg-splash-in var(--splash-trace-out) var(--splash-ease-draw) var(--splash-trace-out-delay) reverse both;
+}
+
+.wg-splash__star {
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+  animation:
+    wg-splash-star var(--splash-star) var(--splash-ease-star) var(--splash-star-delay) both,
+    wg-splash-in var(--splash-star-fade) var(--splash-ease-draw) var(--splash-star-delay) both;
+}
+
+@keyframes wg-splash-settle {
+  from {
+    transform: translateX(var(--splash-shift));
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes wg-splash-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes wg-splash-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes wg-splash-star {
+  from {
+    transform: rotate(var(--splash-star-from)) scale(var(--splash-star-scale));
+  }
+  to {
+    transform: rotate(0deg) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root:not([data-motion='full']) .wg-splash__mark,
+  :root:not([data-motion='full']) .wg-splash__wordmark,
+  :root:not([data-motion='full']) .wg-splash__wfill,
+  :root:not([data-motion='full']) .wg-splash__wtrace,
+  :root:not([data-motion='full']) .wg-splash__star {
+    animation: none;
+  }
+  :root:not([data-motion='full']) .wg-splash__wtrace {
+    opacity: 0;
+  }
+}
+
+[data-motion='reduced'] .wg-splash__mark,
+[data-motion='reduced'] .wg-splash__wordmark,
+[data-motion='reduced'] .wg-splash__wfill,
+[data-motion='reduced'] .wg-splash__wtrace,
+[data-motion='reduced'] .wg-splash__star {
+  animation: none;
+}
+
+[data-motion='reduced'] .wg-splash__wtrace {
+  opacity: 0;
+}

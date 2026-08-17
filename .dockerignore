@@ -14,3 +14,4 @@ client/qa_mobile.cjs
 client/mobile_qa_notes.md
 *.zip
 mobile
+app

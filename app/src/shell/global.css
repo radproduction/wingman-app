@@ -1,0 +1,29 @@
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+html {
+  background: var(--home-surface, #ffffff);
+}
+
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme]) {
+    background: #131313;
+  }
+}
+
+* {
+  scrollbar-width: none;
+}
+*::-webkit-scrollbar {
+  display: none;
+}

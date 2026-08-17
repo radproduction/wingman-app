@@ -1,0 +1,222 @@
+
+:root {
+  --wm-tabbar-h: 65px;
+  --wm-safe-top: env(safe-area-inset-top, 0px);
+  --wm-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --nav-bottom: clamp(14px, var(--wm-safe-bottom), 24px);
+  --tabbar-clearance: calc(var(--wm-tabbar-h) + var(--nav-bottom) + 16px);
+  --wm-kb: 0px;
+}
+
+@media (min-width: 600px) {
+  :root {
+    --wm-safe-top: 32px;
+    --wm-safe-bottom: 24px;
+  }
+}
+
+@media (min-width: 600px) and (hover: hover) and (pointer: fine) {
+  :root {
+    --wm-safe-top: 59px;
+    --wm-safe-bottom: 24px;
+  }
+}
+
+.wm-app-frame {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #2f2f2f;
+}
+
+.wm-app-viewport {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--panel);
+}
+
+@media (min-width: 600px) {
+  .wm-app-viewport {
+    width: 430px;
+    height: min(932px, 100dvh);
+    border-radius: 46px;
+    box-shadow: 0 30px 70px -24px rgba(0, 0, 0, 0.55);
+    will-change: transform;
+  }
+}
+
+.wm-app-viewport {
+  cursor: url('/touch-cursor.svg') 15 15, default;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.wm-app-viewport * {
+  cursor: url('/touch-cursor.svg') 15 15, default !important;
+}
+
+.wm-app-viewport input,
+.wm-app-viewport textarea,
+.wm-app-viewport [contenteditable='true'] {
+  cursor: text !important;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.wm-app-viewport:active,
+.wm-app-viewport *:active {
+  cursor: url('/touch-cursor-pressed.svg') 15 15, default !important;
+}
+
+.wm-app-viewport input:active,
+.wm-app-viewport textarea:active,
+.wm-app-viewport [contenteditable='true']:active {
+  cursor: text !important;
+}
+
+.wm-stack {
+  position: absolute;
+  inset: 0;
+}
+
+.wm-stack[data-nav='push'] .wm-screen[data-role='in'],
+.wm-stack[data-nav='pop'] .wm-screen[data-role='out'] {
+  z-index: 11;
+}
+
+.wm-stack[data-nav='push'] .wm-screen[data-role='out'],
+.wm-stack[data-nav='pop'] .wm-screen[data-role='in'] {
+  z-index: 1;
+}
+
+.wm-screen[data-role='out'] {
+  pointer-events: none;
+}
+
+.wm-stack[data-nav='push'] .wm-screen[data-role='in'] {
+  animation: wm-push-in var(--page-slide-dur) var(--page-slide-ease);
+}
+
+.wm-stack[data-nav='push'] .wm-screen[data-role='out'] {
+  animation: wm-push-out var(--page-slide-dur) var(--page-slide-ease) forwards;
+}
+
+.wm-stack[data-nav='pop'] .wm-screen[data-role='in'] {
+  animation: wm-pop-in var(--page-slide-dur) var(--page-slide-ease);
+}
+
+.wm-stack[data-nav='pop'] .wm-screen[data-role='out'] {
+  animation: wm-pop-out var(--page-slide-dur) var(--page-slide-ease) forwards;
+}
+
+
+@keyframes wm-push-in {
+  from {
+    transform: translateX(var(--page-slide-distance));
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes wm-push-out {
+  from {
+    transform: translateX(0);
+    filter: blur(0);
+  }
+  to {
+    transform: translateX(calc(var(--page-parallax) * -1));
+    filter: blur(var(--page-blur));
+  }
+}
+
+@keyframes wm-pop-in {
+  from {
+    transform: translateX(calc(var(--page-parallax) * -1));
+    filter: blur(var(--page-blur));
+  }
+  to {
+    transform: translateX(0);
+    filter: blur(0);
+  }
+}
+
+@keyframes wm-pop-out {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(var(--page-slide-distance));
+  }
+}
+
+.wm-chrome[data-down] .wg-nav {
+  transform: translateY(calc(100% + var(--nav-bottom) + 12px));
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root:not([data-motion='full']) .wm-stack .wm-screen {
+    animation: none !important;
+  }
+  :root:not([data-motion='full']) .wg-nav {
+    transition: none;
+  }
+}
+
+.wm-screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.wm-screen > .gh {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+.wm-screen > .gh > .wg-screen {
+  min-height: 100%;
+}
+
+.wm-chrome {
+  display: contents;
+}
+
+.wm-coming {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 6px;
+  padding-bottom: var(--tabbar-clearance);
+}
+.wm-coming-glyph {
+  width: 64px;
+  height: 64px;
+  border-radius: 22px;
+  display: grid;
+  place-items: center;
+  background: var(--accent-tonal);
+  color: var(--accent-deep);
+  margin-bottom: 8px;
+}
+.wm-coming h1 {
+  font-size: 22px;
+  margin: 0;
+}
+.wm-coming p {
+  margin: 0;
+  max-width: 260px;
+  color: var(--muted);
+  line-height: 1.45;
+}

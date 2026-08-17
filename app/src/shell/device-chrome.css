@@ -1,0 +1,77 @@
+
+:root {
+  --ios-chrome-fg: #1c1b1a;
+  --ios-island-bg: #000000;
+  --ios-home-indicator: rgba(28, 27, 26, 0.32);
+}
+
+:root[data-theme='dark'] {
+  --ios-chrome-fg: #f5f4f1;
+  --ios-home-indicator: rgba(245, 244, 241, 0.5);
+}
+
+.ios-chrome {
+  display: none;
+  position: absolute;
+  inset: 0;
+  z-index: 200;
+  pointer-events: none;
+}
+
+.ios-statusbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--wm-safe-top);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 32px 0;
+  color: var(--ios-chrome-fg);
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.ios-statusbar__time {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  padding-inline-start: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ios-statusbar__icons {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding-inline-end: 4px;
+}
+
+.ios-island {
+  position: absolute;
+  top: 11px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 125px;
+  height: 37px;
+  border-radius: 20px;
+  background: var(--ios-island-bg);
+}
+
+.ios-home-indicator {
+  position: absolute;
+  bottom: 9px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 140px;
+  height: 5px;
+  border-radius: 100px;
+  background: var(--ios-home-indicator);
+}
+
+@media (min-width: 600px) and (hover: hover) and (pointer: fine) {
+  .ios-chrome {
+    display: block;
+  }
+}

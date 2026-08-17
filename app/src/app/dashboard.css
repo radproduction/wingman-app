@@ -1,0 +1,560 @@
+
+:root {
+  --wgt-unit: 144px;
+}
+
+.wg-dash__date {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+
+.wg-wskel {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: var(--wgt-unit);
+  gap: var(--space-8);
+}
+
+.wg-wskel span {
+  display: block;
+  border-radius: var(--radius-lg);
+  background: var(--card-tonal-cool);
+}
+
+.wg-wskel span.wide {
+  grid-column: span 2;
+}
+
+.wg-wskel span.tall {
+  grid-column: span 2;
+  grid-row: span 2;
+}
+
+
+.wg-wgrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: minmax(var(--wgt-unit), auto);
+  grid-auto-flow: row dense;
+  gap: var(--space-8);
+}
+
+.wg-wgt {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  text-align: start;
+  background: var(--home-surface);
+  border-radius: var(--radius-lg);
+  padding: var(--space-16);
+  grid-column: span 1;
+  grid-row: span 1;
+}
+
+.wg-wgt.md,
+.wg-wgt.lg {
+  grid-column: span 2;
+}
+
+.wg-wgt.lg {
+  grid-row: span 2;
+}
+
+.wg-wgt.bare {
+  background: none;
+  padding: 0;
+}
+
+.wg-wgt__open {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  text-align: start;
+  background: none;
+  padding: 0;
+  transition: transform var(--duration-quick) var(--ease);
+}
+
+.wg-wgt__open:active {
+  transform: scale(0.985);
+}
+
+
+.wg-wgt__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  margin-bottom: var(--space-12);
+}
+
+.wg-wgt__title {
+  font-size: 13px;
+  font-weight: 500;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wg-wgt__end {
+  margin-inline-start: auto;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.wg-wgt__val {
+  font-size: 26px;
+  font-weight: 400;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+}
+
+.wg-wgt__sub {
+  margin-top: var(--space-4);
+  font-size: 12.5px;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.wg-wgt__fill {
+  flex: 1;
+  min-height: var(--space-8);
+}
+
+.wg-wgt__foot {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  margin-top: var(--space-12);
+}
+
+
+.wg-wlist {
+  display: flex;
+  flex-direction: column;
+}
+
+.wg-wrow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  width: 100%;
+  min-width: 0;
+  text-align: start;
+  padding-block: var(--space-8);
+}
+
+.wg-wrow + .wg-wrow {
+  border-top: 1px solid var(--line-soft);
+}
+
+.wg-wgt.lg .wg-wrow {
+  padding-block: var(--space-12);
+}
+
+.wg-wgt.lg .wg-wlist {
+  flex: 1;
+}
+
+.wg-wgt.lg .wg-wlist > .wg-wrow {
+  flex: 1;
+}
+
+.wg-wgt.lg .wg-wgt__fill {
+  display: none;
+}
+
+.wg-wrow__tx {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  text-align: start;
+  background: none;
+  padding: 0;
+}
+
+.wg-wrow__name {
+  font-size: var(--fs-row);
+  font-weight: 500;
+  line-height: 1.25;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.wg-wrow__name.done {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.wg-wrow__meta {
+  font-size: var(--fs-sub);
+  color: var(--muted);
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wg-wrow__end {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.wg-wtick {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-pill);
+  display: grid;
+  place-items: center;
+  color: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--line-strong);
+  transition:
+    background var(--duration-quick) var(--ease),
+    box-shadow var(--duration-quick) var(--ease),
+    color var(--duration-quick) var(--ease);
+}
+
+.wg-wtick.on {
+  background: var(--ok);
+  box-shadow: inset 0 0 0 1.5px var(--ok);
+  color: var(--on-accent);
+}
+
+
+.wg-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex: none;
+  border-radius: var(--radius-pill);
+  padding-block: var(--space-4);
+  padding-inline: var(--space-8);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: var(--pill-line);
+}
+
+.wg-flag.rose { background: var(--chip-rose); color: var(--tone-rose); }
+.wg-flag.sand { background: var(--chip-sand); color: var(--tone-sand-text); }
+.wg-flag.peach { background: var(--chip-peach); color: var(--tone-peach-text); }
+.wg-flag.blue { background: var(--chip-blue); color: var(--tone-blue); }
+.wg-flag.lavender { background: var(--chip-lavender); color: var(--tone-lavender-text); }
+.wg-flag.mint { background: var(--chip-mint); color: var(--tone-mint); }
+
+
+.wg-wempty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: var(--space-8);
+}
+
+.wg-wempty p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+
+.wg-dedit {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  background: var(--accent-tonal);
+  border-radius: var(--radius-lg);
+  padding: var(--space-12) var(--space-16);
+}
+
+.wg-dedit__tx {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.wg-dedit__tx strong {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--accent-deep);
+}
+
+.wg-dedit__tx span {
+  font-size: 12px;
+  color: var(--accent-deep);
+  opacity: 0.75;
+  line-height: 1.35;
+}
+
+.wg-wgrid.edit .wg-wgt {
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  box-shadow: inset 0 0 0 1.5px var(--accent-line);
+  animation: wg-wobble 2400ms var(--ease-in-out) infinite;
+}
+
+.wg-wgrid.edit .wg-wgt:nth-child(even) {
+  animation-delay: -1200ms;
+}
+
+@keyframes wg-wobble {
+  0%,
+  100% {
+    transform: rotate(-0.22deg);
+  }
+  50% {
+    transform: rotate(0.22deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root:not([data-motion='full']) .wg-wgrid.edit .wg-wgt {
+    animation: none !important;
+  }
+}
+
+:root[data-motion='reduced'] .wg-wgrid.edit .wg-wgt {
+  animation: none !important;
+}
+
+.wg-wgt.dragging {
+  z-index: 4;
+  animation: none !important;
+  transition: none !important;
+  cursor: grabbing;
+  box-shadow: var(--shadow-card), inset 0 0 0 1.5px var(--accent);
+}
+
+.wg-wgt__ctrl {
+  position: absolute;
+  z-index: 2;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-pill);
+  display: grid;
+  place-items: center;
+  background: var(--surface-alt);
+  box-shadow: var(--shadow-thumb);
+  transition: transform var(--duration-quick) var(--ease);
+}
+
+.wg-wgt__ctrl:active {
+  transform: scale(0.9);
+}
+
+.wg-wgt__rm {
+  inset-block-start: calc(var(--space-4) * -1);
+  inset-inline-start: calc(var(--space-4) * -1);
+  color: var(--alert);
+}
+
+.wg-wgt__size {
+  inset-block-end: var(--space-8);
+  inset-inline-end: var(--space-8);
+  width: auto;
+  height: 26px;
+  padding-inline: var(--space-12);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--accent-deep);
+}
+
+.wg-wgrid.edit .wg-wgt > *:not(.wg-wgt__ctrl) {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.wg-wadd {
+  grid-column: span 2;
+  min-height: var(--wgt-unit);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-8);
+  border-radius: var(--radius-lg);
+  border: 1.5px dashed var(--line-strong);
+  color: var(--accent-deep);
+  font-size: 14px;
+  font-weight: 500;
+  background: none;
+  transition: background var(--duration-quick) var(--ease);
+}
+
+.wg-wadd:active {
+  background: var(--accent-tonal);
+}
+
+.wg-dempty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-8);
+  padding: var(--space-32) var(--space-16);
+}
+
+.wg-dempty h2 {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 500;
+}
+
+.wg-dempty p {
+  margin: 0 0 var(--space-8);
+  font-size: 13.5px;
+  color: var(--muted);
+  line-height: 1.45;
+  max-width: 34ch;
+}
+
+
+.wg-gal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.wg-gal__row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-12);
+  background: var(--panel-inner);
+  border-radius: var(--radius-lg);
+  padding: var(--space-12);
+  text-align: start;
+}
+
+.wg-gal__tx {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.wg-gal__tx strong {
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.wg-gal__tx span {
+  font-size: 12.5px;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.wg-gal__sizes {
+  display: flex;
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+}
+
+.wg-gal__size {
+  border-radius: var(--radius-pill);
+  padding-block: var(--space-4);
+  padding-inline: var(--space-8);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+  background: var(--card-tonal-cool);
+  transition:
+    background var(--duration-quick) var(--ease),
+    color var(--duration-quick) var(--ease);
+}
+
+.wg-gal__size.on {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.wg-gal__size.is-fixed {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+}
+
+.wg-gal__add {
+  flex: none;
+  align-self: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-pill);
+  display: grid;
+  place-items: center;
+  background: var(--accent-tonal);
+  color: var(--accent-deep);
+  transition: transform var(--duration-quick) var(--ease);
+}
+
+.wg-gal__add:active {
+  transform: scale(0.9);
+}
+
+
+.wg-att__help {
+  margin: calc(var(--space-8) * -1) 0 0;
+  font-size: 12.5px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.wg-att__list {
+  padding: var(--space-4) var(--space-16);
+}
+
+
+.wg-asheet {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  margin-top: var(--space-16);
+}
+
+.wg-asheet__field {
+  background: var(--panel-inner);
+  min-height: 48px;
+}
+
+.wg-asheet__field input {
+  font-size: 15px;
+  padding: var(--space-8) 0;
+}
+
+.wg-asheet__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.wg-asheet__cap {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.wg-asheet__opts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
