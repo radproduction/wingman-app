@@ -103,6 +103,10 @@ export const api = {
   followups: () => get<{ followups: unknown[]; mock?: boolean }>('/followups'),
   briefings: () => get<{ briefings: unknown[]; mock?: boolean }>('/briefings'),
 
+  // ── Places (home / office — separate from the settings allow-list) ──
+  savePlace: (which: 'home' | 'office', address: string) =>
+    req<{ saved: boolean; which: string; address: string }>('POST', '/places', { which, address }),
+
   // ── Actions ──
   completeTask: (id: string) => req<{ ok: boolean }>('POST', `/tasks/${id}/complete`),
   payBill: (id: string) => req<{ ok: boolean }>('POST', `/bills/${id}/pay`),

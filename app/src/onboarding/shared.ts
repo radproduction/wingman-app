@@ -229,9 +229,23 @@ export function useOnboarding() {
     }
   }
 
-  // Save the profile the onboarding collected. Best-effort — a hiccup here must
-  // never trap the user on the last screen.
+  // Save everything the onboarding collected, mapped to what the backend
+  // accepts. Best-effort — a hiccup here must never trap the user on the last
+  // screen.
   const finish = async (): Promise<void> => {
+    // onboarding skill NAMES → backend enabled_skills IDs
+    const skillIds: Record<string, string> = {
+      'Travel Assistant': 'travel_assistant',
+      'Bill Tracker': 'bill_tracker',
+      'Delivery Tracker': 'delivery_tracker',
+      'People CRM': 'people_crm',
+      'Follow-up Tracker': 'followup_tracker',
+    }
+    // interest keys → valid news topic keys
+    const topicIds: Record<string, string> = {
+      business: 'business', markets: 'business', tech: 'technology',
+      world: 'world', local: 'local', health: 'health', sport: 'sports',
+    }
     const patch: Record<string, unknown> = {
       name: state.name.trim(),
       timezone: state.tz,
@@ -242,14 +256,16 @@ export function useOnboarding() {
       tone: state.tone.toLowerCase(),
       communication_style: state.detail.toLowerCase(),
       proactiveness_level: state.proactivity.toLowerCase(),
-      news_topics: state.interests,
+      enabled_skills: state.skills.map((s) => skillIds[s]).filter(Boolean),
+      news_topics: [...new Set(state.interests.map((k) => topicIds[k]).filter(Boolean))],
     }
-    if (state.places.home.trim()) patch.home_address = state.places.home.trim()
-    if (state.places.office.trim()) patch.office_address = state.places.office.trim()
     try {
       await api.completeOnboarding(patch)
+      // Home/office go through their own endpoint (not the settings allow-list).
+      if (state.places.home.trim()) await api.savePlace('home', state.places.home.trim())
+      if (state.places.office.trim()) await api.savePlace('office', state.places.office.trim())
     } catch {
-      /* best-effort */
+      /* best-effort — never trap the user on the last screen */
     }
   }
 
