@@ -5,10 +5,11 @@ import { NotConnected } from './NotConnected'
 import { openApproval } from './ApprovalCard'
 import { IconCheck, IconSpark } from './icons'
 import { PanelSkeleton } from './Skeleton'
-import { email as emailSeed, type EmailItem } from '../data/mock'
+import { type EmailItem } from '../data/mock'
+import { useEmails } from '../data/emails'
 import { useConnections } from '../data/connections'
 import { useFeedLoad } from '../data/loading'
-import { localize, t, tx } from '../i18n'
+import { t, tx } from '../i18n'
 import { tapQuiet } from '../shell/feedback'
 import { usePullToRefresh } from '../shell/usePullToRefresh'
 import { PullSpacer } from '../shell/PullSpacer'
@@ -54,7 +55,7 @@ export const Email = () => {
   const { revealed, showSkeleton, reload } = useFeedLoad()
   const scrollRef = useRef<HTMLDivElement>(null)
   const screenRef = useRef<HTMLDivElement>(null)
-  const email = localize(emailSeed)
+  const email = useEmails()
 
   const { items } = useConnections()
   const linked = items.find((c) => c.key === 'gmail')?.status === 'connected'

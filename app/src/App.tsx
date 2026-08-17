@@ -69,6 +69,7 @@ import { useSession, completeOnboarding } from './data/session'
 import { hydrateProfile } from './data/store'
 import { hydrateTasks } from './data/tasks'
 import { hydrateConnections } from './data/connections'
+import { hydrateEmails } from './data/emails'
 import { useDragScroll } from './shell/useDragScroll'
 import { installTapFeedback } from './shell/feedback'
 import './picker.css'
@@ -217,6 +218,7 @@ const App = () => {
       void hydrateProfile()
       void hydrateTasks()
       void hydrateConnections()
+      void hydrateEmails()
     }
   }, [signedIn])
 
