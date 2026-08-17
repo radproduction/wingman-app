@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react'
 import { NOW, type ChipTone } from './mock'
 import type { IconName } from '../app/icons'
+import { api, type ServerMeetingSummary, type EmailResult } from './api'
 
 
 export type MeetingStatus =
@@ -41,7 +42,7 @@ export const MEETING_STATUS: Record<MeetingStatus, { label: string; tone: 'go' |
   cancelled: { label: 'Cancelled', tone: 'off' },
 }
 
-export type Attendee = { name: string; initial: string; role?: string; person?: boolean }
+export type Attendee = { name: string; initial: string; role?: string; person?: boolean; email?: string }
 
 export type BriefSection = {
   key: string
@@ -110,6 +111,7 @@ export type Meeting = {
   travelRoute?: string
   brief?: MeetingBrief
   summary?: MeetingSummary
+  serverId?: string
 }
 
 
@@ -725,11 +727,11 @@ export const endAssist = (id: string) => {
   const s = sessionOf(id)
   const total = liveSeconds(s)
   setSession(id, { phase: 'processing', seconds: total, since: null })
-  window.setTimeout(() => {
-    if (sessionOf(id).phase !== 'processing') return
-    finishInstant(id, total, s.notes, s.mic !== 'off')
-    setSession(id, { phase: 'ready' })
-  }, 2600)
+  // Real processing: notes → backend (Claude summary + action items), with a
+  // local fallback. When it settles, flip the session to ready.
+  void processInstant(id, total, s.notes, s.mic !== 'off').finally(() => {
+    if (sessionOf(id).phase === 'processing') setSession(id, { phase: 'ready' })
+  })
 }
 
 export const cancelAssist = (id: string) => {
@@ -794,70 +796,141 @@ const patchInstant = (id: string, patch: Partial<Meeting>) =>
 export const renameInstantMeeting = (id: string, title: string) =>
   patchInstant(id, { title: title.trim() || 'Quick meeting' })
 
-const finishInstant = (id: string, seconds: number, notes: LiveNote[], recorded: boolean) => {
-  const m = state.instants.find((x) => x.id === id)
-  if (!m || m.summary) return
+const INSTANT_ACTIONS: ProposedAction[] = [
+  {
+    id: 'ins-whatsapp',
+    kind: 'whatsapp',
+    label: 'Send summary to WhatsApp',
+    detail: 'Send these notes and action items to your WhatsApp so you have them on your phone.',
+    tone: 'mint',
+    icon: 'chat',
+  },
+  {
+    id: 'ins-email',
+    kind: 'email',
+    label: 'Email the notes',
+    detail: 'Email these notes and action items to the attendees who have an address, and to you.',
+    tone: 'blue',
+    icon: 'mail',
+    external: true,
+  },
+]
+
+const retentionLine = (recorded: boolean) =>
+  recorded
+    ? 'Kept for 30 days, then deleted automatically'
+    : 'Notes only - no audio was captured, so there is nothing to keep or delete.'
+
+// The fabricated, notes-only summary — the graceful fallback used when the
+// backend is unreachable (offline / not yet deployed), so finishing never breaks.
+const localSummary = (seconds: number, notes: LiveNote[], recorded: boolean): MeetingSummary => {
   const marks = notes.filter((n) => n.moment)
   const plain = notes.filter((n) => !n.moment)
   const mins = Math.max(1, Math.round(seconds / 60))
-  persist({
-    ...state,
-    instants: state.instants.map((x) =>
-      x.id === id
-        ? {
-            ...x,
-            status: 'summary-ready',
-            when: `${x.when.split(' · ')[0]} · ${mins} min`,
-            summary: {
-              overview: plain.length
-                ? `You captured ${plain.length} note${plain.length === 1 ? '' : 's'} and marked ${marks.length} moment${
-                    marks.length === 1 ? '' : 's'
-                  } across ${mins} minute${mins === 1 ? '' : 's'}. Everything below is what you wrote down - I have not added anything you did not say.`
-                : recorded
-                  ? `A ${mins} minute meeting with nothing written down. The recording is here if you need it, and you can still add action items yourself.`
-                  : `A ${mins} minute meeting with nothing written down, and no audio captured. You can still add action items yourself.`,
-              discussion: plain.map((n) => n.text),
-              decisions: marks.map((n) => n.text),
-              actions: [],
-              openQuestions: [],
-              followUps: [],
-              transcript: notes.map((n) => ({ at: n.at, speaker: 'Note', text: n.text })),
-              recorded,
-              recording: {
-                duration: `${mins} min`,
-                retention: recorded
-                  ? 'Kept for 30 days, then deleted automatically'
-                  : 'Notes only - no audio was captured, so there is nothing to keep or delete.',
-              },
-              proposedActions: [
-                {
-                  id: 'ins-whatsapp',
-                  kind: 'whatsapp',
-                  label: 'Send summary to WhatsApp',
-                  detail: 'Send these notes and action items to your WhatsApp so you have them on your phone.',
-                  tone: 'mint' as ChipTone,
-                  icon: 'chat',
-                },
-                {
-                  id: 'ins-email',
-                  kind: 'email',
-                  label: 'Draft a follow-up email',
-                  detail:
-                    'Draft a follow-up with the notes and the action items you assigned. Held for your review - nothing sends until you approve it.',
-                  tone: 'blue' as ChipTone,
-                  icon: 'mail',
-                  external: true,
-                },
-              ],
-            },
-          }
-        : x,
-    ),
+  return {
+    overview: plain.length
+      ? `You captured ${plain.length} note${plain.length === 1 ? '' : 's'} and marked ${marks.length} moment${
+          marks.length === 1 ? '' : 's'
+        } across ${mins} minute${mins === 1 ? '' : 's'}. Everything below is what you wrote down - I have not added anything you did not say.`
+      : recorded
+        ? `A ${mins} minute meeting with nothing written down. The recording is here if you need it, and you can still add action items yourself.`
+        : `A ${mins} minute meeting with nothing written down, and no audio captured. You can still add action items yourself.`,
+    discussion: plain.map((n) => n.text),
+    decisions: marks.map((n) => n.text),
+    actions: [],
+    openQuestions: [],
+    followUps: [],
+    transcript: notes.map((n) => ({ at: n.at, speaker: 'Note', text: n.text })),
+    recorded,
+    recording: { duration: `${mins} min`, retention: retentionLine(recorded) },
+    proposedActions: INSTANT_ACTIONS,
+  }
+}
+
+// Map the backend's structured summary onto the app's richer shape (transcript
+// from the local notes; recording metadata from the session).
+const serverToSummary = (
+  s: ServerMeetingSummary | null | undefined,
+  seconds: number,
+  notes: LiveNote[],
+  recorded: boolean,
+): MeetingSummary => {
+  const mins = Math.max(1, Math.round(seconds / 60))
+  const actions: ActionItem[] = (s?.actions ?? []).map((a) => ({
+    task: a.task,
+    owner: a.owner || '',
+    due: a.due || '',
+    priority: a.priority === 'High' || a.priority === 'Low' ? a.priority : 'Medium',
+  }))
+  return {
+    overview: s?.overview || localSummary(seconds, notes, recorded).overview,
+    discussion: s?.discussion ?? [],
+    decisions: s?.decisions ?? [],
+    actions,
+    openQuestions: s?.openQuestions ?? [],
+    followUps: s?.followUps ?? [],
+    transcript: notes.map((n) => ({ at: n.at, speaker: 'Note', text: n.text })),
+    recorded,
+    recording: { duration: `${mins} min`, retention: retentionLine(recorded) },
+    proposedActions: INSTANT_ACTIONS,
+  }
+}
+
+const applyInstantSummary = (id: string, mins: number, summary: MeetingSummary, serverId?: string) => {
+  const m = state.instants.find((x) => x.id === id)
+  if (!m || m.summary) return
+  patchInstant(id, {
+    status: 'summary-ready',
+    when: `${m.when.split(' · ')[0]} · ${mins} min`,
+    summary,
+    ...(serverId ? { serverId } : {}),
   })
+}
+
+// Turn the finished session into a summary: send the typed notes to the backend
+// so Claude produces the real summary + action items; fall back to the local
+// notes-only summary if the backend is unreachable.
+const processInstant = async (id: string, seconds: number, notes: LiveNote[], recorded: boolean): Promise<void> => {
+  const m = state.instants.find((x) => x.id === id)
+  if (!m || m.summary) return
+  const mins = Math.max(1, Math.round(seconds / 60))
+  const notesText = notes.map((n) => (n.moment ? `[decision] ${n.text}` : n.text)).join('\n')
+
+  try {
+    const created = await api.createMeeting({
+      title: m.title,
+      type: m.type,
+      attendees: m.attendees.map((a) => ({ name: a.name, email: a.email, role: a.role })),
+      notes: notesText,
+      status: 'processing',
+      meetingAt: new Date().toISOString(),
+    })
+    const res = await api.finalizeMeeting(created.meeting.id)
+    applyInstantSummary(id, mins, serverToSummary(res.meeting.summary, seconds, notes, recorded), created.meeting.id)
+  } catch {
+    applyInstantSummary(id, mins, localSummary(seconds, notes, recorded))
+  }
 }
 
 export const deleteInstantMeeting = (id: string) =>
   persist({ ...state, instants: state.instants.filter((m) => m.id !== id) })
+
+/**
+ * Email the meeting's notes to the attendees who have an address, and to the
+ * user, via the backend (which sends from the user's connected Gmail). Only
+ * possible for meetings that synced to the server (have a serverId). Returns the
+ * result, or null if it can't send (not synced / offline / Gmail not connected).
+ */
+export const sendMeetingSummary = async (id: string): Promise<EmailResult | null> => {
+  const m = state.instants.find((x) => x.id === id)
+  if (!m?.serverId) return null
+  try {
+    const res = await api.sendMeeting(m.serverId)
+    return res.email
+  } catch {
+    return null
+  }
+}
 
 
 export type ActionDecision = 'pending' | 'approved' | 'rejected' | 'saved'

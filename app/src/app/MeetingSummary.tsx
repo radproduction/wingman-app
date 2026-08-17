@@ -13,6 +13,7 @@ import {
   approveAllActions,
   resetAction,
   actionDone,
+  sendMeetingSummary,
   type Meeting,
   type ProposedAction,
 } from '../data/meetings'
@@ -46,6 +47,23 @@ const ProposedCard = ({
   const decision = decisionOfAction(meetingId, action.id)
 
   const approve = () => {
+    // Email actually sends (to attendees with an address + the user) via the
+    // backend, so only mark it done on a real success.
+    if (action.kind === 'email') {
+      void sendMeetingSummary(meetingId).then((res) => {
+        if (res && res.sent.length) {
+          decideAction(meetingId, action.id, 'approved')
+          toast(t('Notes emailed.'), 'checkCircle')
+        } else if (res && res.reason === 'gmail_not_connected') {
+          toast(t('Connect Gmail first to email your notes.'), 'mail')
+        } else if (res && res.reason === 'no_recipients') {
+          toast(t('No email addresses to send to yet.'), 'mail')
+        } else {
+          toast(t('Could not email the notes right now.'), 'alert')
+        }
+      })
+      return
+    }
     decideAction(meetingId, action.id, 'approved')
     if (action.kind === 'whatsapp') openWhatsApp(t('Here is my meeting summary.'))
     if (action.kind === 'tasks') onCreateTasks?.()

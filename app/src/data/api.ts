@@ -30,6 +30,31 @@ export const setToken = (token: string | null) => {
 
 export const isSignedIn = (): boolean => !!getToken()
 
+// ── Meetings shapes (backend /api/meetings) ──
+export type ServerMeetingSummary = {
+  overview?: string
+  discussion?: string[]
+  decisions?: string[]
+  actions?: { task: string; owner?: string; due?: string; priority?: 'High' | 'Medium' | 'Low' }[]
+  openQuestions?: string[]
+  followUps?: string[]
+}
+export type ServerMeeting = {
+  id: string
+  title?: string
+  type?: string
+  company?: string
+  location?: string
+  virtual?: boolean
+  attendees?: { name?: string; email?: string; role?: string }[]
+  notes?: string
+  summary?: ServerMeetingSummary | null
+  status?: string
+  meeting_at?: string
+  emailed_at?: string
+}
+export type EmailResult = { sent: string[]; failed: string[]; skipped: boolean; reason?: string }
+
 export class ApiError extends Error {
   status: number
   constructor(status: number, message: string) {
@@ -102,6 +127,16 @@ export const api = {
   contacts: () => get<{ contacts: unknown[]; mock?: boolean }>('/contacts'),
   followups: () => get<{ followups: unknown[]; mock?: boolean }>('/followups'),
   briefings: () => get<{ briefings: unknown[]; mock?: boolean }>('/briefings'),
+
+  // ── Meetings (notes → AI summary + action items → email attendees + user) ──
+  meetings: () => get<{ meetings: ServerMeeting[] }>('/meetings'),
+  createMeeting: (body: Record<string, unknown>) => req<{ meeting: ServerMeeting }>('POST', '/meetings', body),
+  updateMeeting: (id: string, body: Record<string, unknown>) =>
+    req<{ meeting: ServerMeeting }>('PATCH', `/meetings/${encodeURIComponent(id)}`, body),
+  finalizeMeeting: (id: string, body: Record<string, unknown> = {}) =>
+    req<{ meeting: ServerMeeting; email: EmailResult | null }>('POST', `/meetings/${encodeURIComponent(id)}/finalize`, body),
+  sendMeeting: (id: string) =>
+    req<{ email: EmailResult | null }>('POST', `/meetings/${encodeURIComponent(id)}/send`),
 
   // ── Connections ──
   // One Google consent connects Calendar + Gmail + Tasks + Drive together
