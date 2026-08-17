@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react'
 import { NOW, type ChipTone } from './mock'
 import type { IconName } from '../app/icons'
-import { api, type ServerMeetingSummary, type EmailResult } from './api'
+import { api, type ServerMeetingSummary, type ServerMeeting, type EmailResult } from './api'
 
 
 export type MeetingStatus =
@@ -458,7 +458,17 @@ export const meetings: Meeting[] = [
   },
 ]
 
-export const allMeetings = (): Meeting[] => [...instantMeetings(), ...meetings]
+// Real meetings loaded from the backend (null until hydrated). Once loaded, the
+// list is the user's real meetings (local instants + server), no seed samples.
+let serverMeetings: Meeting[] | null = null
+
+export const allMeetings = (): Meeting[] => {
+  const instants = instantMeetings()
+  if (serverMeetings === null) return [...instants, ...meetings] // seed until loaded
+  const syncedIds = new Set(instants.map((m) => m.serverId).filter(Boolean))
+  const server = serverMeetings.filter((m) => !syncedIds.has(m.serverId))
+  return [...instants, ...server]
+}
 
 export const meetingById = (id: string) => allMeetings().find((m) => m.id === id)
 
@@ -758,7 +768,7 @@ const nowLabel = () => {
 
 export type InstantDraft = {
   title: string
-  attendees: string[]
+  attendees: { name: string; email?: string }[]
   type?: Meeting['type']
   project?: string
 }
@@ -767,7 +777,12 @@ export const createInstantMeeting = (d: InstantDraft): string => {
   const n = state.nextInstant
   const id = `instant-${n}`
   const { display, at } = nowLabel()
-  const names = d.attendees.map((name) => ({ name, initial: name.trim().charAt(0).toUpperCase() || '?', person: true }))
+  const names = d.attendees.map((a) => ({
+    name: a.name,
+    initial: a.name.trim().charAt(0).toUpperCase() || '?',
+    person: true,
+    ...(a.email ? { email: a.email } : {}),
+  }))
   const m: Meeting = {
     id,
     instant: true,
@@ -929,6 +944,99 @@ export const sendMeetingSummary = async (id: string): Promise<EmailResult | null
     return res.email
   } catch {
     return null
+  }
+}
+
+// ── Real meetings from the backend (/api/meetings) ──────────────────────────
+const MEETING_TYPES: Meeting['type'][] = ['Product', 'Client', 'Internal', 'Sales', 'Partner']
+const two = (n: number) => String(n).padStart(2, '0')
+
+const meetingWhen = (iso?: string): { when: string; at: string; day: string; today: boolean } => {
+  const d = iso ? new Date(iso) : null
+  if (!d || Number.isNaN(d.getTime())) return { when: 'Recently', at: '00:00', day: 'Earlier', today: false }
+  const h = d.getHours()
+  const m = two(d.getMinutes())
+  const ampm = h < 12 ? 'AM' : 'PM'
+  const h12 = h % 12 === 0 ? 12 : h % 12
+  const today = d.toDateString() === new Date().toDateString()
+  return {
+    when: `${h12}:${m} ${ampm}`,
+    at: `${two(h)}:${m}`,
+    day: today ? 'Today' : d.toLocaleDateString(undefined, { weekday: 'short' }),
+    today,
+  }
+}
+
+const mapServerSummaryFull = (s: ServerMeetingSummary | null | undefined): MeetingSummary | undefined => {
+  if (!s) return undefined
+  const actions: ActionItem[] = (s.actions ?? []).map((a) => ({
+    task: a.task,
+    owner: a.owner || '',
+    due: a.due || '',
+    priority: a.priority === 'High' || a.priority === 'Low' ? a.priority : 'Medium',
+  }))
+  return {
+    overview: s.overview || '',
+    discussion: s.discussion ?? [],
+    decisions: s.decisions ?? [],
+    actions,
+    openQuestions: s.openQuestions ?? [],
+    followUps: s.followUps ?? [],
+    transcript: [],
+    recorded: false,
+    recording: { duration: '', retention: 'Notes only - no audio was captured.' },
+    proposedActions: INSTANT_ACTIONS,
+  }
+}
+
+const serverToMeeting = (s: ServerMeeting): Meeting => {
+  const w = meetingWhen(s.meeting_at)
+  const summary = mapServerSummaryFull(s.summary)
+  const status: MeetingStatus =
+    s.status === 'processing'
+      ? 'processing'
+      : summary || s.status === 'summary-ready'
+        ? 'summary-ready'
+        : s.status === 'in-progress'
+          ? 'in-progress'
+          : 'completed'
+  return {
+    id: `srv-${s.id}`,
+    serverId: s.id,
+    title: s.title || 'Meeting',
+    when: w.when,
+    at: w.at,
+    day: w.day,
+    today: w.today,
+    attendees: (s.attendees ?? []).map((a) => {
+      const name = a.name || a.email || 'Someone'
+      return {
+        name,
+        initial: name.trim().charAt(0).toUpperCase() || '?',
+        person: true,
+        ...(a.email ? { email: a.email } : {}),
+      }
+    }),
+    company: s.company || 'Meeting',
+    location: s.location || '',
+    virtual: !!s.virtual,
+    type: MEETING_TYPES.includes(s.type as Meeting['type']) ? (s.type as Meeting['type']) : 'Internal',
+    status,
+    tone: 'lavender',
+    icon: 'users',
+    context: [],
+    summary,
+  }
+}
+
+/** Load the user's real meetings from the backend. Best-effort — keeps the seed on error. */
+export const hydrateMeetings = async (): Promise<void> => {
+  try {
+    const res = await api.meetings()
+    serverMeetings = (res.meetings || []).map(serverToMeeting)
+    persist({ ...state }) // new state ref → subscribers re-render, allMeetings() recomputes
+  } catch {
+    /* keep the seed */
   }
 }
 

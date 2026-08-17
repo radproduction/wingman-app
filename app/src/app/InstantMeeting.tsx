@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { SubScreen } from './SubScreen'
 import { Icon, IconCheck, IconPlus } from './icons'
-import { ASSIGNEES } from '../data/actionItems'
+import { useContacts, emailForName } from '../data/contacts'
 import { createInstantMeeting, startAssist } from '../data/meetings'
 import { t } from '../i18n'
 import { navigate } from '../shell/nav'
@@ -10,6 +10,7 @@ import './business.css'
 import './dashboard.css'
 
 export const InstantMeeting = () => {
+  const contacts = useContacts()
   const [title, setTitle] = useState('')
   const [who, setWho] = useState<string[]>([])
   const [extra, setExtra] = useState('')
@@ -28,7 +29,10 @@ export const InstantMeeting = () => {
   const begin = (recording: boolean) => {
     if (starting) return
     setStarting(true)
-    const id = createInstantMeeting({ title, attendees: who })
+    // Carry each attendee's real email (if they're a known contact) so the
+    // meeting's notes can actually be sent to them.
+    const attendees = who.map((name) => ({ name, email: emailForName(name) }))
+    const id = createInstantMeeting({ title, attendees })
     void startAssist(id, recording)
     navigate(`meetings/${id}/live`)
   }
@@ -81,18 +85,18 @@ export const InstantMeeting = () => {
         <span>{people.length > 0 ? t('{n} plus you', { n: people.length }) : t('Just you')}</span>
       </div>
       <div className="wg-inst__who">
-        {ASSIGNEES.filter((n) => n !== 'You' && n !== 'Wingman').map((name) => (
+        {contacts.map((c) => (
           <button
-            className={`wg-gal__size ${who.includes(name) ? 'on' : ''}`}
-            key={name}
-            aria-pressed={who.includes(name)}
-            onClick={() => toggle(name)}
+            className={`wg-gal__size ${who.includes(c.name) ? 'on' : ''}`}
+            key={c.id}
+            aria-pressed={who.includes(c.name)}
+            onClick={() => toggle(c.name)}
           >
-            {t(name)}
+            {c.name}
           </button>
         ))}
         {who
-          .filter((n) => !ASSIGNEES.includes(n))
+          .filter((n) => !contacts.some((c) => c.name === n))
           .map((name) => (
             <button className="wg-gal__size on" key={name} aria-pressed onClick={() => toggle(name)}>
               {name}
