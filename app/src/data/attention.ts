@@ -1,8 +1,9 @@
 import { useMemo } from 'react'
 import type { IconName } from '../app/icons'
-import type { ChipTone } from './mock'
-import { useActionItems, isBlocked, isOverdue, isUnassigned, isUrgent, type ActionItem } from './actionItems'
-import { approvals, useDecisions } from './approvals'
+import { TODAY, type ChipTone } from './mock'
+import { useTasks } from './tasks'
+import { useEmails } from './emails'
+import { eventsFor, useCalendarData } from './day'
 
 
 export type AttentionReason = 'overdue' | 'blocked' | 'unassigned' | 'urgent' | 'waiting'
@@ -29,61 +30,64 @@ export const REASONS: Record<
   waiting: { label: 'Waiting on you', short: 'waiting', tone: 'blue', icon: 'checkCircle', rank: 4 },
 }
 
-const reasonOf = (a: ActionItem): AttentionReason | null => {
-  if (isOverdue(a)) return 'overdue'
-  if (isBlocked(a)) return 'blocked'
-  if (isUnassigned(a)) return 'unassigned'
-  if (isUrgent(a)) return 'urgent'
-  return null
-}
-
-const subOf = (a: ActionItem, reason: AttentionReason) => {
-  if (reason === 'blocked') return a.blockedBy ?? 'Blocked'
-  if (reason === 'unassigned') return a.meeting ? `Nobody assigned · ${a.meeting}` : 'Nobody assigned'
-  if (reason === 'overdue') return `${a.due} · ${a.owner || 'Unassigned'}`
-  return `Due ${a.due.toLowerCase()} · ${a.owner || 'Unassigned'}`
-}
-
+// "Needs attention" is not its own data source — it is BUILT from real signals:
+// overdue tasks, today's calendar conflicts, and emails still waiting on a reply.
+// Each store hydrates on sign-in, so this list turns real as the data lands.
 export const useAttention = (): AttentionItem[] => {
-  const items = useActionItems()
-  const decisions = useDecisions()
+  const tasks = useTasks()
+  const emails = useEmails()
+  const calVersion = useCalendarData() // re-derive when the calendar loads
 
   return useMemo(() => {
     const out: AttentionItem[] = []
 
-    for (const a of items) {
-      if (a.status === 'done') continue
-      const reason = reasonOf(a)
-      if (!reason) continue
-      out.push({
-        id: a.id,
-        title: a.title,
-        sub: subOf(a, reason),
-        reason,
-        tone: REASONS[reason].tone,
-        icon: REASONS[reason].icon,
-        route: 'tasks',
-        actionId: a.id,
+    // 1) Overdue tasks (real /api/tasks) — grouped under Today with due 'Overdue'.
+    tasks.groups
+      .flatMap((g) => g.items)
+      .filter((i) => i.due === 'Overdue')
+      .forEach((tk, i) => {
+        out.push({
+          id: `task-overdue-${i}-${tk.title}`,
+          title: tk.title,
+          sub: tk.source ? `Overdue · ${tk.source}` : 'Overdue',
+          reason: 'overdue',
+          tone: REASONS.overdue.tone,
+          icon: REASONS.overdue.icon,
+          route: 'tasks',
+        })
       })
-    }
 
-    for (const ap of approvals) {
-      const d = decisions[ap.id]
-      if (d && d.state !== 'pending') continue
+    // 2) Today's calendar conflicts (real /api/calendar) — flagged events overlap.
+    eventsFor(TODAY)
+      .filter((e) => e.flag)
+      .forEach((ev, i) => {
+        out.push({
+          id: `cal-conflict-${i}-${ev.time}`,
+          title: ev.title,
+          sub: `${ev.time} · ${ev.flag}`,
+          reason: 'urgent',
+          tone: REASONS.urgent.tone,
+          icon: REASONS.urgent.icon,
+          route: 'calendar',
+        })
+      })
+
+    // 3) Emails still waiting on a personal reply (real /api/emails).
+    emails.needsReply.forEach((m, i) => {
       out.push({
-        id: `ap-${ap.id}`,
-        title: ap.title,
-        sub: ap.why,
+        id: `mail-${i}-${m.from}`,
+        title: m.subject,
+        sub: `From ${m.from}`,
         reason: 'waiting',
-        tone: ap.tone,
-        icon: ap.icon,
-        route: 'approvals',
+        tone: REASONS.waiting.tone,
+        icon: REASONS.waiting.icon,
+        route: 'email',
       })
-    }
+    })
 
-    const dueOf = (x: AttentionItem) => items.find((a) => a.id === x.actionId)?.dueIn ?? 0
-    return out.sort((a, b) => REASONS[a.reason].rank - REASONS[b.reason].rank || dueOf(a) - dueOf(b))
-  }, [items, decisions])
+    return out.sort((a, b) => REASONS[a.reason].rank - REASONS[b.reason].rank)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tasks, emails, calVersion])
 }
 
 export const attentionCounts = (list: AttentionItem[]) => {
