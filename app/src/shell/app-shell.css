@@ -8,17 +8,13 @@
   --wm-kb: 0px;
 }
 
+/* Desktop preview only. The faux status bar / island are gone, so the top
+   inset is now just a small breathing space — no empty band. On a real phone
+   the base rule above uses env(safe-area-inset-top) for the OS status bar. */
 @media (min-width: 600px) {
   :root {
-    --wm-safe-top: 32px;
-    --wm-safe-bottom: 24px;
-  }
-}
-
-@media (min-width: 600px) and (hover: hover) and (pointer: fine) {
-  :root {
-    --wm-safe-top: 59px;
-    --wm-safe-bottom: 24px;
+    --wm-safe-top: 12px;
+    --wm-safe-bottom: 16px;
   }
 }
 
