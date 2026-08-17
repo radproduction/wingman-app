@@ -1,47 +1,39 @@
 import { useSyncExternalStore } from 'react'
 import { tasks as seed, type TaskItem } from './mock'
+import { api } from './api'
 
+// Local completion overrides (keyed by title) so a tap feels instant even
+// before the backend confirms. Persisted so it survives a reload.
 type Overrides = Record<string, boolean>
-
 const KEY = 'wingman.tasks'
-
 const read = (): Overrides => {
   try {
     const raw = localStorage.getItem(KEY)
-    return raw ? JSON.parse(raw) : {}
+    return raw ? (JSON.parse(raw) as Overrides) : {}
   } catch {
     return {}
   }
 }
 
-let current: Overrides = read()
+let overrides: Overrides = read()
+let version = 0
 const listeners = new Set<() => void>()
-
 const subscribe = (fn: () => void) => {
   listeners.add(fn)
   return () => void listeners.delete(fn)
 }
-
-const write = (next: Overrides) => {
-  current = next
-  try {
-    localStorage.setItem(KEY, JSON.stringify(current))
-  } catch {
-  }
+const bump = () => {
+  version++
   listeners.forEach((fn) => fn())
 }
-
-const ALL: { item: TaskItem; group: string }[] = [
-  ...seed.groups.flatMap((g) => g.items.map((item) => ({ item, group: g.title }))),
-  ...seed.done.map((item) => ({ item, group: 'Done' })),
-]
-
-const isDone = (o: Overrides, title: string, group: string) => o[title] ?? group === 'Done'
-
-export const toggleTask = (title: string) => {
-  const entry = ALL.find((e) => e.item.title === title)
-  if (!entry) return
-  write({ ...current, [title]: !isDone(current, title, entry.group) })
+const write = (next: Overrides) => {
+  overrides = next
+  try {
+    localStorage.setItem(KEY, JSON.stringify(overrides))
+  } catch {
+    /* ignore */
+  }
+  bump()
 }
 
 export type TaskView = {
@@ -51,33 +43,117 @@ export type TaskView = {
   progress: number
 }
 
-const project = (o: Overrides): TaskView => {
+// ── Real tasks from the backend, mapped onto the TaskItem shape ───────
+type ServerTask = { id?: string; title?: string; completed?: boolean | number; due_date?: string | null; source?: string }
+let server: ServerTask[] | null = null
+
+const dueLabel = (iso?: string | null): string => {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const key = (x: Date) => x.getFullYear() * 10000 + x.getMonth() * 100 + x.getDate()
+  const diff = key(d) - key(new Date())
+  if (diff < 0) return 'Overdue'
+  if (diff === 0) return 'Today'
+  if (diff === 1) return 'Tomorrow'
+  if (diff <= 7) return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getDay()]
+  return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
+}
+
+const toItem = (t: ServerTask): TaskItem => ({
+  title: t.title || 'Untitled',
+  due: dueLabel(t.due_date),
+  tone: 'blue',
+  icon: 'task',
+  source: t.source,
+})
+
+const doneServer = (t: ServerTask): boolean => {
+  const backend = t.completed === true || t.completed === 1
+  return overrides[t.title || ''] ?? backend
+}
+
+const projectServer = (list: ServerTask[]): TaskView => {
+  const today: TaskItem[] = []
+  const week: TaskItem[] = []
+  const later: TaskItem[] = []
+  const done: TaskItem[] = []
+  for (const t of list) {
+    if (doneServer(t)) {
+      done.push(toItem(t))
+      continue
+    }
+    const lbl = dueLabel(t.due_date)
+    const item = toItem(t)
+    if (lbl === 'Overdue' || lbl === 'Today') today.push(item)
+    else if (lbl === 'Tomorrow' || ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].includes(lbl)) week.push(item)
+    else later.push(item)
+  }
+  const groups = [
+    { title: 'Today', items: today },
+    { title: 'This week', items: week },
+    { title: 'Later', items: later },
+  ]
+  const openCount = today.length + week.length + later.length
+  const total = openCount + done.length
+  return { groups, done, openCount, progress: total ? done.length / total : 0 }
+}
+
+// ── Seed fallback (until the backend loads) — the original behaviour ──
+const ALL = [
+  ...seed.groups.flatMap((g) => g.items.map((item) => ({ item, group: g.title }))),
+  ...seed.done.map((item) => ({ item, group: 'Done' })),
+]
+const doneSeed = (title: string, group: string) => overrides[title] ?? group === 'Done'
+const projectSeed = (): TaskView => {
   const fallback = seed.groups[0]?.title ?? 'Today'
   const open = new Map<string, TaskItem[]>(seed.groups.map((g) => [g.title, []]))
   for (const { item, group } of ALL) {
-    if (isDone(o, item.title, group)) continue
+    if (doneSeed(item.title, group)) continue
     open.get(open.has(group) ? group : fallback)!.push(item)
   }
   const groups = seed.groups.map((g) => ({ title: g.title, items: open.get(g.title)! }))
   const done = [
-    ...seed.done.filter((t) => isDone(o, t.title, 'Done')),
-    ...seed.groups.flatMap((g) => g.items.filter((t) => isDone(o, t.title, g.title))),
+    ...seed.done.filter((tk) => doneSeed(tk.title, 'Done')),
+    ...seed.groups.flatMap((g) => g.items.filter((tk) => doneSeed(tk.title, g.title))),
   ]
   const openCount = groups.reduce((n, g) => n + g.items.length, 0)
   const total = openCount + done.length
   return { groups, done, openCount, progress: total ? done.length / total : 0 }
 }
 
-let view = project(current)
-let seen = current
-const snapshot = () => {
-  if (seen !== current) {
-    view = project(current)
-    seen = current
+export const toggleTask = (title: string) => {
+  const t = server?.find((x) => x.title === title)
+  const wasDone = t ? doneServer(t) : doneSeed(title, ALL.find((e) => e.item.title === title)?.group ?? '')
+  write({ ...overrides, [title]: !wasDone })
+  // Persist a real completion when we know the backend task id.
+  if (!wasDone && t?.id) api.completeTask(t.id).catch(() => {})
+}
+
+// getSnapshot must return a STABLE reference until something actually changes,
+// or useSyncExternalStore loops. Cache on (version, server identity).
+let cached: TaskView = projectSeed()
+let cachedVersion = -1
+let cachedServer: ServerTask[] | null | undefined = undefined
+const snapshot = (): TaskView => {
+  if (cachedVersion !== version || cachedServer !== server) {
+    cached = server ? projectServer(server) : projectSeed()
+    cachedVersion = version
+    cachedServer = server
   }
-  return view
+  return cached
 }
 
 export const useTasks = () => useSyncExternalStore(subscribe, snapshot)
-
 export const taskView = snapshot
+
+/** Load the real tasks from the backend. Best-effort — keeps the seed on error. */
+export const hydrateTasks = async (): Promise<void> => {
+  try {
+    const res = await api.tasks()
+    server = (res.tasks as ServerTask[]) || []
+    bump()
+  } catch {
+    /* keep the seed */
+  }
+}

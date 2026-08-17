@@ -67,6 +67,7 @@ import { useLang } from './i18n'
 import { useNavRoute, replaceRoute, type NavDir } from './shell/nav'
 import { useSession, completeOnboarding } from './data/session'
 import { hydrateProfile } from './data/store'
+import { hydrateTasks } from './data/tasks'
 import { useDragScroll } from './shell/useDragScroll'
 import { installTapFeedback } from './shell/feedback'
 import './picker.css'
@@ -209,9 +210,12 @@ const App = () => {
   const inApp = isTabRoute(route) && signedIn
   const dragScrollRef = useDragScroll()
   useEffect(() => installTapFeedback(), [])
-  // Once signed in, pull the real profile so the greeting/header/settings are live.
+  // Once signed in, pull the real profile + tasks from the backend.
   useEffect(() => {
-    if (signedIn) void hydrateProfile()
+    if (signedIn) {
+      void hydrateProfile()
+      void hydrateTasks()
+    }
   }, [signedIn])
 
   const from = useRef<string | null>(null)
