@@ -370,3 +370,26 @@ CREATE TABLE IF NOT EXISTS automations (
   created_at TEXT DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_automations_user ON automations(user_id, active);
+
+-- ─── Meetings (noted/recorded meetings → AI summary + action items) ──
+--   A meeting the user held. Raw notes (typed now; transcribed audio later) are
+--   turned into a structured summary + action items by Claude, then optionally
+--   emailed to the attendees who have an address, and to the user.
+CREATE TABLE IF NOT EXISTS meetings (
+  id TEXT PRIMARY KEY,
+  user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+  title TEXT,
+  type TEXT,                     -- 'Product' | 'Client' | 'Internal' | 'Sales' | 'Partner'
+  company TEXT,
+  location TEXT,
+  virtual INTEGER DEFAULT 0,
+  attendees TEXT DEFAULT '[]',   -- JSON [{ name, email, role }]
+  notes TEXT,                    -- raw notes (typed now; transcript later)
+  summary TEXT,                  -- JSON { overview, discussion[], decisions[], actions[], openQuestions[], followUps[] }
+  status TEXT DEFAULT 'scheduled', -- scheduled | in-progress | processing | summary-ready | completed | cancelled
+  meeting_at TEXT,               -- ISO time the meeting happened
+  emailed_at TEXT,               -- when the summary was emailed out
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_meetings_user ON meetings(user_id);

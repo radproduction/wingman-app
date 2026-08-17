@@ -12,6 +12,7 @@ const authRoutes = require('./auth/routes');
 const otpAuthRoutes = require('./api/authRoutes');
 const { attachUserOptional } = require('./api/middleware/auth');
 const dashboardApi = require('./api/dashboard');
+const meetingsApi = require('./api/meetings');
 const adminQr = require('./admin/qr');
 const fs = require('fs');
 const path = require('path');
@@ -34,6 +35,7 @@ app.use('/api', attachUserOptional);
 
 // Dashboard JSON API for the mobile PWA (/api/*)
 app.use('/api', dashboardApi);
+app.use('/api', meetingsApi);
 
 // Browser-based WhatsApp pairing (/admin/qr, /admin/qr.json)
 app.use('/admin', adminQr);
