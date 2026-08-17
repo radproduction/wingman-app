@@ -29,6 +29,7 @@ import {
   peekFor,
   startOfWeek,
   summaryFor,
+  useCalendarData,
   weekOf,
   weekdayInitial,
   initialOf,
@@ -172,6 +173,7 @@ const revealer = () => {
 }
 
 export const Calendar = () => {
+  useCalendarData() // re-render when the real Google calendar finishes loading
   const trackRef = useRef<HTMLDivElement>(null)
   const { screenRef, tucked } = useFoldingBar(trackRef)
   const [nonce, setNonce] = useState(0)

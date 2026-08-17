@@ -1,4 +1,6 @@
-import { NOW, TODAY, calendarDays, type CalEvent } from './mock'
+import { useSyncExternalStore } from 'react'
+import { NOW, TODAY, calendarDays, type CalEvent, type ChipTone } from './mock'
+import { api } from './api'
 import { plural, t } from '../i18n'
 
 const MS_DAY = 86_400_000
@@ -77,10 +79,14 @@ export const dayLabel = (iso: string) => {
 }
 
 
-export const eventsFor = (iso: string): CalEvent[] =>
-  [...(calendarDays[iso]?.events ?? [])].sort((a, b) => a.time.localeCompare(b.time))
+export const eventsFor = (iso: string): CalEvent[] => {
+  // Once the real calendar has loaded, days with no real event are truly empty
+  // (no mock fill-in). Before that, the seed keeps the UI from flashing blank.
+  const src = realDays ? realDays[iso] ?? [] : calendarDays[iso]?.events ?? []
+  return [...src].sort((a, b) => a.time.localeCompare(b.time))
+}
 
-export const briefFor = (iso: string) => calendarDays[iso]?.brief
+export const briefFor = (iso: string) => (realDays ? undefined : calendarDays[iso]?.brief)
 
 export const dotsFor = (iso: string) => Math.min(3, eventsFor(iso).length)
 
@@ -136,4 +142,81 @@ export const peekFor = (iso: string) => {
     }
   }
   return null
+}
+
+// ── Real calendar (Google, via /api/calendar) ───────────────────────────────
+// The whole calendar (grid dots, agenda, day briefs, peek) flows through
+// eventsFor/briefFor above, so wiring just those two makes every screen real.
+// realDays stays null until the first load so the seed shows meanwhile.
+
+type ServerEvent = {
+  id?: string
+  title?: string
+  location?: string | null
+  start_time?: string
+  end_time?: string
+  attendees?: unknown[]
+  has_conflict?: boolean
+}
+
+let realDays: Record<string, CalEvent[]> | null = null
+let calVersion = 0
+const calListeners = new Set<() => void>()
+const subscribeCal = (fn: () => void) => {
+  calListeners.add(fn)
+  return () => void calListeners.delete(fn)
+}
+// Screens that read the calendar call this so they re-render when it loads.
+export const useCalendarData = () => useSyncExternalStore(subscribeCal, () => calVersion)
+
+const two = (n: number) => String(n).padStart(2, '0')
+const localDate = (d: Date) => `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())}`
+const localTime = (d: Date) => `${two(d.getHours())}:${two(d.getMinutes())}`
+
+const durLabel = (start: Date, end?: Date): string => {
+  if (!end || Number.isNaN(end.getTime())) return ''
+  const mins = Math.round((end.getTime() - start.getTime()) / 60000)
+  if (mins <= 0) return ''
+  if (mins < 60) return `${mins} min`
+  const hrs = mins / 60
+  return Number.isInteger(hrs) ? `${hrs} hr` : `${hrs.toFixed(1)} hr`
+}
+
+const TONES: ChipTone[] = ['blue', 'lavender', 'mint', 'peach', 'sand', 'rose']
+
+const toEvent = (e: ServerEvent, i: number): CalEvent | null => {
+  if (!e.start_time) return null
+  const start = new Date(e.start_time)
+  if (Number.isNaN(start.getTime())) return null
+  const end = e.end_time ? new Date(e.end_time) : undefined
+  const guests = Array.isArray(e.attendees) ? e.attendees.length : 0
+  return {
+    time: localTime(start),
+    dur: durLabel(start, end),
+    title: e.title || t('Untitled'),
+    sub: e.location || (guests ? plural(guests, { one: '{n} guest', other: '{n} guests' }) : ''),
+    tone: TONES[i % TONES.length],
+    icon: 'calendar',
+    ...(e.location ? { place: e.location } : {}),
+    ...(e.has_conflict ? { flag: t('Conflict') } : {}),
+  }
+}
+
+/** Load the user's real Google calendar. Best-effort — keeps the seed on error. */
+export const hydrateCalendar = async (): Promise<void> => {
+  try {
+    const res = await api.calendar()
+    const map: Record<string, CalEvent[]> = {}
+    ;((res.events as ServerEvent[]) || []).forEach((e, i) => {
+      const ev = toEvent(e, i)
+      if (!ev || !e.start_time) return
+      const key = localDate(new Date(e.start_time))
+      ;(map[key] ||= []).push(ev)
+    })
+    realDays = map
+    calVersion++
+    calListeners.forEach((fn) => fn())
+  } catch {
+    /* keep the seed */
+  }
 }

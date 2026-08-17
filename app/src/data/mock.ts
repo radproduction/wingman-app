@@ -3,8 +3,12 @@ import type { IconName } from '../app/icons'
 export type ChipTone = 'blue' | 'lavender' | 'mint' | 'peach' | 'sand' | 'rose'
 export type MetricTone = 'teal' | 'amber' | 'violet'
 
-export const TODAY = '2026-07-21'
-export const NOW = '10:20'
+// Real "now", resolved once at load — so the calendar grid, the agenda "now"
+// line and every relative date the app computes are the user's actual today.
+const _pad = (n: number) => String(n).padStart(2, '0')
+const _now = new Date()
+export const TODAY = `${_now.getFullYear()}-${_pad(_now.getMonth() + 1)}-${_pad(_now.getDate())}`
+export const NOW = `${_pad(_now.getHours())}:${_pad(_now.getMinutes())}`
 
 
 export const channel = {
