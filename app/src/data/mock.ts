@@ -14,7 +14,9 @@ export const NOW = `${_pad(_now.getHours())}:${_pad(_now.getMinutes())}`
 export const channel = {
   name: 'WhatsApp',
   online: true,
-  number: '+1 202 555 0100',
+  // The real Wingman WhatsApp Business number — every "Ask Wingman on WhatsApp"
+  // / connect action opens a chat with this number (wa.me).
+  number: '+1 646 862 7900',
 }
 
 
