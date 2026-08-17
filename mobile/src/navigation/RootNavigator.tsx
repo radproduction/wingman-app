@@ -1,28 +1,29 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { AppTabs } from './AppTabs';
+import { OnboardingScreen } from '../screens/OnboardingScreen';
 import { LoginScreen } from '../screens/LoginScreen';
 import { useTheme } from '../theme/ThemeProvider';
 import { getToken } from '../lib/auth';
 import { api } from '../api/client';
 
 /**
- * Auth gate. A stored token that the backend still accepts → the app. Otherwise
- * → login. Kept out of the tab stack on purpose: login is not a screen you can
- * navigate back to once you are in.
+ * Auth gate + first-run flow. A stored token the backend still accepts → the
+ * app. Otherwise a new user walks the intro carousel, then signs in. Login is
+ * kept out of the tab stack on purpose: it is not a screen you go back to.
  */
 export function RootNavigator() {
   const { palette } = useTheme();
-  const [state, setState] = useState<'loading' | 'in' | 'out'>('loading');
+  const [state, setState] = useState<'loading' | 'onboarding' | 'login' | 'in'>('loading');
 
   const resolve = useCallback(async () => {
     const token = await getToken();
-    if (!token) return setState('out');
+    if (!token) return setState('onboarding');
     try {
       await api.authMe(); // token still valid?
       setState('in');
     } catch {
-      setState('out');
+      setState('onboarding');
     }
   }, []);
 
@@ -38,5 +39,7 @@ export function RootNavigator() {
     );
   }
 
-  return state === 'in' ? <AppTabs /> : <LoginScreen onAuthed={resolve} />;
+  if (state === 'onboarding') return <OnboardingScreen onDone={() => setState('login')} />;
+  if (state === 'login') return <LoginScreen onAuthed={resolve} />;
+  return <AppTabs />;
 }
