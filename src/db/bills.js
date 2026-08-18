@@ -9,11 +9,11 @@ const { db, uuid } = require('./index');
 function upsert(userId, bill) {
   let existing = null;
   if (bill.sourceEmailId) {
-    existing = db.prepare('SELECT id FROM bills WHERE user_id = ? AND source_email_id = ?')
+    existing = db.prepare('SELECT id, status FROM bills WHERE user_id = ? AND source_email_id = ?')
       .get(userId, bill.sourceEmailId);
   }
   if (!existing && bill.name) {
-    existing = db.prepare('SELECT id FROM bills WHERE user_id = ? AND name = ? AND IFNULL(due_date,\'\') = IFNULL(?,\'\')')
+    existing = db.prepare('SELECT id, status FROM bills WHERE user_id = ? AND name = ? AND IFNULL(due_date,\'\') = IFNULL(?,\'\')')
       .get(userId, bill.name, bill.dueDate || null);
   }
 
@@ -29,11 +29,14 @@ function upsert(userId, bill) {
   };
 
   if (existing) {
+    // Never revert a bill the user already marked paid back to pending when a
+    // re-scan of the same email re-imports it (that caused paid bills to nag again).
+    const status = existing.status === 'paid' ? 'paid' : row.status;
     db.prepare(`
       UPDATE bills SET name=@name, amount=@amount, currency=@currency,
         due_date=@due_date, status=@status, recurring=@recurring,
         source_email_id=@source_email_id WHERE id=@id
-    `).run({ ...row, id: existing.id });
+    `).run({ ...row, status, id: existing.id });
     return existing.id;
   }
 
@@ -71,4 +74,12 @@ function markPaid(id) {
   return db.prepare('SELECT * FROM bills WHERE id = ?').get(id);
 }
 
-module.exports = { upsert, listForUser, findByName, markPaid };
+/** Stamp when we last alerted about these bills, so they don't re-notify daily. */
+function markAlerted(ids, whenISO) {
+  if (!ids || !ids.length) return;
+  const stmt = db.prepare('UPDATE bills SET last_alerted_at = ? WHERE id = ?');
+  const tx = db.transaction((list) => { for (const id of list) stmt.run(whenISO, id); });
+  tx(ids);
+}
+
+module.exports = { upsert, listForUser, findByName, markPaid, markAlerted };

@@ -138,6 +138,7 @@ CREATE TABLE IF NOT EXISTS bills (
   status TEXT DEFAULT 'pending',
   recurring INTEGER DEFAULT 0,
   source_email_id TEXT REFERENCES email_items(id),
+  last_alerted_at TEXT,
   created_at TEXT DEFAULT (datetime('now'))
 );
 

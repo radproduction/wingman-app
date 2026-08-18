@@ -121,6 +121,10 @@ function applyMigrations() {
       ['account_id', 'TEXT'],
       ['account_email', 'TEXT'],
     ],
+    bills: [
+      // When we last alerted about this bill, so overdue bills don't re-notify daily.
+      ['last_alerted_at', 'TEXT'],
+    ],
     automations: [
       // Anchor a fire time to a learned behaviour (e.g. the user's usual finish),
       // so the reminder self-adjusts as that behaviour drifts. Null → fixed time.

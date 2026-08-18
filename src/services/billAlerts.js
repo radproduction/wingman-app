@@ -10,45 +10,68 @@ function fmtAmount(b) {
   return `${b.currency || 'PKR'} ${Number(b.amount || 0).toLocaleString('en-US')}`;
 }
 
+// Don't re-nag about the same bill more than once every few days, and never
+// send more than one message \u2014 a digest, capped so it's never a wall of pings.
+const REMIND_EVERY_DAYS = 3;
+const MAX_IN_DIGEST = 8;
+
 /**
- * Send due-soon (within 3 days) and overdue bill alerts for one user.
+ * Build ONE digest of the bills that genuinely need the user (real amount,
+ * overdue or due within 3 days), skipping zero-amount notices and bills we
+ * already alerted about recently. Sends a single message, not one per bill.
  */
 async function alertForUser(userId, { now = new Date(), send = true } = {}) {
   const user = usersRepo.getById(userId);
-  if (!user) return { alerts: [] };
+  if (!user) return { alerts: [], count: 0 };
   const tz = user.timezone || 'Asia/Karachi';
   const todayStart = t.startOfDayISO(tz, 0, now);
   const todayDate = todayStart.slice(0, 10);
   const offset = todayStart.slice(-6);
 
   const pending = billsRepo.listForUser(user.id, { status: 'pending' });
-  const alerts = [];
+  const due = [];
 
   for (const b of pending) {
     if (!b.due_date) continue;
-    const dueISO = `${b.due_date}T00:00:00${offset}`;
-    const days = t.daysBetween(todayStart, dueISO);
-
+    // Skip $0 / PKR 0 notices (free-tier receipts, not real bills to pay).
+    if (!(Number(b.amount) > 0)) continue;
+    // Throttle: don't re-alert a bill we already pinged within the last few days.
+    if (b.last_alerted_at) {
+      const since = t.daysBetween(`${String(b.last_alerted_at).slice(0, 10)}T00:00:00${offset}`, todayStart);
+      if (since < REMIND_EVERY_DAYS) continue;
+    }
+    const days = t.daysBetween(todayStart, `${b.due_date}T00:00:00${offset}`);
     if (days < 0) {
-      const ago = Math.abs(days);
-      alerts.push(`\u26a0\ufe0f Your ${b.name} of ${fmtAmount(b)} was due ${ago} day${ago === 1 ? '' : 's'} ago. Mark as paid?`);
+      due.push({ b, days, line: `\u26a0\ufe0f ${b.name} \u2014 ${fmtAmount(b)} (overdue ${Math.abs(days)}d)` });
     } else if (days <= 3) {
-      const when = days === 0 ? 'today' : `in ${days} day${days === 1 ? '' : 's'}`;
-      alerts.push(`\ud83d\udcb0 Reminder: Your ${b.name} of ${fmtAmount(b)} is due ${when}.`);
+      const when = days === 0 ? 'due today' : `due in ${days}d`;
+      due.push({ b, days, line: `\ud83d\udcb0 ${b.name} \u2014 ${fmtAmount(b)} (${when})` });
     }
   }
 
-  if (send && alerts.length) {
+  if (!due.length) return { alerts: [], count: 0 };
+
+  due.sort((x, y) => x.days - y.days); // most overdue first
+  const shown = due.slice(0, MAX_IN_DIGEST);
+  const extra = due.length - shown.length;
+
+  let msg = `\ud83d\udcb0 *Bills that need you* (${due.length})\n\n${shown.map((x) => x.line).join('\n')}`;
+  if (extra > 0) msg += `\n\n\u2026and ${extra} more.`;
+  msg += `\n\nReply e.g. \u201cpaid ${shown[0].b.name}\u201d to clear one, or \u201cbills\u201d to see them all.`;
+
+  if (send) {
     try {
       if (wa().ready()) {
-        for (const a of alerts) await wa().sendMessage(user.phone, a);
+        await wa().sendMessage(user.phone, msg);
+        // Mark the whole batch alerted, so the next reminder is in a few days.
+        billsRepo.markAlerted(due.map((x) => x.b.id), todayDate);
       } else {
-        console.log('[billAlerts] (WA not ready) would alert:', alerts.length);
+        console.log('[billAlerts] (WA not ready) would send 1 digest for', due.length, 'bills');
       }
     } catch (err) { console.warn('[billAlerts] send failed:', err.message); }
   }
 
-  return { alerts };
+  return { alerts: [msg], count: due.length };
 }
 
 async function runDueUsers({ hour = 9, now = new Date() } = {}) {
