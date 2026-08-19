@@ -3,6 +3,12 @@
 require('dotenv').config();
 
 const path = require('path');
+const fs = require('fs');
+
+// Serve the new app (app/dist) when it's built, else the legacy dashboard (client/dist).
+const appDist = path.resolve(__dirname, '..', 'app', 'dist');
+const legacyDist = path.resolve(__dirname, '..', 'client', 'dist');
+const uiDist = fs.existsSync(path.join(appDist, 'index.html')) ? appDist : legacyDist;
 
 const config = {
   port: parseInt(process.env.PORT, 10) || 3000,
@@ -28,7 +34,7 @@ const config = {
   adminPassword: process.env.ADMIN_PASSWORD || 'wingman',
 
   // Built dashboard (Vite) output served by Express in production
-  clientDist: path.resolve(__dirname, '..', 'client', 'dist'),
+  clientDist: uiDist,
 
   // Disable WhatsApp entirely (useful for API-only / screenshot demos)
   disableWhatsapp: process.env.DISABLE_WHATSAPP === '1',

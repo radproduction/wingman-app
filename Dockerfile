@@ -34,6 +34,12 @@ RUN cd client && npm install --include=dev
 COPY client ./client
 RUN cd client && npm run build
 
+# ── Build the new app (Vite PWA — the product UI served at / ) ─────────
+COPY app/package*.json ./app/
+RUN cd app && npm install --include=dev
+COPY app ./app
+RUN cd app && npm run build
+
 # ── App source ────────────────────────────────────────────────────────
 COPY . .
 
