@@ -678,31 +678,94 @@ export const requestMic = async (): Promise<MicState> => {
   }
 }
 
+// ── Real audio capture (MediaRecorder) ──────────────────────────────────────
+type Rec = { rec: MediaRecorder; chunks: BlobPart[]; stream: MediaStream; mime: string }
+const recorders: Record<string, Rec> = {}
+
+const pickAudioMime = (): string => {
+  if (typeof MediaRecorder === 'undefined') return ''
+  for (const m of ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/aac', 'audio/ogg']) {
+    try {
+      if (MediaRecorder.isTypeSupported?.(m)) return m
+    } catch {
+      /* ignore */
+    }
+  }
+  return ''
+}
+
+/** Get the mic AND start recording, keeping the stream open. Returns mic state. */
+const startRecording = async (id: string): Promise<MicState> => {
+  if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) return 'unavailable'
+  if (typeof MediaRecorder === 'undefined') return 'unavailable'
+  let stream: MediaStream
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+  } catch (e) {
+    const name = (e as { name?: string })?.name
+    return name === 'NotFoundError' || name === 'NotSupportedError' ? 'unavailable' : 'denied'
+  }
+  try {
+    const mime = pickAudioMime()
+    const rec = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream)
+    const chunks: BlobPart[] = []
+    rec.ondataavailable = (e) => {
+      if (e.data && e.data.size > 0) chunks.push(e.data)
+    }
+    rec.start()
+    recorders[id] = { rec, chunks, stream, mime: rec.mimeType || mime || 'audio/webm' }
+    return 'granted'
+  } catch {
+    stream.getTracks().forEach((tr) => tr.stop())
+    return 'unavailable'
+  }
+}
+
+/** Stop recording and return the captured audio (null if nothing / no recorder). */
+const stopRecording = (id: string): Promise<{ blob: Blob; mime: string } | null> => {
+  const r = recorders[id]
+  if (!r) return Promise.resolve(null)
+  delete recorders[id]
+  return new Promise((resolve) => {
+    const finish = () => {
+      try {
+        r.stream.getTracks().forEach((tr) => tr.stop())
+      } catch {
+        /* ignore */
+      }
+      const blob = new Blob(r.chunks, { type: r.mime })
+      resolve(blob.size > 0 ? { blob, mime: r.mime } : null)
+    }
+    r.rec.onstop = finish
+    try {
+      if (r.rec.state !== 'inactive') r.rec.stop()
+      else finish()
+    } catch {
+      finish()
+    }
+  })
+}
+
+const micProblem = (mic: MicState) =>
+  mic === 'denied'
+    ? 'I could not reach your microphone. Allow microphone access for this site, then try again.'
+    : 'I could not find a microphone on this device.'
+
 export const startAssist = async (id: string, recording: boolean) => {
   if (!recording) {
     setSession(id, { phase: 'recording', mic: 'off', seconds: 0, since: Date.now(), notes: [] })
     return 'off' as MicState
   }
   setSession(id, { phase: 'arming', mic: 'unknown', seconds: 0, since: null, notes: [] })
-  const mic = await requestMic()
-  if (mic === 'granted') {
-    setSession(id, { phase: 'recording', mic, since: Date.now() })
-  } else {
-    setSession(id, {
-      phase: 'error',
-      mic,
-      problem:
-        mic === 'denied'
-          ? 'I could not reach your microphone. Allow microphone access for this site, then try again.'
-          : 'I could not find a microphone on this device.',
-    })
-  }
+  const mic = await startRecording(id)
+  if (mic === 'granted') setSession(id, { phase: 'recording', mic, since: Date.now() })
+  else setSession(id, { phase: 'error', mic, problem: micProblem(mic) })
   return mic
 }
 
 export const retryMic = async (id: string) => {
   setSession(id, { phase: 'arming' })
-  const mic = await requestMic()
+  const mic = await startRecording(id)
   if (mic === 'granted') setSession(id, { phase: 'recording', mic, since: Date.now() })
   else
     setSession(id, {
@@ -737,14 +800,17 @@ export const endAssist = (id: string) => {
   const s = sessionOf(id)
   const total = liveSeconds(s)
   setSession(id, { phase: 'processing', seconds: total, since: null })
-  // Real processing: notes → backend (Claude summary + action items), with a
-  // local fallback. When it settles, flip the session to ready.
-  void processInstant(id, total, s.notes, s.mic !== 'off').finally(() => {
+  // Stop the recording, then process: recorded audio → transcribe on the backend,
+  // otherwise typed notes → Claude. Local fallback if the backend is unreachable.
+  void (async () => {
+    const audio = await stopRecording(id)
+    await processInstant(id, total, s.notes, s.mic !== 'off', audio)
     if (sessionOf(id).phase === 'processing') setSession(id, { phase: 'ready' })
-  })
+  })()
 }
 
 export const cancelAssist = (id: string) => {
+  void stopRecording(id) // stop + discard any recording
   live = { ...live, [id]: IDLE }
   emit()
 }
@@ -833,7 +899,7 @@ const INSTANT_ACTIONS: ProposedAction[] = [
 
 const retentionLine = (recorded: boolean) =>
   recorded
-    ? 'Kept for 30 days, then deleted automatically'
+    ? 'The audio was turned into a transcript, then discarded — nothing is stored.'
     : 'Notes only - no audio was captured, so there is nothing to keep or delete.'
 
 // The fabricated, notes-only summary — the graceful fallback used when the
@@ -905,7 +971,13 @@ const applyInstantSummary = (id: string, mins: number, summary: MeetingSummary, 
 // Turn the finished session into a summary: send the typed notes to the backend
 // so Claude produces the real summary + action items; fall back to the local
 // notes-only summary if the backend is unreachable.
-const processInstant = async (id: string, seconds: number, notes: LiveNote[], recorded: boolean): Promise<void> => {
+const processInstant = async (
+  id: string,
+  seconds: number,
+  notes: LiveNote[],
+  recorded: boolean,
+  audio?: { blob: Blob; mime: string } | null,
+): Promise<void> => {
   const m = state.instants.find((x) => x.id === id)
   if (!m || m.summary) return
   const mins = Math.max(1, Math.round(seconds / 60))
@@ -920,8 +992,22 @@ const processInstant = async (id: string, seconds: number, notes: LiveNote[], re
       status: 'processing',
       meetingAt: new Date().toISOString(),
     })
-    const res = await api.finalizeMeeting(created.meeting.id)
-    applyInstantSummary(id, mins, serverToSummary(res.meeting.summary, seconds, notes, recorded), created.meeting.id)
+    // Recorded audio → transcribe on the backend (Whisper) then summarize; else
+    // the typed notes → Claude. If transcription fails, fall back to the notes.
+    let serverSummary: ServerMeetingSummary | null | undefined
+    if (audio && audio.blob.size > 0) {
+      try {
+        const res = await api.transcribeMeeting(created.meeting.id, audio.blob, audio.mime)
+        serverSummary = res.meeting.summary
+      } catch {
+        const res = await api.finalizeMeeting(created.meeting.id)
+        serverSummary = res.meeting.summary
+      }
+    } else {
+      const res = await api.finalizeMeeting(created.meeting.id)
+      serverSummary = res.meeting.summary
+    }
+    applyInstantSummary(id, mins, serverToSummary(serverSummary, seconds, notes, recorded || !!audio), created.meeting.id)
   } catch {
     applyInstantSummary(id, mins, localSummary(seconds, notes, recorded))
   }

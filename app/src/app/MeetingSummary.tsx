@@ -331,25 +331,9 @@ const FullSummary = ({ m }: { m: Meeting }) => {
         <h2>{t('Recording')}</h2>
       </div>
       {recorded ? (
-        <div className="wg-integ wg-card-line">
-          <div className="wg-integ__top">
-            <span className="wg-chip mint sm">
-              <Icon name="volume" size={18} variant="duotone" />
-            </span>
-            <div className="wg-integ__tx">
-              <div className="wg-integ__name">{t('Play recording')}</div>
-              <div className="wg-integ__sync">{t(s.recording.duration)}</div>
-            </div>
-            <button className="wg-link wg-link--end" onClick={() => toast(t('Playback is not available in this preview.'), 'volume')}>
-              {t('Play')}
-            </button>
-          </div>
-          <p className="wg-integ__reads">{t(s.recording.retention)}</p>
-          <div className="wg-integ__foot">
-            <button className="wg-link wg-link--end wg-link--danger" onClick={() => toast(t('Recording deleted.'), 'trash')}>
-              {t('Delete recording')}
-            </button>
-          </div>
+        <div className="wg-bc__summary wg-card-line">
+          <Icon name="volume" size={18} variant="duotone" />
+          <p>{t('I turned the audio into the transcript above, then discarded the recording — nothing is stored to play or delete.')}</p>
         </div>
       ) : (
         <div className="wg-bc__summary wg-card-line">

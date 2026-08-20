@@ -99,6 +99,47 @@ router.post('/meetings/:id/finalize', async (req, res) => {
   res.json({ meeting: meetingsRepo.getForUser(u.id, base.id), email });
 });
 
+// ── transcribe: audio recording → Whisper → notes → summary ─────────
+const AUDIO_EXT = {
+  'audio/webm': 'webm', 'audio/mp4': 'mp4', 'audio/mpeg': 'mp3',
+  'audio/wav': 'wav', 'audio/ogg': 'ogg', 'audio/aac': 'mp4', 'video/mp4': 'mp4',
+};
+function extOfType(ct) {
+  const base = String(ct || '').split(';')[0].trim().toLowerCase();
+  return AUDIO_EXT[base] || 'webm';
+}
+
+router.post('/meetings/:id/transcribe', express.raw({ type: () => true, limit: '25mb' }), async (req, res) => {
+  const u = requireUser(req, res);
+  if (!u) return;
+  const m = meetingsRepo.getForUser(u.id, req.params.id);
+  if (!m) return res.status(404).json({ error: 'Meeting not found' });
+
+  const voice = require('../services/voice');
+  if (!voice.enabled()) return res.status(501).json({ error: 'Transcription is not available' });
+
+  const audio = req.body;
+  if (!Buffer.isBuffer(audio) || !audio.length) return res.status(400).json({ error: 'No audio received' });
+
+  let transcript;
+  try {
+    transcript = await voice.transcribe(audio, { filename: `meeting.${extOfType(req.headers['content-type'])}` });
+  } catch (_) {
+    return res.status(502).json({ error: 'Could not transcribe the recording' });
+  }
+  if (!transcript) return res.status(422).json({ error: 'Nothing could be heard in the recording' });
+
+  meetingsRepo.update(u.id, m.id, { notes: transcript });
+  let summary;
+  try {
+    summary = await meetingNotes.summarize({ title: m.title, attendees: m.attendees, notes: transcript });
+  } catch (_) {
+    return res.status(502).json({ error: 'Could not summarize the recording' });
+  }
+  meetingsRepo.update(u.id, m.id, { summary, status: 'summary-ready' });
+  res.json({ meeting: meetingsRepo.getForUser(u.id, m.id), transcript });
+});
+
 // ── send: email the stored summary ──────────────────────────────────
 router.post('/meetings/:id/send', async (req, res) => {
   const u = requireUser(req, res);

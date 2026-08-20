@@ -137,6 +137,16 @@ export const api = {
     req<{ meeting: ServerMeeting; email: EmailResult | null }>('POST', `/meetings/${encodeURIComponent(id)}/finalize`, body),
   sendMeeting: (id: string) =>
     req<{ email: EmailResult | null }>('POST', `/meetings/${encodeURIComponent(id)}/send`),
+  // Upload a meeting recording → backend transcribes (Whisper) + summarizes (Claude).
+  transcribeMeeting: async (id: string, blob: Blob, mime: string) => {
+    const res = await fetch(`${BASE}/api/meetings/${encodeURIComponent(id)}/transcribe`, {
+      method: 'POST',
+      headers: headers({ 'Content-Type': mime || 'application/octet-stream' }),
+      body: blob,
+    })
+    if (!res.ok) throw new ApiError(res.status, `transcribe → ${res.status}`)
+    return (await res.json()) as { meeting: ServerMeeting; transcript?: string }
+  },
 
   // ── Connections ──
   // One Google consent connects Calendar + Gmail + Tasks + Drive together

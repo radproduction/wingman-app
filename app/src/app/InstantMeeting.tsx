@@ -125,7 +125,7 @@ export const InstantMeeting = () => {
         <ul className="wg-consent__list">
           <li>
             <IconCheck size={16} />
-            {t('I record the audio and build a live transcript while the meeting runs.')}
+            {t('I record the audio, then turn it into a transcript when the meeting ends.')}
           </li>
           <li>
             <IconCheck size={16} />
@@ -133,7 +133,7 @@ export const InstantMeeting = () => {
           </li>
           <li>
             <IconCheck size={16} />
-            {t('The recording is kept for 30 days, then deleted automatically. You can delete it sooner.')}
+            {t('The audio is turned into text and then discarded — the recording itself is not stored.')}
           </li>
           <li>
             <IconCheck size={16} />
