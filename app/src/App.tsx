@@ -195,7 +195,10 @@ const OPEN_ROUTES = ['concepts', 'morning-paper', 'first-light']
 
 const Gate = ({ route }: { route: string }) => {
   const { onboarded, signedIn } = useSession()
-  if (signedIn || OPEN_ROUTES.includes(route)) return <Screen route={route} />
+  if (OPEN_ROUTES.includes(route)) return <Screen route={route} />
+  // Not onboarded yet (brand new, OR verified-but-didn't-finish) → the wizard,
+  // even when a token exists. This stops a refresh mid-onboarding from dropping
+  // the user into Home with nothing saved.
   if (!onboarded)
     return (
       <Onboarding
@@ -205,6 +208,7 @@ const Gate = ({ route }: { route: string }) => {
         }}
       />
     )
+  if (signedIn) return <Screen route={route} />
   return route === 'signin' ? <SignIn /> : <Welcome />
 }
 

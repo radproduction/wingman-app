@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { IconName } from '../app/icons'
-import { api, ApiError } from '../data/api'
+import { api, ApiError, isSignedIn } from '../data/api'
+import { markOnboarded } from '../data/session'
 
 export type Screen =
   | 'splash'
@@ -128,26 +129,63 @@ export interface OnboardingState {
   quiet: { from: string; to: string }
 }
 
+const PERSIST_KEY = 'wingman.onboarding'
+const PRE_VERIFY: Screen[] = ['splash', 'intro', 'phone', 'verify']
+
+const defaultOnboardingState = (): OnboardingState => ({
+  screen: 'splash',
+  cc: '+92',
+  phone: '',
+  code: ['', '', '', '', '', ''],
+  name: '',
+  tz: detectTimezone(),
+  times: { brief: '07:00', start: '09:00', end: '18:00', wrap: '20:00' },
+  proactivity: 'Moderate',
+  skills: SKILLS.map((s) => s.name),
+  tone: 'Friendly',
+  detail: 'Concise',
+  connected: [],
+  interests: ['business', 'markets', 'tech', 'world', 'local'],
+  places: { home: '', office: '' },
+  runsBusiness: true,
+  autonomy: 'Small things',
+  quiet: { from: '22:00', to: '07:00' },
+})
+
+// Restore an in-progress onboarding so a refresh resumes instead of restarting.
+const loadOnboardingState = (): OnboardingState => {
+  let s = defaultOnboardingState()
+  try {
+    const raw = localStorage.getItem(PERSIST_KEY)
+    if (raw) s = { ...s, ...(JSON.parse(raw) as Partial<OnboardingState>) }
+  } catch {
+    /* ignore */
+  }
+  // If a token already exists (OTP verified), never sit on splash/phone/verify —
+  // resume in the flow so a mid-onboarding refresh continues, not restarts.
+  if (isSignedIn() && PRE_VERIFY.includes(s.screen)) s = { ...s, screen: 'name' }
+  return s
+}
+
+export const clearOnboardingState = () => {
+  try {
+    localStorage.removeItem(PERSIST_KEY)
+  } catch {
+    /* ignore */
+  }
+}
+
 export function useOnboarding() {
-  const [state, setState] = useState<OnboardingState>(() => ({
-    screen: 'splash',
-    cc: '+92',
-    phone: '',
-    code: ['', '', '', '', '', ''],
-    name: '',
-    tz: detectTimezone(),
-    times: { brief: '07:00', start: '09:00', end: '18:00', wrap: '20:00' },
-    proactivity: 'Moderate',
-    skills: SKILLS.map((s) => s.name),
-    tone: 'Friendly',
-    detail: 'Concise',
-    connected: [],
-    interests: ['business', 'markets', 'tech', 'world', 'local'],
-    places: { home: '', office: '' },
-    runsBusiness: true,
-    autonomy: 'Small things',
-    quiet: { from: '22:00', to: '07:00' },
-  }))
+  const [state, setState] = useState<OnboardingState>(loadOnboardingState)
+
+  // Persist progress on every change so a refresh can resume mid-flow.
+  useEffect(() => {
+    try {
+      localStorage.setItem(PERSIST_KEY, JSON.stringify(state))
+    } catch {
+      /* ignore */
+    }
+  }, [state])
 
   const set = <K extends keyof OnboardingState>(key: K, value: OnboardingState[K]) =>
     setState((s) => ({ ...s, [key]: value }))
@@ -220,6 +258,8 @@ export function useOnboarding() {
           proactivity: cap(u.proactiveness_level) || s.proactivity,
           tone: cap(u.tone) || s.tone,
         }))
+        // Returning user who already finished setup → skip the wizard, go Home.
+        if (u.onboarding_complete === 1 || u.onboarding_complete === true) markOnboarded()
       }
       return null
     } catch (e) {
@@ -267,6 +307,7 @@ export function useOnboarding() {
         if (state.places.home.trim()) await api.savePlace('home', state.places.home.trim())
         if (state.places.office.trim()) await api.savePlace('office', state.places.office.trim())
       } catch { /* places are best-effort */ }
+      clearOnboardingState() // setup saved — drop the resume snapshot
       return null
     } catch (e) {
       // Surface the failure so we don't mark the user "done" with nothing saved.

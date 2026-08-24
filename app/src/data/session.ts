@@ -41,6 +41,10 @@ export const getSession = () => current
 
 export const completeOnboarding = () => write({ onboarded: true, signedIn: true })
 
+// Mark onboarded WITHOUT forcing signedIn (used when the backend says a
+// returning user already finished onboarding, so they skip the wizard).
+export const markOnboarded = () => write({ onboarded: true })
+
 export const signIn = () => write({ signedIn: true })
 
 export const signOut = () => {
