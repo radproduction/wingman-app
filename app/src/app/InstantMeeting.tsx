@@ -39,6 +39,16 @@ export const InstantMeeting = () => {
 
   const people = extra.trim() && !who.includes(extra.trim()) ? [...who, extra.trim()] : who
 
+  // Searchable, capped suggestions so a big address book never becomes a long
+  // scroll: filter by the query (name or email), hide already-picked, show ≤8.
+  const q = extra.trim().toLowerCase()
+  const suggestions = (q
+    ? contacts.filter((c) => c.name.toLowerCase().includes(q) || (c.email ?? '').toLowerCase().includes(q))
+    : contacts
+  )
+    .filter((c) => !who.includes(c.name))
+    .slice(0, 8)
+
   return (
     <SubScreen
       title="Start a meeting now"
@@ -84,39 +94,48 @@ export const InstantMeeting = () => {
         <h2>{t('Who is here?')}</h2>
         <span>{people.length > 0 ? t('{n} plus you', { n: people.length }) : t('Just you')}</span>
       </div>
-      <div className="wg-inst__who">
-        {contacts.map((c) => (
-          <button
-            className={`wg-gal__size ${who.includes(c.name) ? 'on' : ''}`}
-            key={c.id}
-            aria-pressed={who.includes(c.name)}
-            onClick={() => toggle(c.name)}
-          >
-            {c.name}
-          </button>
-        ))}
-        {who
-          .filter((n) => !contacts.some((c) => c.name === n))
-          .map((name) => (
+      {}
+      {who.length > 0 && (
+        <div className="wg-inst__who">
+          {who.map((name) => (
             <button className="wg-gal__size on" key={name} aria-pressed onClick={() => toggle(name)}>
-              {name}
+              {name} ✕
             </button>
           ))}
-      </div>
+        </div>
+      )}
+      {}
       <div className="wg-inst__add">
         <label className="wg-field wg-field--free wg-card-line">
           <input
             value={extra}
             onChange={(e) => setExtra(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && addExtra()}
-            placeholder={t('Add someone else')}
-            aria-label={t('Add someone else')}
+            placeholder={t('Search your contacts or type a name')}
+            aria-label={t('Add someone')}
           />
         </label>
         <button className="wg-gal__add" aria-label={t('Add person')} disabled={!extra.trim()} onClick={addExtra}>
           <IconPlus size={18} />
         </button>
       </div>
+      {}
+      {suggestions.length > 0 && (
+        <div className="wg-inst__who">
+          {suggestions.map((c) => (
+            <button
+              className="wg-gal__size"
+              key={c.id}
+              onClick={() => {
+                toggle(c.name)
+                setExtra('')
+              }}
+            >
+              {c.name}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="wg-panel-head">
         <h2>{t('Before I record')}</h2>

@@ -226,8 +226,27 @@ router.get(['/health-data', '/health'], (req, res) => {
 });
 
 // ── /api/contacts ───────────────────────────────────────────────────
-router.get('/contacts', (req, res) => {
+router.get('/contacts', async (req, res) => {
   const u = resolveUser(req);
+  // Prefer the user's REAL saved Google contacts (People API) — their address
+  // book, not everyone they've emailed. Falls back to the CRM if the contacts
+  // scope wasn't granted (user connected before it) or Google is unreachable.
+  if (u) {
+    try {
+      const gc = require('../services/googleContacts');
+      const list = await gc.listContacts(u);
+      if (list && list.length) {
+        return res.json({
+          contacts: list.map((c, i) => ({
+            id: `g-${i}`, name: c.name, email: c.email, company: c.company || null,
+            relationship: null, interaction_count: 0, strength: 'saved',
+            last_contacted_at: null, notes: null,
+          })),
+          mock: false, source: 'google',
+        });
+      }
+    } catch (_) { /* fall through to the CRM */ }
+  }
   const repo = requireRepo('contacts');
   const { data, mock: isMock } = safe(() => {
     if (!u || !repo || !repo.listForUser) return null;

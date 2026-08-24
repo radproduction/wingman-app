@@ -27,6 +27,12 @@ const TASKS_SCOPES = [
   'https://www.googleapis.com/auth/tasks',
 ];
 
+// Contacts (read-only): the user's saved address book, used to suggest meeting
+// attendees (with their email) — their real saved contacts, not email history.
+const CONTACTS_SCOPES = [
+  'https://www.googleapis.com/auth/contacts.readonly',
+];
+
 // Identity — lets us label each linked account with its Google address so a
 // user can tell their personal and work accounts apart (and disconnect one).
 const IDENTITY_SCOPES = [
@@ -37,7 +43,7 @@ const IDENTITY_SCOPES = [
 // Drive and Google Tasks. Tokens live in google_accounts (one row per linked account); the
 // PRIMARY account is mirrored into users.calendar_token / users.gmail_token so
 // every pre-existing code path keeps working unchanged.
-const SCOPES = [...CALENDAR_SCOPES, ...GMAIL_SCOPES, ...DRIVE_SCOPES, ...TASKS_SCOPES, ...IDENTITY_SCOPES];
+const SCOPES = [...CALENDAR_SCOPES, ...GMAIL_SCOPES, ...DRIVE_SCOPES, ...TASKS_SCOPES, ...CONTACTS_SCOPES, ...IDENTITY_SCOPES];
 
 // Google Health API (read-only) — sleep, heart rate, steps and body metrics
 // from Android, Pixel Watch, Fitbit and anything else that syncs to Google.

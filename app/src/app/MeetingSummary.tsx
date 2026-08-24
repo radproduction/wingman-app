@@ -27,6 +27,26 @@ import './dashboard.css'
 
 const DONE_STATUSES = ['summary-ready', 'completed', 'follow-up']
 
+// Build a WhatsApp-ready text of the meeting's summary + action items.
+const summaryToText = (m: Meeting): string => {
+  const s = m.summary
+  if (!s) return t('Here is my meeting summary.')
+  const lines: string[] = [`*${m.title || t('Meeting')}*`]
+  if (s.overview) lines.push('', s.overview)
+  if (s.decisions.length) {
+    lines.push('', `*${t('Decisions')}*`)
+    s.decisions.forEach((d) => lines.push(`• ${d}`))
+  }
+  if (s.actions.length) {
+    lines.push('', `*${t('Action items')}*`)
+    s.actions.forEach((a) => {
+      const meta = [a.owner, a.due].filter(Boolean).join(', ')
+      lines.push(`• ${a.task}${meta ? ` (${meta})` : ''}`)
+    })
+  }
+  return lines.join('\n')
+}
+
 const ACTION_LINK: Record<ProposedAction['kind'], { label: string; route: string } | undefined> = {
   tasks: { label: 'View tasks', route: 'tasks' },
   meeting: { label: 'View calendar', route: 'calendar' },
@@ -65,7 +85,10 @@ const ProposedCard = ({
       return
     }
     decideAction(meetingId, action.id, 'approved')
-    if (action.kind === 'whatsapp') openWhatsApp(t('Here is my meeting summary.'))
+    if (action.kind === 'whatsapp') {
+      const m = meetingById(meetingId)
+      openWhatsApp(m ? summaryToText(m) : t('Here is my meeting summary.'))
+    }
     if (action.kind === 'tasks') onCreateTasks?.()
   }
 

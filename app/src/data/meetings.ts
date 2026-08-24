@@ -1,7 +1,8 @@
 import { useSyncExternalStore } from 'react'
 import { NOW, type ChipTone } from './mock'
 import type { IconName } from '../app/icons'
-import { api, type ServerMeetingSummary, type ServerMeeting, type EmailResult } from './api'
+import { api, ApiError, type ServerMeetingSummary, type ServerMeeting, type EmailResult } from './api'
+import { toast } from '../shell/toast'
 
 
 export type MeetingStatus =
@@ -999,11 +1000,16 @@ const processInstant = async (
       try {
         const res = await api.transcribeMeeting(created.meeting.id, audio.blob, audio.mime)
         serverSummary = res.meeting.summary
-      } catch {
+      } catch (e) {
+        // Surface WHY transcription failed, then fall back to typed notes.
+        const why = e instanceof ApiError ? `Transcription failed (${e.status})` : 'Transcription failed'
+        toast(`${why} — used your notes instead.`, 'alert', 6000)
         const res = await api.finalizeMeeting(created.meeting.id)
         serverSummary = res.meeting.summary
       }
     } else {
+      // Recording was on but nothing was captured (common on iOS PWAs).
+      if (recorded) toast('No audio was captured — used your notes instead.', 'alert', 6000)
       const res = await api.finalizeMeeting(created.meeting.id)
       serverSummary = res.meeting.summary
     }
