@@ -167,6 +167,12 @@ export const api = {
   savePlace: (which: 'home' | 'office', address: string) =>
     req<{ saved: boolean; which: string; address: string }>('POST', '/places', { which, address }),
 
+  // ── Location (device geolocation → traffic origin + "use my location") ──
+  saveLocation: (lat: number, lng: number) =>
+    req<{ ok: boolean; label: string | null }>('POST', '/location', { lat, lng }),
+  reverseGeocode: (lat: number, lng: number) =>
+    req<{ address: string }>('POST', '/location/reverse', { lat, lng }),
+
   // ── Actions ──
   completeTask: (id: string) => req<{ ok: boolean }>('POST', `/tasks/${id}/complete`),
   payBill: (id: string) => req<{ ok: boolean }>('POST', `/bills/${id}/pay`),

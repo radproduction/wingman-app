@@ -131,9 +131,16 @@ export const Onboarding = ({ onDone }: { onDone: () => void }) => {
   const ob = useOnboarding()
   const {
     state, set, go, toggleSkill, toggleInterest, connect, fullPhone, phoneValid, codeComplete, nameValid, preview,
-    busy, sendCode, verifyCode, finish, openConnect, refreshConnections,
+    busy, sendCode, verifyCode, finish, openConnect, refreshConnections, locateMe,
   } = ob
   const { msg, show, toast } = useToast()
+  const [locating, setLocating] = useState<'home' | 'office' | null>(null)
+  const useMyLocation = async (which: 'home' | 'office') => {
+    setLocating(which)
+    const err = await locateMe(which)
+    setLocating(null)
+    toast(err ?? t('Location added'))
+  }
   const resend = useResendTimer(state.screen === 'verify')
   const code = useCodeBoxes(state.code, (c) => set('code', c))
   const [pane, setPane] = useState(0)
@@ -510,6 +517,16 @@ export const Onboarding = ({ onDone }: { onDone: () => void }) => {
                 onChange={(e) => set('places', { ...state.places, home: e.target.value })}
               />
             </div>
+            <button
+              type="button"
+              className="wg-btn-text"
+              style={{ justifySelf: 'start' }}
+              disabled={locating !== null}
+              onClick={() => useMyLocation('home')}
+            >
+              <Icon name="pin" size={15} variant="duotone" />{' '}
+              {locating === 'home' ? t('Getting your location…') : t('Use my current location')}
+            </button>
             <div className="wg-field">
               <input
                 placeholder={t('Work - area or address')}
@@ -517,6 +534,16 @@ export const Onboarding = ({ onDone }: { onDone: () => void }) => {
                 onChange={(e) => set('places', { ...state.places, office: e.target.value })}
               />
             </div>
+            <button
+              type="button"
+              className="wg-btn-text"
+              style={{ justifySelf: 'start' }}
+              disabled={locating !== null}
+              onClick={() => useMyLocation('office')}
+            >
+              <Icon name="pin" size={15} variant="duotone" />{' '}
+              {locating === 'office' ? t('Getting your location…') : t("I'm at work now — use this location")}
+            </button>
           </div>
           <p className="wg-note">
             <IconShield size={16} />
@@ -548,12 +575,9 @@ export const Onboarding = ({ onDone }: { onDone: () => void }) => {
               ) : (
                 <button
                   className="st"
-                  onClick={() => {
-                    connect('Apple Health & Google Fit')
-                    toast(t('Health connected'))
-                  }}
+                  onClick={() => toast(t('You can connect Health from Settings once you finish setup.'))}
                 >
-                  {t('Connect')}
+                  {t('Set up later')}
                 </button>
               )}
             </div>
@@ -597,14 +621,36 @@ export const Onboarding = ({ onDone }: { onDone: () => void }) => {
                 ) : (
                   <button
                     className="st"
-                    onClick={() => {
-                      connect('Shopify')
-                      toast(t('Shopify connected'))
-                    }}
+                    onClick={() => toast(t('You can connect Shopify from Settings once you finish setup.'))}
                   >
-                    {t('Connect')}
+                    {t('Set up later')}
                   </button>
                 )}
+              </div>
+              <div className="wg-option wg-card-line">
+                <span className="ic blue">
+                  <Icon name="mail" size={20} variant="duotone" />
+                </span>
+                <span className="tx">
+                  <strong>{t('Business email')}</strong>
+                  <span>{t('Customer mail from your own inbox')}</span>
+                </span>
+                <button
+                  className="st"
+                  onClick={() => toast(t('You can connect your business email from Settings once you finish setup.'))}
+                >
+                  {t('Set up later')}
+                </button>
+              </div>
+              <div className="wg-option wg-card-line">
+                <span className="ic">
+                  <Icon name="globe" size={20} variant="duotone" />
+                </span>
+                <span className="tx">
+                  <strong>{t('Google Analytics')}</strong>
+                  <span>{t('Traffic and conversions')}</span>
+                </span>
+                <span className="st">{t('Coming soon')}</span>
               </div>
             </div>
           )}
@@ -740,7 +786,11 @@ export const Onboarding = ({ onDone }: { onDone: () => void }) => {
               className="wg-btn full"
               disabled={busy}
               onClick={async () => {
-                await finish()
+                const err = await finish()
+                if (err) {
+                  toast(err)
+                  return
+                }
                 onDone()
               }}
             >
@@ -748,8 +798,13 @@ export const Onboarding = ({ onDone }: { onDone: () => void }) => {
             </button>
             <button
               className="wg-btn-text"
+              disabled={busy}
               onClick={async () => {
-                await finish()
+                const err = await finish()
+                if (err) {
+                  toast(err)
+                  return
+                }
                 onDone()
               }}
             >

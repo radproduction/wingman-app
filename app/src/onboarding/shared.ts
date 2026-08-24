@@ -232,7 +232,7 @@ export function useOnboarding() {
   // Save everything the onboarding collected, mapped to what the backend
   // accepts. Best-effort — a hiccup here must never trap the user on the last
   // screen.
-  const finish = async (): Promise<void> => {
+  const finish = async (): Promise<string | null> => {
     // onboarding skill NAMES → backend enabled_skills IDs
     const skillIds: Record<string, string> = {
       'Travel Assistant': 'travel_assistant',
@@ -262,10 +262,15 @@ export function useOnboarding() {
     try {
       await api.completeOnboarding(patch)
       // Home/office go through their own endpoint (not the settings allow-list).
-      if (state.places.home.trim()) await api.savePlace('home', state.places.home.trim())
-      if (state.places.office.trim()) await api.savePlace('office', state.places.office.trim())
-    } catch {
-      /* best-effort — never trap the user on the last screen */
+      // Keep place failures non-fatal (Maps may be off) but surface the main save.
+      try {
+        if (state.places.home.trim()) await api.savePlace('home', state.places.home.trim())
+        if (state.places.office.trim()) await api.savePlace('office', state.places.office.trim())
+      } catch { /* places are best-effort */ }
+      return null
+    } catch (e) {
+      // Surface the failure so we don't mark the user "done" with nothing saved.
+      return e instanceof ApiError ? e.message : 'Could not save your setup. Check your connection and try again.'
     }
   }
 
@@ -295,10 +300,40 @@ export function useOnboarding() {
     }
   }
 
+  // Fill a place from the device's current location (geolocation → reverse
+  // geocode), and store it as the traffic origin. Returns an error msg or null.
+  const locateMe = (which: 'home' | 'office'): Promise<string | null> => {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
+      return Promise.resolve('Location is not available on this device.')
+    }
+    return new Promise((resolve) => {
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          const { latitude, longitude } = pos.coords
+          try {
+            void api.saveLocation(latitude, longitude) // store as the traffic origin
+            const { address } = await api.reverseGeocode(latitude, longitude)
+            setState((s) => ({ ...s, places: { ...s.places, [which]: address } }))
+            resolve(null)
+          } catch (e) {
+            resolve(e instanceof ApiError ? e.message : 'Could not get your address from that location.')
+          }
+        },
+        (err) =>
+          resolve(
+            err.code === err.PERMISSION_DENIED
+              ? 'Location permission was blocked. Allow it, then try again.'
+              : 'Could not read your location.',
+          ),
+        { enableHighAccuracy: true, timeout: 10000 },
+      )
+    })
+  }
+
   return {
     state, set, go, toggleSkill, toggleInterest, connect,
     fullPhone, phoneValid, codeComplete, nameValid, preview,
-    busy, sendCode, verifyCode, finish, openConnect, refreshConnections,
+    busy, sendCode, verifyCode, finish, openConnect, refreshConnections, locateMe,
   }
 }
 
