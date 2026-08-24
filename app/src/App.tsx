@@ -65,7 +65,8 @@ import { OrientationLock } from './pwa/OrientationLock'
 import { hasThemeRestarted } from './shell/prefs'
 import { useLang } from './i18n'
 import { useNavRoute, replaceRoute, type NavDir } from './shell/nav'
-import { useSession, completeOnboarding } from './data/session'
+import { useSession, completeOnboarding, signOut } from './data/session'
+import { api, isSignedIn, setToken, ApiError } from './data/api'
 import { hydrateProfile } from './data/store'
 import { hydrateTasks } from './data/tasks'
 import { hydrateConnections } from './data/connections'
@@ -221,6 +222,17 @@ const App = () => {
   const inApp = isTabRoute(route) && signedIn
   const dragScrollRef = useDragScroll()
   useEffect(() => installTapFeedback(), [])
+  // Heal a stale/invalid token on load: if the backend rejects it, clear it so we
+  // show a clean login instead of the mock/demo dataset (the "all dummy" symptom).
+  useEffect(() => {
+    if (!isSignedIn()) return
+    void api.authMe().catch((e) => {
+      if (e instanceof ApiError && e.status === 401) {
+        setToken(null)
+        signOut()
+      }
+    })
+  }, [])
   // Once signed in, pull the real profile + tasks from the backend.
   useEffect(() => {
     if (signedIn) {

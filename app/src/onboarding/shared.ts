@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { IconName } from '../app/icons'
-import { api, ApiError, isSignedIn } from '../data/api'
+import { api, ApiError } from '../data/api'
 import { markOnboarded } from '../data/session'
 
 export type Screen =
@@ -130,7 +130,6 @@ export interface OnboardingState {
 }
 
 const PERSIST_KEY = 'wingman.onboarding'
-const PRE_VERIFY: Screen[] = ['splash', 'intro', 'phone', 'verify']
 
 const defaultOnboardingState = (): OnboardingState => ({
   screen: 'splash',
@@ -161,9 +160,6 @@ const loadOnboardingState = (): OnboardingState => {
   } catch {
     /* ignore */
   }
-  // If a token already exists (OTP verified), never sit on splash/phone/verify —
-  // resume in the flow so a mid-onboarding refresh continues, not restarts.
-  if (isSignedIn() && PRE_VERIFY.includes(s.screen)) s = { ...s, screen: 'name' }
   return s
 }
 
