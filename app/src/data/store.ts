@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import { profile as seed } from './mock'
-import { api, isSignedIn } from './api'
+import { api } from './api'
 
 export type Profile = typeof seed
 
@@ -32,6 +32,18 @@ export const saveProfile = (patch: Partial<Profile>) => {
   try {
     localStorage.setItem(KEY, JSON.stringify(current))
   } catch {
+  }
+  listeners.forEach((fn) => fn())
+}
+
+/** Drop the cached profile (used on sign-out / invalid token) so a stale name
+ * (e.g. the mock user) never lingers on the Welcome/greeting screens. */
+export const resetProfile = () => {
+  current = seed
+  try {
+    localStorage.removeItem(KEY)
+  } catch {
+    /* ignore */
   }
   listeners.forEach((fn) => fn())
 }
@@ -72,5 +84,6 @@ export const hydrateProfile = async (): Promise<void> => {
   }
 }
 
-// A returning user (token already present) → hydrate immediately on load.
-if (isSignedIn()) void hydrateProfile()
+// NOTE: no auto-hydrate on module load. App.tsx hydrates AFTER the token is
+// validated (see the auth-heal effect), so a stale/invalid token never caches
+// the mock user's name here.

@@ -65,9 +65,9 @@ import { OrientationLock } from './pwa/OrientationLock'
 import { hasThemeRestarted } from './shell/prefs'
 import { useLang } from './i18n'
 import { useNavRoute, replaceRoute, type NavDir } from './shell/nav'
-import { useSession, completeOnboarding, signOut } from './data/session'
+import { useSession, completeOnboarding, startFresh } from './data/session'
 import { api, isSignedIn, setToken, ApiError } from './data/api'
-import { hydrateProfile } from './data/store'
+import { hydrateProfile, resetProfile } from './data/store'
 import { hydrateTasks } from './data/tasks'
 import { hydrateConnections } from './data/connections'
 import { hydrateEmails } from './data/emails'
@@ -228,8 +228,11 @@ const App = () => {
     if (!isSignedIn()) return
     void api.authMe().catch((e) => {
       if (e instanceof ApiError && e.status === 401) {
+        // Invalid/expired token: clear it + the cached (mock) profile, and reset
+        // to a fresh start so no stale "Welcome back, <mock name>" ever shows.
         setToken(null)
-        signOut()
+        resetProfile()
+        startFresh()
       }
     })
   }, [])
