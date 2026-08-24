@@ -68,6 +68,7 @@ import { useNavRoute, replaceRoute, type NavDir } from './shell/nav'
 import { useSession, completeOnboarding, startFresh } from './data/session'
 import { api, isSignedIn, setToken, ApiError } from './data/api'
 import { hydrateProfile, resetProfile } from './data/store'
+import { clearOnboardingState } from './onboarding/shared'
 import { hydrateTasks } from './data/tasks'
 import { hydrateConnections } from './data/connections'
 import { hydrateEmails } from './data/emails'
@@ -232,6 +233,7 @@ const App = () => {
         // to a fresh start so no stale "Welcome back, <mock name>" ever shows.
         setToken(null)
         resetProfile()
+        clearOnboardingState()
         startFresh()
       }
     })

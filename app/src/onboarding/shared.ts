@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { IconName } from '../app/icons'
 import { api, ApiError } from '../data/api'
-import { markOnboarded } from '../data/session'
+import { signIn, completeOnboarding } from '../data/session'
 
 export type Screen =
   | 'splash'
@@ -254,9 +254,12 @@ export function useOnboarding() {
           proactivity: cap(u.proactiveness_level) || s.proactivity,
           tone: cap(u.tone) || s.tone,
         }))
-        // Returning user who already finished setup → skip the wizard, go Home.
-        if (u.onboarding_complete === 1 || u.onboarding_complete === true) markOnboarded()
       }
+      // OTP verified + token stored → reflect it in the session, or the Gate keeps
+      // showing "Welcome back". A returning user (already onboarded) goes straight
+      // Home; a new user is signed in and continues the wizard.
+      if (u && (u.onboarding_complete === 1 || u.onboarding_complete === true)) completeOnboarding()
+      else signIn()
       return null
     } catch (e) {
       return e instanceof ApiError ? e.message : 'That code did not work.'

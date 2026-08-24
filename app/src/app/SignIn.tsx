@@ -6,6 +6,7 @@ import { useProfile, firstName } from '../data/store'
 import { signIn, signOut, startFresh } from '../data/session'
 import { resetProfile } from '../data/store'
 import { setToken } from '../data/api'
+import { clearOnboardingState } from '../onboarding/shared'
 import { confirmAction } from '../shell/confirm'
 import { t } from '../i18n'
 import { toast } from '../shell/toast'
@@ -91,6 +92,7 @@ export const Welcome = () => {
     if (!ok) return
     setToken(null) // drop any stale token
     resetProfile() // drop the cached (possibly mock) name so the greeting is clean
+    clearOnboardingState() // drop the saved wizard snapshot (stale phone + consumed code)
     startFresh()
     navigate('')
   }
