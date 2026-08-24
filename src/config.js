@@ -120,6 +120,14 @@ const config = {
     get enabled() { return !!process.env.OPENAI_API_KEY; },
   },
 
+  // Gemini (Google): multimodal audio → text. Handles mixed Roman Urdu + English
+  // well, so it's the primary meeting transcriber (Whisper stays as a fallback).
+  gemini: {
+    apiKey: process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY || '',
+    model: process.env.GEMINI_MODEL || 'gemini-2.0-flash',
+    get enabled() { return !!(process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY); },
+  },
+
   maps: {
     apiKey: process.env.MAPS_API_KEY || process.env.GOOGLE_MAPS_API_KEY || '',
     get enabled() { return !!(process.env.MAPS_API_KEY || process.env.GOOGLE_MAPS_API_KEY); },

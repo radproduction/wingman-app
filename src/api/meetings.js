@@ -115,25 +115,41 @@ router.post('/meetings/:id/transcribe', express.raw({ type: () => true, limit: '
   const m = meetingsRepo.getForUser(u.id, req.params.id);
   if (!m) return res.status(404).json({ error: 'Meeting not found' });
 
+  const gemini = require('../services/geminiTranscribe');
   const voice = require('../services/voice');
-  if (!voice.enabled()) return res.status(501).json({ error: 'Transcription is not available' });
+  if (!gemini.enabled() && !voice.enabled()) {
+    return res.status(501).json({ error: 'Transcription is not available' });
+  }
 
   const audio = req.body;
   if (!Buffer.isBuffer(audio) || !audio.length) return res.status(400).json({ error: 'No audio received' });
+  const ct = req.headers['content-type'];
 
-  let transcript;
-  try {
-    transcript = await voice.transcribe(audio, { filename: `meeting.${extOfType(req.headers['content-type'])}` });
-  } catch (_) {
-    return res.status(502).json({ error: 'Could not transcribe the recording' });
+  // Primary: Gemini (handles mixed Roman Urdu + English). Fallback: Whisper.
+  // Both errors are logged so a failure is diagnosable, not a silent 502.
+  let transcript = null;
+  if (gemini.enabled()) {
+    try {
+      transcript = await gemini.transcribe(audio, (ct || '').split(';')[0].trim());
+    } catch (e) {
+      console.warn('[meetings] gemini transcribe failed:', e.message);
+    }
   }
-  if (!transcript) return res.status(422).json({ error: 'Nothing could be heard in the recording' });
+  if (!transcript && voice.enabled()) {
+    try {
+      transcript = await voice.transcribe(audio, { filename: `meeting.${extOfType(ct)}` });
+    } catch (e) {
+      console.warn('[meetings] whisper transcribe failed:', e.message);
+    }
+  }
+  if (!transcript) return res.status(502).json({ error: 'Could not transcribe the recording' });
 
   meetingsRepo.update(u.id, m.id, { notes: transcript });
   let summary;
   try {
     summary = await meetingNotes.summarize({ title: m.title, attendees: m.attendees, notes: transcript });
-  } catch (_) {
+  } catch (e) {
+    console.warn('[meetings] summarize failed:', e.message);
     return res.status(502).json({ error: 'Could not summarize the recording' });
   }
   meetingsRepo.update(u.id, m.id, { summary, status: 'summary-ready' });
