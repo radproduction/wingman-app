@@ -4,6 +4,8 @@ import { WingGlyph } from '../onboarding/WingGlyph'
 import { COUNTRY_CODES, CC_FLAGS, useCodeBoxes, useResendTimer } from '../onboarding/shared'
 import { useProfile, firstName } from '../data/store'
 import { signIn, signOut, startFresh } from '../data/session'
+import { resetProfile } from '../data/store'
+import { setToken } from '../data/api'
 import { confirmAction } from '../shell/confirm'
 import { t } from '../i18n'
 import { toast } from '../shell/toast'
@@ -87,6 +89,8 @@ export const Welcome = () => {
       cancelLabel: 'Never mind',
     })
     if (!ok) return
+    setToken(null) // drop any stale token
+    resetProfile() // drop the cached (possibly mock) name so the greeting is clean
     startFresh()
     navigate('')
   }
