@@ -124,7 +124,10 @@ const config = {
   // well, so it's the primary meeting transcriber (Whisper stays as a fallback).
   gemini: {
     apiKey: process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY || '',
-    model: process.env.GEMINI_MODEL || 'gemini-2.0-flash',
+    // gemini-2.0/2.5-flash are deprecated ("no longer available to new users");
+    // the *-latest alias auto-tracks the current flash so it won't break on the
+    // next deprecation. Override with GEMINI_MODEL if needed.
+    model: process.env.GEMINI_MODEL || 'gemini-flash-latest',
     get enabled() { return !!(process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY); },
   },
 
