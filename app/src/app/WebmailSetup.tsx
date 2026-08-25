@@ -49,19 +49,26 @@ export const WebmailSetup = () => {
 
   const connect = async () => {
     setError('')
-    if (!address.trim() || !password) {
+    const addr = address.trim()
+    if (!addr || !password) {
       setError(t('Enter your email address and password.'))
+      return
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addr)) {
+      setError(t("That email address doesn't look right — check it and try again."))
       return
     }
     setBusy(true)
     try {
-      const body: Parameters<typeof api.webmailConnect>[0] = { address: address.trim(), password }
-      if (advanced) {
-        if (imapHost.trim()) body.imap_host = imapHost.trim()
-        if (imapPort.trim()) body.imap_port = Number(imapPort)
-        if (smtpHost.trim()) body.smtp_host = smtpHost.trim()
-        if (smtpPort.trim()) body.smtp_port = Number(smtpPort)
-      }
+      const body: Parameters<typeof api.webmailConnect>[0] = { address: addr, password }
+      // Send any server settings the user typed, regardless of whether the panel
+      // is open (collapsing it must not silently drop what they entered).
+      if (imapHost.trim()) body.imap_host = imapHost.trim()
+      if (smtpHost.trim()) body.smtp_host = smtpHost.trim()
+      const ip = Number(imapPort)
+      if (imapPort.trim() && Number.isInteger(ip) && ip > 0) body.imap_port = ip
+      const sp = Number(smtpPort)
+      if (smtpPort.trim() && Number.isInteger(sp) && sp > 0) body.smtp_port = sp
       if (fromName.trim()) body.from_name = fromName.trim()
       const res = await api.webmailConnect(body)
       setConnected(true)
@@ -71,7 +78,8 @@ export const WebmailSetup = () => {
     } catch (e) {
       const msg = e instanceof ApiError ? e.message : t('Could not connect that mailbox. Check the details and try again.')
       setError(msg)
-      if (/host/i.test(msg)) setAdvanced(true) // server couldn't guess the host → reveal the fields
+      // Only push the user toward server settings for a genuine host/port issue.
+      if (/imap|smtp|host|port|server/i.test(msg)) setAdvanced(true)
     } finally {
       setBusy(false)
     }
@@ -180,7 +188,7 @@ export const WebmailSetup = () => {
             )}
           </div>
 
-          {error && <p className="wg-error" style={{ color: 'var(--danger, #c0392b)' }}>{error}</p>}
+          {error && <p style={{ color: '#c0392b', margin: 'var(--space-8) 0 0', fontSize: '0.9em' }}>{error}</p>}
 
           <button className="wg-btn full" disabled={busy} onClick={connect}>
             {busy ? t('Connecting…') : t('Connect')}
