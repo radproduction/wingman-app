@@ -14,6 +14,13 @@ function fmtAmount(b) {
 // send more than one message \u2014 a digest, capped so it's never a wall of pings.
 const REMIND_EVERY_DAYS = 3;
 const MAX_IN_DIGEST = 8;
+// Stop chasing a single bill after a few nudges \u2014 if it's still unpaid after
+// this many reminders, going on is nagging, not helping. (The user pays it in
+// real life; Wingman may not have a payment receipt to confirm it.)
+const MAX_REMINDERS = 3;
+// And drop bills that are so far past due they're clearly settled outside
+// Wingman or no longer relevant \u2014 don't resurrect months-old invoices.
+const STALE_AFTER_DAYS = 14;
 
 /**
  * Build ONE digest of the bills that genuinely need the user (real amount,
@@ -35,12 +42,16 @@ async function alertForUser(userId, { now = new Date(), send = true } = {}) {
     if (!b.due_date) continue;
     // Skip $0 / PKR 0 notices (free-tier receipts, not real bills to pay).
     if (!(Number(b.amount) > 0)) continue;
+    // Stop after a few nudges — a still-unpaid bill isn't chased forever.
+    if ((b.reminder_count || 0) >= MAX_REMINDERS) continue;
     // Throttle: don't re-alert a bill we already pinged within the last few days.
     if (b.last_alerted_at) {
       const since = t.daysBetween(`${String(b.last_alerted_at).slice(0, 10)}T00:00:00${offset}`, todayStart);
       if (since < REMIND_EVERY_DAYS) continue;
     }
     const days = t.daysBetween(todayStart, `${b.due_date}T00:00:00${offset}`);
+    // Don't resurrect long-overdue invoices — assume settled outside Wingman.
+    if (days < -STALE_AFTER_DAYS) continue;
     if (days < 0) {
       due.push({ b, days, line: `\u26a0\ufe0f ${b.name} \u2014 ${fmtAmount(b)} (overdue ${Math.abs(days)}d)` });
     } else if (days <= 3) {

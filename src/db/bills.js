@@ -74,12 +74,29 @@ function markPaid(id) {
   return db.prepare('SELECT * FROM bills WHERE id = ?').get(id);
 }
 
-/** Stamp when we last alerted about these bills, so they don't re-notify daily. */
+/**
+ * Mark the pending bill matching `name` as paid — used when a payment/receipt
+ * email is detected, so Wingman stops chasing a bill the user already settled.
+ * Returns the bill that was cleared, or null if none matched.
+ */
+function markPaidByName(userId, name) {
+  const bill = findByName(userId, name);
+  if (!bill) return null;
+  markPaid(bill.id);
+  return bill;
+}
+
+/**
+ * Stamp when we last alerted about these bills AND bump their reminder count, so
+ * they don't re-notify daily and a still-unpaid bill isn't chased forever.
+ */
 function markAlerted(ids, whenISO) {
   if (!ids || !ids.length) return;
-  const stmt = db.prepare('UPDATE bills SET last_alerted_at = ? WHERE id = ?');
+  const stmt = db.prepare(
+    'UPDATE bills SET last_alerted_at = ?, reminder_count = COALESCE(reminder_count, 0) + 1 WHERE id = ?',
+  );
   const tx = db.transaction((list) => { for (const id of list) stmt.run(whenISO, id); });
   tx(ids);
 }
 
-module.exports = { upsert, listForUser, findByName, markPaid, markAlerted };
+module.exports = { upsert, listForUser, findByName, markPaid, markPaidByName, markAlerted };

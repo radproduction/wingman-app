@@ -51,6 +51,10 @@ CREATE TABLE IF NOT EXISTS users (
   news_city TEXT,
   news_country TEXT,
   proactiveness_level TEXT DEFAULT 'moderate',   -- 'low' | 'moderate' | 'high'
+  autonomy_level TEXT DEFAULT 'small',           -- 'ask' | 'small' | 'act' — how far it may act unprompted
+  quiet_hours_start TEXT,                         -- local HH:MM; avoid non-urgent pings between these
+  quiet_hours_end TEXT,
+  runs_business INTEGER DEFAULT 1,               -- whether the user runs a business (unlocks store/ops framing)
   enabled_skills TEXT DEFAULT '["travel_assistant","bill_tracker","delivery_tracker","people_crm","followup_tracker"]',
   tone TEXT DEFAULT 'friendly',                  -- 'professional' | 'casual' | 'friendly'
   communication_style TEXT DEFAULT 'concise',    -- 'concise' | 'detailed'
@@ -139,6 +143,7 @@ CREATE TABLE IF NOT EXISTS bills (
   recurring INTEGER DEFAULT 0,
   source_email_id TEXT REFERENCES email_items(id),
   last_alerted_at TEXT,
+  reminder_count INTEGER DEFAULT 0,   -- how many times we've nudged; capped so we don't nag forever
   created_at TEXT DEFAULT (datetime('now'))
 );
 

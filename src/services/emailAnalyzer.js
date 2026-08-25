@@ -7,10 +7,10 @@ const ANALYSIS_PROMPT = (subject, sender, body) => `Analyze this email. Respond 
   "category": "urgent|needs_reply|fyi|spam",
   "summary": "1-2 sentence summary",
   "action_needed": true or false,
-  "detected_type": "bill|order|flight|meeting_request|general",
+  "detected_type": "bill|payment_receipt|order|flight|meeting_request|general",
   "extracted_data": {
-    "company": "if bill: company name",
-    "amount": "if bill: amount with currency",
+    "company": "if bill or payment_receipt: company/biller name",
+    "amount": "if bill or payment_receipt: amount with currency",
     "due_date": "if bill: YYYY-MM-DD",
     "item": "if order: item name",
     "store": "if order: store name",
@@ -26,6 +26,10 @@ const ANALYSIS_PROMPT = (subject, sender, body) => `Analyze this email. Respond 
   },
   "draft_reply": "suggested reply text if action_needed, null otherwise"
 }
+
+detected_type guidance:
+- "bill" = an invoice/statement the user still needs to PAY (has an amount due and usually a due date).
+- "payment_receipt" = confirmation a payment ALREADY went through (words like "payment received", "receipt", "thank you for your payment", "your card was charged"). Set company and amount so the matching bill can be cleared. Do NOT mark these as "bill".
 
 Email subject: ${subject}
 Email from: ${sender}

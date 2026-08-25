@@ -105,6 +105,13 @@ function applyMigrations() {
       ['news_topics', 'TEXT'],
       ['news_city', 'TEXT'],
       ['news_country', 'TEXT'],
+      // Onboarding preferences that previously had nowhere to land, so the AI
+      // never knew them: how much it may act unprompted, when to stay quiet,
+      // and whether the user runs a business.
+      ['autonomy_level', 'TEXT'],
+      ['quiet_hours_start', 'TEXT'],
+      ['quiet_hours_end', 'TEXT'],
+      ['runs_business', 'INTEGER DEFAULT 1'],
     ],
     tasks: [
       ['completed_at', 'TEXT'],
@@ -124,6 +131,9 @@ function applyMigrations() {
     bills: [
       // When we last alerted about this bill, so overdue bills don't re-notify daily.
       ['last_alerted_at', 'TEXT'],
+      // How many times we've nudged about it — capped so a still-unpaid bill
+      // isn't chased forever (the "old bills keep pinging" complaint).
+      ['reminder_count', 'INTEGER DEFAULT 0'],
     ],
     automations: [
       // Anchor a fire time to a learned behaviour (e.g. the user's usual finish),

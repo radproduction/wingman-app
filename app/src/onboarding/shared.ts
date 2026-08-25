@@ -285,6 +285,12 @@ export function useOnboarding() {
       business: 'business', markets: 'business', tech: 'technology',
       world: 'world', local: 'local', health: 'health', sport: 'sports',
     }
+    // autonomy labels → backend ids
+    const autonomyIds: Record<string, string> = {
+      'Ask me first': 'ask',
+      'Small things': 'small',
+      'Act and update me': 'act',
+    }
     const patch: Record<string, unknown> = {
       name: state.name.trim(),
       timezone: state.tz,
@@ -297,6 +303,11 @@ export function useOnboarding() {
       proactiveness_level: state.proactivity.toLowerCase(),
       enabled_skills: state.skills.map((s) => skillIds[s]).filter(Boolean),
       news_topics: [...new Set(state.interests.map((k) => topicIds[k]).filter(Boolean))],
+      // Previously collected but never saved — so the AI never knew them.
+      autonomy_level: autonomyIds[state.autonomy] || 'small',
+      quiet_hours_start: state.quiet.from,
+      quiet_hours_end: state.quiet.to,
+      runs_business: state.runsBusiness,
     }
     try {
       await api.completeOnboarding(patch)

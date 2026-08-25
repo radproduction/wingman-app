@@ -116,6 +116,16 @@ async function scanUser(userId, { maxResults = 50 } = {}) {
         const d = deliveriesRepo.getById(fan.delivery.id);
         if (d) await deliveryAlerts.sendStatusAlert(user, d);
       }
+      // We spotted a payment go through and cleared the bill — tell the user ONCE
+      // (this replaces future nags, so it's a net reduction in pings).
+      if (fan && fan.paidBill) {
+        const amt = `${fan.paidBill.currency || 'PKR'} ${Number(fan.paidBill.amount || 0).toLocaleString('en-US')}`;
+        try {
+          if (wa().ready()) {
+            await wa().sendMessage(user.phone, `✅ Saw your *${fan.paidBill.name}* payment (${amt}) go through — marked it paid, so I'll stop reminding you.`);
+          }
+        } catch (err) { console.warn('[emailScanner] paid-confirmation failed:', err.message); }
+      }
       // Compile flight + hotel into a single trip itinerary
       if (fan && fan.tripId) {
         try { travelAssistant.compileItinerary(userId, fan.tripId); }
@@ -180,6 +190,13 @@ function fanOut(userId, emailItemId, analysis) {
       status: 'pending',
       sourceEmailId: emailItemId,
     });
+  } else if (analysis.detectedType === 'payment_receipt') {
+    // The user paid something — clear the matching pending bill so Wingman
+    // stops chasing a bill they already settled.
+    if (d.company) {
+      const paidBill = billsRepo.markPaidByName(userId, d.company);
+      if (paidBill) return { paidBill };
+    }
   } else if (analysis.detectedType === 'order') {
     const delivery = deliveriesRepo.upsert(userId, {
       itemName: d.item || 'Order',

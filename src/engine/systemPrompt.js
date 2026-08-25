@@ -332,6 +332,14 @@ Match this tone and style in every reply, overriding the default tone above wher
     } catch (_) { return String(v); }
   };
 
+  // How much the user has authorised Wingman to act on its own.
+  const autonomyMap = {
+    ask: 'Ask first — confirm with the user before doing anything that changes something (sending mail, creating/cancelling events or tasks, clocking in/out). Reading and answering is always fine.',
+    small: 'Handle the low-stakes things yourself and tell them after; anything involving money, sending to other people, or cancelling — ask first.',
+    act: 'Act on most things and keep them posted; only the big, hard-to-undo calls wait for a yes.',
+  };
+  const autonomy = (user.autonomy_level || 'small').toLowerCase();
+
   const ctx = `
 
 --- USER CONTEXT ---
@@ -342,6 +350,8 @@ Work hours: ${user.work_hours_start || '?'}–${user.work_hours_end || '?'}
 Usual finish (learned from actual clock-outs): ${learnedFinish || '(not enough data yet)'}
 Morning briefing time: ${user.briefing_time || '(default)'} · Evening wrap time: ${user.debrief_time || '(default)'}
 Proactiveness level: ${user.proactiveness_level || 'moderate'}
+How much you may act on your own: ${autonomyMap[autonomy] || autonomyMap.small}${user.quiet_hours_start && user.quiet_hours_end ? `\nQuiet hours: ${user.quiet_hours_start}–${user.quiet_hours_end} — don't send non-urgent messages during this window unless they message you first.` : ''}
+Runs a business: ${user.runs_business == null ? '(unknown)' : (user.runs_business ? 'yes — store/sales/ops questions are relevant to them' : 'no — keep it personal, not business-focused')}
 News topics they follow: ${fmtList(user.news_topics) || '(none set)'}${user.news_city ? ` · City: ${user.news_city}` : ''}
 Skills they enabled: ${fmtList(user.enabled_skills) || 'all'}
 Language preference: ${user.language || 'en'}

@@ -379,6 +379,7 @@ router.post('/bills/:id/pay', (req, res) => {
 const SETTINGS_FIELDS = [
   'name', 'timezone', 'work_hours_start', 'work_hours_end', 'language',
   'briefing_time', 'debrief_time', 'proactiveness_level', 'enabled_skills',
+  'autonomy_level', 'quiet_hours_start', 'quiet_hours_end', 'runs_business',
   'tone', 'communication_style',
   'news_topics', 'news_city', 'news_country', 'voice_replies', 'voice_name', 'assistant_name',
 ];
