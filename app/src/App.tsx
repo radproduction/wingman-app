@@ -79,6 +79,7 @@ import { hydrateHomeStats } from './data/homeStats'
 import { hydrateContacts } from './data/contacts'
 import { hydrateMeetings } from './data/meetings'
 import { hydrateFollowups } from './data/followups'
+import { hydratePlaces } from './data/mobility'
 import { useDragScroll } from './shell/useDragScroll'
 import { installTapFeedback } from './shell/feedback'
 import './picker.css'
@@ -254,6 +255,7 @@ const App = () => {
       void hydrateContacts()
       void hydrateMeetings()
       void hydrateFollowups()
+      void hydratePlaces()
     }
   }, [signedIn])
 

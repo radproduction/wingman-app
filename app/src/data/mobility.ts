@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react'
 import { NOW, type ChipTone } from './mock'
 import type { IconName } from '../app/icons'
+import { api } from './api'
 
 
 export type TravelMode = 'drive' | 'walk' | 'transit' | 'twowheeler'
@@ -183,10 +184,12 @@ export type Place = {
   builtin?: boolean
 }
 
+// Home/office addresses come from the backend (the SAME place the WhatsApp AI
+// routes from) via hydratePlaces — never hardcode a fake address here, or the
+// app would show one office while the AI uses another.
 const SEED_PLACES: Place[] = [
-  { key: 'home', name: 'Home', address: 'DHA Phase 6, Karachi', mode: 'drive', departure: '8:20 AM', notify: true, icon: 'home', tone: 'blue', builtin: true },
-  { key: 'office', name: 'Office', address: 'Shahra-e-Faisal, Karachi', mode: 'drive', departure: '6:00 PM', notify: true, icon: 'office', tone: 'lavender', builtin: true },
-  { key: 'gym', name: 'Gym', address: 'Clifton Block 4', mode: 'walk', departure: '6:15 PM', notify: false, icon: 'activity', tone: 'rose', builtin: true },
+  { key: 'home', name: 'Home', address: '', mode: 'drive', departure: '8:20 AM', notify: true, icon: 'home', tone: 'blue', builtin: true },
+  { key: 'office', name: 'Office', address: '', mode: 'drive', departure: '6:00 PM', notify: true, icon: 'office', tone: 'lavender', builtin: true },
 ]
 
 
@@ -270,8 +273,38 @@ const placesSnapshot = () => {
 export const usePlaces = () => useSyncExternalStore(subscribe, placesSnapshot)
 export const placeByKey = (key: string) => placesSnapshot().find((p) => p.key === key)
 
-export const savePlace = (p: Place) => persist({ ...state, places: { ...state.places, [p.key]: p } })
+export const savePlace = (p: Place) => {
+  persist({ ...state, places: { ...state.places, [p.key]: p } })
+  // Home/office are what the WhatsApp AI routes from — persist them to the
+  // backend (the single source of truth), not just localStorage.
+  if ((p.key === 'home' || p.key === 'office') && p.address.trim()) {
+    void api.savePlace(p.key, p.address.trim()).catch(() => {})
+  }
+}
 export const removePlace = (key: string) => persist({ ...state, removed: { ...state.removed, [key]: true } })
+
+/**
+ * Pull the real home/office addresses from the backend (/me) into the store, so
+ * the app shows exactly what the WhatsApp AI uses for routing. Best-effort.
+ */
+export const hydratePlaces = async (): Promise<void> => {
+  try {
+    const me = (await api.me()) as { home_address?: string | null; office_address?: string | null }
+    const base = (key: string): Place | undefined => state.places[key] || SEED_PLACES.find((p) => p.key === key)
+    const places: Record<string, Place> = {}
+    if (me.home_address) {
+      const b = base('home')
+      if (b) places.home = { ...b, address: String(me.home_address) }
+    }
+    if (me.office_address) {
+      const b = base('office')
+      if (b) places.office = { ...b, address: String(me.office_address) }
+    }
+    if (Object.keys(places).length) persist({ ...state, places: { ...state.places, ...places } })
+  } catch {
+    /* keep what we have */
+  }
+}
 
 export const useCommutePrefs = (): CommutePrefs => {
   useSyncExternalStore(subscribe, () => state)

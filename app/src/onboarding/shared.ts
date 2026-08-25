@@ -300,12 +300,14 @@ export function useOnboarding() {
     }
     try {
       await api.completeOnboarding(patch)
-      // Home/office go through their own endpoint (not the settings allow-list).
-      // Keep place failures non-fatal (Maps may be off) but surface the main save.
-      try {
-        if (state.places.home.trim()) await api.savePlace('home', state.places.home.trim())
-        if (state.places.office.trim()) await api.savePlace('office', state.places.office.trim())
-      } catch { /* places are best-effort */ }
+      // Home/office go through their own endpoint. Save them INDEPENDENTLY —
+      // previously one shared try/catch meant a failing home save (Maps quota /
+      // network) silently skipped the office save, leaving a stale office that
+      // the WhatsApp AI then used for routing.
+      await Promise.allSettled([
+        state.places.home.trim() ? api.savePlace('home', state.places.home.trim()) : Promise.resolve(),
+        state.places.office.trim() ? api.savePlace('office', state.places.office.trim()) : Promise.resolve(),
+      ])
       clearOnboardingState() // setup saved — drop the resume snapshot
       return null
     } catch (e) {

@@ -207,6 +207,7 @@ STARTING POINT — default to where they are NOW:
 - "current" is their LAST KNOWN location (the app reads it when open; it can't track in the background). If it's recent, just use it.
 - If a tool returns {"error":"CURRENT_LOCATION_UNKNOWN"}, it means the app hasn't captured their location yet. Say so and offer two ways: open the Wingman app once (it will pick up their location), or share their live location here on WhatsApp. Do NOT silently fall back to home — that could send them the wrong route.
 - Only default \`from\` to "home"/"office" when they clearly mean it (e.g. "how long from home to the office?").
+- ALWAYS resolve "home"/"office" by passing from/to = "home"/"office" to the maps tool — it reads their CURRENT saved address. Never route from an address you remember from earlier in this chat or from the memory notes; they may have updated Home/Office since, so a remembered address can be stale.
 
 "Remind me with a traffic update before I usually leave for home" and similar standing requests → this is an AUTOMATION (create_automation), not a one-off. The instruction to your future self should be "get the driving time from the user's current location to home with live traffic and send it". Because the time depends on when they usually finish, set anchor="usual_finish" and lead_minutes (≈20–30) — the system then keeps the fire time in sync with their real finish as it drifts, so you never have to redo it. For the initial \`time\`, use their "Usual finish (learned…)" from the context above minus the lead; if that says "(not enough data yet)", fall back to their work hours, or ask once what time they usually leave. (Only anchor to usual_finish when the request is genuinely tied to their finishing/leaving — a plain "at 7am" stays a fixed time.)
 
@@ -323,6 +324,14 @@ Match this tone and style in every reply, overriding the default tone above wher
     }
   } catch (_) { /* no clock data yet — fall back to configured hours */ }
 
+  const fmtList = (v) => {
+    if (!v) return null;
+    try {
+      const a = typeof v === 'string' ? JSON.parse(v) : v;
+      return Array.isArray(a) && a.length ? a.join(', ') : (Array.isArray(a) ? null : String(v));
+    } catch (_) { return String(v); }
+  };
+
   const ctx = `
 
 --- USER CONTEXT ---
@@ -331,6 +340,10 @@ Timezone: ${tz}
 Current local time: ${nowLocal}
 Work hours: ${user.work_hours_start || '?'}–${user.work_hours_end || '?'}
 Usual finish (learned from actual clock-outs): ${learnedFinish || '(not enough data yet)'}
+Morning briefing time: ${user.briefing_time || '(default)'} · Evening wrap time: ${user.debrief_time || '(default)'}
+Proactiveness level: ${user.proactiveness_level || 'moderate'}
+News topics they follow: ${fmtList(user.news_topics) || '(none set)'}${user.news_city ? ` · City: ${user.news_city}` : ''}
+Skills they enabled: ${fmtList(user.enabled_skills) || 'all'}
 Language preference: ${user.language || 'en'}
 Google Calendar connected: ${connected ? 'yes' : 'no'}
 Home address: ${user.home_address || '(not set)'}
