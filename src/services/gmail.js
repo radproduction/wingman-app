@@ -11,14 +11,15 @@ function gmailFor(user, account = null) {
 }
 
 /**
- * The ONE Google account Wingman should actively use for Gmail features.
- * We keep multi-account rows for reconnect/switching, but live reads/sends are
- * anchored to the primary account so the product behaves consistently.
+ * ALL linked Google accounts, so reads (inbox scan, search, reply/forward
+ * lookup) cover every connected mailbox — personal + work merge into one view.
+ * Sends/creates deliberately use getPrimary elsewhere. Falls back to [null]
+ * (the legacy single-token path) for users with no google_accounts rows.
  */
 function accountsFor(user) {
   try {
-    const primary = require('../db/googleAccounts').getPrimary(user.id);
-    return primary ? [primary] : [null];
+    const accts = require('../db/googleAccounts').listForUser(user.id);
+    return accts.length ? accts : [null];
   } catch (_) {
     return [null];
   }

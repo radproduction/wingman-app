@@ -15,14 +15,15 @@ function calendarFor(user, account = null) {
 }
 
 /**
- * The ONE Google account Wingman should actively use for Calendar features.
- * This keeps dashboard/chat results consistent with the account the user chose
- * as primary in Settings.
+ * ALL linked Google accounts, so calendar reads merge events from every
+ * connected account (events are tagged with their account). Event creation uses
+ * getPrimary elsewhere. Falls back to [null] (legacy single-token) when there
+ * are no google_accounts rows.
  */
 function accountsFor(user) {
   try {
-    const primary = require('../db/googleAccounts').getPrimary(user.id);
-    return primary ? [primary] : [null];
+    const accts = require('../db/googleAccounts').listForUser(user.id);
+    return accts.length ? accts : [null];
   } catch (_) {
     return [null];
   }

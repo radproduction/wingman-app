@@ -79,8 +79,10 @@ function createOAuthClient() {
 function getAuthUrl(phone, scopes = SCOPES) {
   const oauth2Client = createOAuthClient();
   return oauth2Client.generateAuthUrl({
-    access_type: 'offline',     // request a refresh token
-    prompt: 'consent',          // force refresh_token issuance every time
+    access_type: 'offline',              // request a refresh token
+    // 'select_account' forces Google's account chooser so a user can add a
+    // DIFFERENT second account; 'consent' still forces refresh_token issuance.
+    prompt: 'select_account consent',
     scope: scopes,
     state: phone || '',
     include_granted_scopes: true,

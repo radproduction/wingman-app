@@ -798,7 +798,9 @@ router.post('/google/accounts/:id/primary', (req, res) => {
   if (!req.user) return res.status(401).json({ error: 'Authentication required.' });
   const accountsRepo = require('../db/googleAccounts');
   const cleanup = require('../services/googleDisconnectCleanup');
-  if (!accountsRepo.getById(req.params.id)) return res.status(404).json({ error: 'Account not found.' });
+  const acct = accountsRepo.getById(req.params.id);
+  // Scope to the caller — never let one user re-primary/clear another's accounts.
+  if (!acct || acct.user_id !== req.user.id) return res.status(404).json({ error: 'Account not found.' });
   accountsRepo.setPrimary(req.user.id, req.params.id);
   syncPrimaryToLegacy(req.user.id);
   const cleanupResult = cleanup.cleanupAllGoogleData(req.user.id);
