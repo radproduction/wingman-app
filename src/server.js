@@ -462,6 +462,10 @@ app.post('/webhook', (req, res) => {
         const phoneNumber = String(m.from || '').replace(/[^0-9]/g, '');
         if (!phoneNumber) continue;
 
+        // Diagnostic: log every inbound message's type up-front, so it's obvious
+        // in the logs whether images (and other media) actually reach the webhook.
+        console.log(`[webhook] recv type=${m.type} from ${phoneNumber}${m.image ? ` image_id=${m.image.id || 'none'}` : ''}`);
+
         // Quick-reply button on a TEMPLATE (e.g. dormant user tapping "Show my
         // briefing"). The tap itself opens the 24h window, so we log it as an
         // inbound message and then send the FULL rich free-form briefing/wrap —
