@@ -62,14 +62,14 @@ function buildAlert(classified) {
       lines.push(`Plus ${rest.length} other new email${rest.length === 1 ? '' : 's'}.`);
     }
     lines.push('');
-    lines.push('Want me to reply to any? Just say e.g. "reply to the one from ' + important[0].from + '".');
+    lines.push('Want me to reply to any of these? Just tell me — however you like.');
   } else {
     // Nothing urgent — a light heads-up, not an alarm.
     lines.push(`📬 ${classified.length} new business email${classified.length === 1 ? '' : 's'}, nothing urgent.`);
     for (const c of classified.slice(0, 3)) lines.push(`• ${c.subject} — ${c.from}`);
     if (classified.length > 3) lines.push(`…and ${classified.length - 3} more.`);
     lines.push('');
-    lines.push('Say "check the business inbox" to see them.');
+    lines.push('Tell me if you want to see them or reply to any.');
   }
   return lines.join('\n');
 }
