@@ -2,6 +2,7 @@
 
 const { ImapFlow } = require('imapflow');
 const nodemailer = require('nodemailer');
+const { simpleParser } = require('mailparser');
 const secrets = require('../utils/secrets');
 const usersRepo = require('../db/users');
 const config = require('../config');
@@ -183,6 +184,7 @@ async function listRecent(user, { limit = 10, mailbox = 'INBOX' } = {}) {
           subject: env.subject || '(no subject)',
           from: sender.address ? `${sender.name ? `${sender.name} ` : ''}<${sender.address}>` : (sender.name || 'unknown'),
           fromAddress: sender.address || null,
+          messageId: env.messageId || null,
           date: env.date ? new Date(env.date).toISOString() : null,
         });
       }
@@ -195,6 +197,110 @@ async function listRecent(user, { limit = 10, mailbox = 'INBOX' } = {}) {
     throw new Error(friendlyError(err));
   }
   return out.reverse(); // newest first
+}
+
+const MAX_BODY_CHARS = 6000;
+
+/** Collapse an HTML body to readable plain text (last resort when no text/plain). */
+function htmlToText(html) {
+  return String(html || '')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<\/(p|div|br|tr|li|h[1-6])>/gi, '\n')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/&lt;/gi, '<').replace(/&gt;/gi, '>')
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+/** Turn a parsed (mailparser) message into our flat shape. */
+function shapeParsed(uid, parsed) {
+  const fromVal = (parsed.from && parsed.from.value && parsed.from.value[0]) || {};
+  let body = (parsed.text || '').trim();
+  if (!body && parsed.html) body = htmlToText(parsed.html);
+  if (body.length > MAX_BODY_CHARS) body = `${body.slice(0, MAX_BODY_CHARS)}\n…(truncated)`;
+  return {
+    uid: Number(uid),
+    subject: parsed.subject || '(no subject)',
+    from: (parsed.from && parsed.from.text) || fromVal.address || 'unknown',
+    fromAddress: fromVal.address || null,
+    to: (parsed.to && parsed.to.text) || null,
+    date: parsed.date ? parsed.date.toISOString() : null,
+    messageId: parsed.messageId || null,
+    body,
+  };
+}
+
+/**
+ * Read ONE message in full (headers + body text) by UID. Needed to summarise an
+ * email and to write an informed reply. Downloads the raw RFC822 and parses it.
+ */
+async function readMessage(user, uid, { mailbox = 'INBOX' } = {}) {
+  const s = settingsFor(user);
+  const client = imapClient(s);
+  try {
+    await client.connect();
+    const lock = await client.getMailboxLock(mailbox);
+    let parsed;
+    try {
+      const dl = await client.download(String(uid), undefined, { uid: true });
+      if (!dl || !dl.content) return null;
+      parsed = await simpleParser(dl.content);
+    } finally {
+      lock.release();
+    }
+    await client.logout();
+    return shapeParsed(uid, parsed);
+  } catch (err) {
+    try { await client.logout(); } catch (_) { /* already down */ }
+    throw new Error(friendlyError(err));
+  }
+}
+
+/**
+ * Read several messages' bodies over a SINGLE connection (used by the proactive
+ * alert). Opening one connection for many uids avoids the rapid connect/logout
+ * bursts that shared cPanel/Dovecot hosts throttle. Returns a Map(uid → shaped).
+ * A message that fails to fetch/parse is simply skipped.
+ */
+async function readBodies(user, uids, { mailbox = 'INBOX' } = {}) {
+  const out = new Map();
+  if (!uids || !uids.length) return out;
+  const s = settingsFor(user);
+  const client = imapClient(s);
+  try {
+    await client.connect();
+    const lock = await client.getMailboxLock(mailbox);
+    try {
+      for (const uid of uids) {
+        try {
+          const dl = await client.download(String(uid), undefined, { uid: true });
+          if (dl && dl.content) out.set(Number(uid), shapeParsed(uid, await simpleParser(dl.content)));
+        } catch (_) { /* skip this one */ }
+      }
+    } finally {
+      lock.release();
+    }
+    await client.logout();
+  } catch (err) {
+    try { await client.logout(); } catch (_) { /* already down */ }
+    throw new Error(friendlyError(err));
+  }
+  return out;
+}
+
+/**
+ * Reply to an existing message: fetch the original, then send to its sender with
+ * a "Re:" subject and proper threading headers (In-Reply-To / References).
+ * The caller (the AI) writes the reply body.
+ */
+async function replyMessage(user, uid, bodyText) {
+  const orig = await readMessage(user, uid);
+  if (!orig || !orig.fromAddress) throw new Error('WEBMAIL_ORIGINAL_NOT_FOUND');
+  const subject = /^\s*re:/i.test(orig.subject) ? orig.subject : `Re: ${orig.subject}`;
+  const r = await send(user, { to: orig.fromAddress, subject, body: bodyText, replyTo: orig.messageId });
+  return { ...r, to: orig.fromAddress, subject, repliedTo: orig.from };
 }
 
 /** Send a message from the user's business address. */
@@ -231,5 +337,5 @@ async function send(user, { to, subject, body, replyTo } = {}) {
 
 module.exports = {
   detectSettings, testConnection, saveForUser, disconnect, isConnected,
-  listRecent, send, settingsFor,
+  listRecent, readMessage, readBodies, replyMessage, send, settingsFor,
 };

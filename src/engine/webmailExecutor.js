@@ -20,6 +20,22 @@ async function executeWebmailTool(user, toolUse) {
         return { mailbox: user.webmail_address, count: messages.length, emails: messages };
       }
 
+      case 'read_business_email': {
+        const uid = parseInt(input.uid, 10);
+        if (!uid) return { error: 'INVALID_UID', detail: 'Pass the uid from list_business_emails.' };
+        const msg = await webmail.readMessage(user, uid);
+        if (!msg) return { error: 'EMAIL_NOT_FOUND', detail: `No message with uid ${uid}.` };
+        return { mailbox: user.webmail_address, email: msg };
+      }
+
+      case 'reply_business_email': {
+        const uid = parseInt(input.uid, 10);
+        if (!uid) return { error: 'INVALID_UID', detail: 'Pass the uid of the email to reply to.' };
+        const r = await webmail.replyMessage(user, uid, input.body || '');
+        try { if (r.to) contactsRepo.recordInteraction(user.id, { email: r.to, at: new Date().toISOString() }); } catch (_) {}
+        return { sent: true, from: r.from, to: r.to, subject: r.subject };
+      }
+
       case 'send_business_email': {
         const to = String(input.to || '').trim();
         if (!EMAIL_RE.test(to)) {
@@ -44,6 +60,9 @@ async function executeWebmailTool(user, toolUse) {
     }
     if (msg === 'WEBMAIL_CREDENTIALS_UNREADABLE') {
       return { error: 'WEBMAIL_AUTH_FAILED', detail: 'Stored mail credentials could not be read — the user should reconnect the mailbox.' };
+    }
+    if (msg === 'WEBMAIL_ORIGINAL_NOT_FOUND') {
+      return { error: 'EMAIL_NOT_FOUND', detail: 'Could not open the original email to reply to — list the inbox again to get a current uid.' };
     }
     if (msg === 'WEBMAIL_HOST_NOT_FOUND' || msg === 'WEBMAIL_CONNECTION_FAILED') {
       // Reading and sending fail differently here: IMAP works from this host,
