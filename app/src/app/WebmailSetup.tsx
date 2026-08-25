@@ -143,7 +143,7 @@ export const WebmailSetup = () => {
           <div className="wg-panel-head">
             <h2>{t('Your mailbox')}</h2>
           </div>
-          <div style={{ display: 'grid', gap: 'var(--space-12)' }}>
+          <div dir="ltr" style={{ display: 'grid', gap: 'var(--space-12)' }}>
             <div className="wg-field">
               <input
                 type="email"
