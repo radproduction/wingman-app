@@ -79,6 +79,8 @@ router.get('/me', (req, res) => {
     health_connected: !!u.health_connected,
     gmail_connected: require('../auth/googleAuth').isEmailConnected(u),
     calendar_connected: require('../auth/googleAuth').isConnected(u),
+    webmail_connected: !!u.webmail_address,
+    webmail_address: u.webmail_address || null,
     wingman_number: config.wingmanNumber || null,
     whatsapp_connected: whatsappConnected,
     mock: false,

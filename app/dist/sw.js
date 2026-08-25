@@ -1,5 +1,5 @@
 
-const CACHE = 'wm-shell-v14'
+const CACHE = 'wm-shell-v16'
 
 const FONT_ORIGINS = ['https://fonts.googleapis.com', 'https://fonts.gstatic.com']
 const SHELL = [
@@ -53,6 +53,11 @@ self.addEventListener('fetch', (event) => {
   }
 
   if (url.origin !== self.location.origin) return
+
+  // NEVER cache API / auth responses — they are per-user and per-token. Caching a
+  // logged-out (mock) /api response is exactly what made the app show dummy data
+  // ("Aamir") even after a real login. Always hit the network for these.
+  if (url.pathname.startsWith('/api') || url.pathname.startsWith('/auth')) return
 
   if (request.mode === 'navigate') {
     event.respondWith(

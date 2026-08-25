@@ -1,9 +1,10 @@
 import { SubScreen } from './SubScreen'
-import { IconSpark, IconChevronR, ConnectorMark } from './icons'
+import { Icon, IconSpark, IconChevronR, ConnectorMark } from './icons'
 import { businessCenter as bcSeed, type Connector } from '../data/mock'
 import { useConnections, disconnect } from '../data/connections'
 import { localize, t } from '../i18n'
 import { openConnect } from './ConnectSheet'
+import { navigate } from '../shell/nav'
 import { confirmAction } from '../shell/confirm'
 import { toast } from '../shell/toast'
 import './app.css'
@@ -88,6 +89,26 @@ export const BusinessIntegrations = () => {
           )
         })}
       </div>
+
+      <div className="wg-panel-head">
+        <h2>{t('Business email')}</h2>
+      </div>
+      <button
+        className="wg-integ wg-card-line"
+        style={{ width: '100%', textAlign: 'left' }}
+        onClick={() => navigate('business/webmail')}
+      >
+        <div className="wg-integ__top">
+          <span className="wg-chip blue sm">
+            <Icon name="mail" size={18} variant="duotone" />
+          </span>
+          <div className="wg-integ__tx">
+            <div className="wg-integ__name">{t('Business email (IMAP/SMTP)')}</div>
+            <div className="wg-integ__sync">{t('Connect your own inbox — I watch it and draft replies')}</div>
+          </div>
+          <IconChevronR size={18} />
+        </div>
+      </button>
 
       <p className="wg-footnote">
         {t('I only ever read from these. Nothing that spends money or messages a customer happens without a card you approve.')}

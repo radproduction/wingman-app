@@ -26,6 +26,7 @@ import { Approvals } from './app/Approvals'
 import { Business } from './app/Business'
 import { BusinessPerformance } from './app/BusinessPerformance'
 import { BusinessIntegrations } from './app/BusinessIntegrations'
+import { WebmailSetup } from './app/WebmailSetup'
 import { Meetings } from './app/Meetings'
 import { MeetingDetail } from './app/MeetingDetail'
 import { MeetingBrief } from './app/MeetingBrief'
@@ -136,6 +137,7 @@ const Screen = ({ route }: { route: string }) => {
   if (route === 'business') return <Business />
   if (route === 'business/performance') return <BusinessPerformance />
   if (route === 'business/integrations') return <BusinessIntegrations />
+  if (route === 'business/webmail') return <WebmailSetup />
   if (route === 'business/brain') return <BusinessBrain />
   if (route === 'meetings') return <Meetings />
   if (route === 'meetings/instant') return <InstantMeeting />

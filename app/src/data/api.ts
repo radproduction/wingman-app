@@ -167,6 +167,23 @@ export const api = {
   savePlace: (which: 'home' | 'office', address: string) =>
     req<{ saved: boolean; which: string; address: string }>('POST', '/places', { which, address }),
 
+  // ── Webmail (IMAP/SMTP business email — creds verified + encrypted server-side) ──
+  webmailConnect: (body: {
+    address: string
+    password: string
+    imap_host?: string
+    imap_port?: number
+    smtp_host?: string
+    smtp_port?: number
+    from_name?: string
+  }) =>
+    req<{ connected: boolean; address: string; imap_host: string; smtp_host: string; can_send: boolean; send_note: string | null }>(
+      'POST',
+      '/webmail/connect',
+      body,
+    ),
+  webmailDisconnect: () => req<{ connected: boolean }>('POST', '/webmail/disconnect'),
+
   // ── Location (device geolocation → traffic origin + "use my location") ──
   saveLocation: (lat: number, lng: number) =>
     req<{ ok: boolean; label: string | null }>('POST', '/location', { lat, lng }),
