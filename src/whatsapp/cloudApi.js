@@ -177,6 +177,19 @@ function parseIncoming(body) {
           // Voice note: carry the media id so the handler can fetch + transcribe it.
           const a = m.audio || m.voice || {};
           out.push({ ...base, audio: { id: a.id, mimeType: a.mime_type || 'audio/ogg', voice: !!a.voice }, text: '' });
+        } else if (m.type === 'image') {
+          // A photo / screenshot. Carry the media id + caption so the handler
+          // can download it and read it with vision (OCR + description).
+          const img = m.image || {};
+          out.push({
+            ...base,
+            image: {
+              id: img.id,
+              mimeType: img.mime_type || 'image/jpeg',
+              caption: img.caption || '',
+            },
+            text: img.caption || '',
+          });
         } else if (m.type === 'document') {
           const d = m.document || {};
           out.push({

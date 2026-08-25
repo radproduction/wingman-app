@@ -543,9 +543,31 @@ app.post('/webhook', (req, res) => {
           }
         }
 
+        // Images / screenshots: read them with vision (OCR + description), then
+        // treat the result as the user's message — so Wingman can actually "see"
+        // a screenshot, receipt, bill photo, error message, etc.
+        if (m.type === 'image' && m.image && m.image.id) {
+          try {
+            const imageReader = require('./services/imageReader');
+            const media = await cloudApi.downloadMedia(m.image.id);
+            m.text = await imageReader.readImage(media.buffer, {
+              mimeType: m.image.mimeType || media.mimeType,
+              caption: m.image.caption || '',
+            });
+            console.log(`[webhook] 🖼️ (${phoneNumber}) image read (${(media.buffer && media.buffer.length) || 0} bytes)`);
+          } catch (err) {
+            console.warn('[webhook] image read failed:', err.message);
+            const note = err.message === 'IMAGE_TOO_LARGE'
+              ? "That image is a bit too large for me to read — send a smaller version or a screenshot and I'll take a look."
+              : "Sorry, I couldn't open that image. Mind sending it again?";
+            await cloudApi.sendText(phoneNumber, note);
+            continue;
+          }
+        }
+
         // Shared location pins carry text too (label + coordinates), so the
         // assistant can route to them. Anything else without text is ignored.
-        if (!m.text || (m.type !== 'text' && m.type !== 'interactive' && m.type !== 'location' && m.type !== 'audio' && m.type !== 'document')) {
+        if (!m.text || (m.type !== 'text' && m.type !== 'interactive' && m.type !== 'location' && m.type !== 'audio' && m.type !== 'document' && m.type !== 'image')) {
           continue;
         }
 

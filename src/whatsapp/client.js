@@ -51,13 +51,20 @@ async function textFromWhatsAppMedia(message) {
   if (!message || !message.hasMedia || typeof message.downloadMedia !== 'function') return null;
   const media = await message.downloadMedia();
   if (!media || !media.data) return null;
-  const extracted = await documentReader.extractTextFromBuffer(
-    Buffer.from(media.data, 'base64'),
-    {
-      filename: media.filename || 'attachment',
-      mimeType: media.mimetype || 'application/octet-stream',
-    },
-  );
+  const buffer = Buffer.from(media.data, 'base64');
+  const mimeType = media.mimetype || 'application/octet-stream';
+
+  // Photos / screenshots → vision (OCR + description). Everything else →
+  // document text extraction.
+  if (message.type === 'image' || /^image\//i.test(mimeType)) {
+    const imageReader = require('../services/imageReader');
+    return imageReader.readImage(buffer, { mimeType, caption: message.body || '' });
+  }
+
+  const extracted = await documentReader.extractTextFromBuffer(buffer, {
+    filename: media.filename || 'attachment',
+    mimeType,
+  });
   return documentReader.buildAttachmentContext(extracted, {
     intro: message.body ? `User note: ${message.body}` : null,
   });
