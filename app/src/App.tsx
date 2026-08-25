@@ -19,6 +19,7 @@ import { SettingsAppearance } from './app/SettingsAppearance'
 import { SettingsLanguage } from './app/SettingsLanguage'
 import { SettingsPrivacy } from './app/SettingsPrivacy'
 import { Permissions } from './app/Permissions'
+import { GoogleAccounts } from './app/GoogleAccounts'
 import { SettingsHelp } from './app/SettingsHelp'
 import { HelpArticle } from './app/HelpArticle'
 import { Memory, BusinessBrain } from './app/Memory'
@@ -114,6 +115,7 @@ const Screen = ({ route }: { route: string }) => {
   if (route === 'settings/language') return <SettingsLanguage />
   if (route === 'settings/privacy') return <SettingsPrivacy />
   if (route === 'settings/permissions') return <Permissions />
+  if (route === 'settings/google') return <GoogleAccounts />
   if (route === 'settings/memory') return <Memory />
   if (route === 'settings/help') return <SettingsHelp />
   if (route.startsWith('help/')) return <HelpArticle id={route.slice('help/'.length)} />

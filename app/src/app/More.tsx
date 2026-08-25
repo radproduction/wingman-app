@@ -126,6 +126,21 @@ export const More = () => {
                 </div>
                 )
               })}
+              <button
+                className="wg-conn wg-card-line"
+                data-feedback="header"
+                style={{ width: '100%', textAlign: 'left' }}
+                onClick={() => navigate('settings/google')}
+              >
+                <span className="wg-chip blue sm">
+                  <Icon name="mail" size={18} variant="duotone" />
+                </span>
+                <div className="wg-conn__tx">
+                  <div className="wg-conn__name">{t('Google accounts')}</div>
+                  <div className="wg-conn__desc">{t('Add or switch between multiple Google accounts')}</div>
+                </div>
+                <IconChevronR size={18} className="chev" />
+              </button>
             </div>
 
             <div className="wg-panel-head">

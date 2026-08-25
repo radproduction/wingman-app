@@ -55,6 +55,8 @@ export type ServerMeeting = {
 }
 export type EmailResult = { sent: string[]; failed: string[]; skipped: boolean; reason?: string }
 
+export type GoogleAccount = { id: string; email: string | null; is_primary: boolean; connected_at: string }
+
 export class ApiError extends Error {
   status: number
   constructor(status: number, message: string) {
@@ -153,6 +155,12 @@ export const api = {
   // (the backend's combined scopes). The flow is keyed by phone.
   googleConnectUrl: (phone: string) =>
     `${BASE}/auth/google?phone=${encodeURIComponent(phone.replace(/\D/g, ''))}`,
+  // Multiple Google accounts: list, set which sends/creates, unlink one.
+  googleAccounts: () => get<{ accounts: GoogleAccount[] }>('/google/accounts'),
+  setPrimaryGoogleAccount: (id: string) =>
+    req<{ accounts: GoogleAccount[] }>('POST', `/google/accounts/${encodeURIComponent(id)}/primary`),
+  disconnectGoogleAccount: (id: string) =>
+    req<{ accounts: GoogleAccount[] }>('POST', `/google/accounts/${encodeURIComponent(id)}/disconnect`),
   // Real connection state, read from /me.
   connections: async () => {
     const me = await get<Record<string, unknown>>('/me')
