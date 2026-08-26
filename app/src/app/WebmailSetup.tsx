@@ -144,7 +144,7 @@ export const WebmailSetup = () => {
             <h2>{t('Your mailbox')}</h2>
           </div>
           <div dir="ltr" style={{ display: 'grid', gap: 'var(--space-12)' }}>
-            <div className="wg-field">
+            <div className="wg-field wg-field--free">
               <input
                 type="email"
                 inputMode="email"
@@ -154,7 +154,7 @@ export const WebmailSetup = () => {
                 onChange={(e) => setAddress(e.target.value)}
               />
             </div>
-            <div className="wg-field">
+            <div className="wg-field wg-field--free">
               <input
                 type="password"
                 placeholder={t('Password (or app password)')}
@@ -169,19 +169,19 @@ export const WebmailSetup = () => {
 
             {advanced && (
               <>
-                <div className="wg-field">
+                <div className="wg-field wg-field--free">
                   <input placeholder={t('IMAP host (e.g. imap.yourhost.com)')} value={imapHost} onChange={(e) => setImapHost(e.target.value)} />
                 </div>
-                <div className="wg-field">
+                <div className="wg-field wg-field--free">
                   <input inputMode="numeric" placeholder={t('IMAP port (993)')} value={imapPort} onChange={(e) => setImapPort(e.target.value)} />
                 </div>
-                <div className="wg-field">
+                <div className="wg-field wg-field--free">
                   <input placeholder={t('SMTP host (e.g. smtp.yourhost.com)')} value={smtpHost} onChange={(e) => setSmtpHost(e.target.value)} />
                 </div>
-                <div className="wg-field">
+                <div className="wg-field wg-field--free">
                   <input inputMode="numeric" placeholder={t('SMTP port (465)')} value={smtpPort} onChange={(e) => setSmtpPort(e.target.value)} />
                 </div>
-                <div className="wg-field">
+                <div className="wg-field wg-field--free">
                   <input placeholder={t('From name (optional)')} value={fromName} onChange={(e) => setFromName(e.target.value)} />
                 </div>
               </>
