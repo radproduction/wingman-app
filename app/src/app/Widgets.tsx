@@ -16,6 +16,9 @@ import {
   type ActionItem,
 } from '../data/actionItems'
 import { useAttention, attentionSummary, REASONS, type AttentionItem } from '../data/attention'
+import { useBills } from '../data/bills'
+import { useVitals, fmtSleep } from '../data/vitals'
+import { useFollowups } from '../data/followups'
 import { allMeetings, MEETING_STATUS, useMeetingState, type Meeting } from '../data/meetings'
 import type { WidgetSize, WidgetType } from '../data/dashboard'
 import { localize, t } from '../i18n'
@@ -674,32 +677,96 @@ const CommuteWidgetCell = () => {
   )
 }
 
+// Travel and Deliveries are parked for now — shown as "Coming soon" and not
+// tappable, per the current product scope.
+const SOON_TILES = new Set(['travel', 'deliveries'])
+
+type WatchTile = {
+  key: string
+  title: string
+  tone: string
+  icon: IconName
+  value: string
+  sub: string
+  soon?: boolean
+}
+
 const WatchingWidget = ({ size }: { size: WidgetSize }) => {
   const DAY = localize(homeSeed)
-  const conn = useConnections()
   const waiting = useWaiting()
-  const healthOn = conn.items.find((c) => c.key === 'health')?.status === 'connected'
+  const bills = useBills()
+  const vitals = useVitals()
+  const followups = useFollowups()
   const bizWaiting = waiting.filter((a) => a.source === 'commerce').length
-  const tiles = DAY.watching
-    .map((w) => {
-      if (w.key === 'health' && healthOn) return { ...w, value: t('Recovered'), sub: t('Slept 7h 10m, HRV steady') }
-      if (w.key === 'business')
-        return { ...w, value: bizWaiting > 0 ? t('{n} waiting', { n: bizWaiting }) : t('All clear') }
-      return w
-    })
-    .slice(0, size === 'lg' ? 6 : 4)
+
+  const dyn = (w: WatchTile): WatchTile => {
+    if (SOON_TILES.has(w.key)) return { ...w, value: t('Coming soon'), sub: '', soon: true }
+
+    if (w.key === 'bills') {
+      if (!bills) return w
+      const value =
+        bills.needsYou > 0 ? t('{n} need you', { n: bills.needsYou })
+        : bills.paid > 0 ? t('All paid')
+        : t('Nothing due')
+      const sub =
+        bills.coming ? t('{name} · due {due}', { name: bills.coming.name, due: bills.coming.due })
+        : bills.paid > 0 ? t('{n} paid recently', { n: bills.paid })
+        : t('Nothing coming up')
+      return { ...w, value, sub }
+    }
+
+    if (w.key === 'health') {
+      if (!vitals) return w
+      if (!vitals.connected) return { ...w, value: t('Get started'), sub: t('Connect to see sleep & recovery') }
+      const value =
+        vitals.recovery != null ? t('{n}% recovered', { n: Math.round(vitals.recovery) })
+        : vitals.restingHr != null ? t('Resting HR {n}', { n: Math.round(vitals.restingHr) })
+        : vitals.sleepHours != null ? t('Slept {v}', { v: fmtSleep(vitals.sleepHours) })
+        : t('Connected')
+      const parts: string[] = []
+      if (vitals.sleepHours != null) parts.push(t('Slept {v}', { v: fmtSleep(vitals.sleepHours) }))
+      if (vitals.hrv != null) parts.push(`HRV ${Math.round(vitals.hrv)}ms`)
+      else if (vitals.restingHr != null && value !== t('Resting HR {n}', { n: Math.round(vitals.restingHr) }))
+        parts.push(t('Resting HR {n}', { n: Math.round(vitals.restingHr) }))
+      const sub = parts.join(' · ') || vitals.summary || t('Connected')
+      return { ...w, value, sub }
+    }
+
+    if (w.key === 'people') {
+      if (!followups) return w
+      const value = followups.active > 0 ? t('{n} follow-ups', { n: followups.active }) : t('All caught up')
+      const sub = followups.overdue > 0 ? t('{n} overdue', { n: followups.overdue }) : t('Nothing waiting on you')
+      return { ...w, value, sub }
+    }
+
+    if (w.key === 'business') {
+      return { ...w, value: bizWaiting > 0 ? t('{n} waiting', { n: bizWaiting }) : t('All clear') }
+    }
+
+    return w
+  }
+
+  const tiles = (DAY.watching as WatchTile[]).map(dyn).slice(0, size === 'lg' ? 6 : 4)
 
   return (
     <>
       <h3 className="wg-sect">{t('Watching for you')}</h3>
       <div className="wg-grid" data-feedback="header">
         {tiles.map((w) => (
-          <button className="wg-tile wg-card-line" key={w.key} onClick={() => navigate(w.key)}>
+          <button
+            className={`wg-tile wg-card-line${w.soon ? ' soon' : ''}`}
+            key={w.key}
+            disabled={w.soon}
+            onClick={() => {
+              if (!w.soon) navigate(w.key)
+            }}
+          >
             <span className="wg-tile__head">
               <span className={`wg-chip ${w.tone} sm`}>
                 <Icon name={w.icon} size={24} variant="duotone" />
               </span>
               <span className="ti">{w.title}</span>
+              {w.soon && <span className="wg-tile__soon">{t('Soon')}</span>}
             </span>
             <span className="val">{w.value}</span>
             <span className="sub">{w.sub}</span>

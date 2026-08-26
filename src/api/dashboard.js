@@ -221,10 +221,31 @@ router.get('/travel', (req, res) => {
 // ── /api/health ─────────────────────────────────────────────────────
 router.get(['/health-data', '/health'], (req, res) => {
   const u = resolveUser(req);
-  // Live health ingestion is a later sprint. Logged-in users see an empty
-  // (not connected) state; only unauthenticated demo requests see the sample.
+  // Unauthenticated demo requests see the sample; real users get their actual
+  // latest readings (same source the briefing/health analyst reads).
   if (!u) return res.json({ health: mock.health, mock: true });
-  res.json({ health: { sleep_hours: null, hrv: null, steps: null }, mock: false });
+  try {
+    const healthRepo = require('../db/healthData');
+    const all = healthRepo.latestAll(u.id);
+    const by = Object.fromEntries(all.map((r) => [r.metric_type, r]));
+    const num = (m) => (by[m] ? Number(by[m].value) : null);
+    let summary = null;
+    try { summary = require('../services/health').summaryLine(u.id); } catch (_) { /* optional */ }
+    res.json({
+      health: {
+        connected: all.length > 0,
+        sleep_hours: num('sleep_hours'),
+        hrv: num('hrv'),
+        recovery: num('recovery'),
+        resting_heart_rate: num('resting_heart_rate'),
+        steps: num('steps'),
+        summary,
+      },
+      mock: false,
+    });
+  } catch (e) {
+    res.json({ health: { connected: false, sleep_hours: null, hrv: null, steps: null }, mock: false });
+  }
 });
 
 // ── /api/contacts ───────────────────────────────────────────────────

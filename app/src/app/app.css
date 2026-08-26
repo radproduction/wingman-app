@@ -2046,6 +2046,23 @@
   line-height: 1.35;
 }
 
+/* Parked tiles (Travel, Deliveries) — dimmed, not tappable, with a "Soon" pill. */
+.wg-tile.soon {
+  opacity: 0.5;
+  cursor: default;
+}
+.wg-tile__soon {
+  margin-inline-start: auto;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: var(--home-surface-2, rgba(127, 127, 127, 0.16));
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
 .wg-card {
   display: flex;
   flex-direction: column;
