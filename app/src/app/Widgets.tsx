@@ -718,17 +718,19 @@ const WatchingWidget = ({ size }: { size: WidgetSize }) => {
     if (w.key === 'health') {
       if (!vitals) return w
       if (!vitals.connected) return { ...w, value: t('Get started'), sub: t('Connect to see sleep & recovery') }
-      const value =
-        vitals.recovery != null ? t('{n}% recovered', { n: Math.round(vitals.recovery) })
-        : vitals.restingHr != null ? t('Resting HR {n}', { n: Math.round(vitals.restingHr) })
-        : vitals.sleepHours != null ? t('Slept {v}', { v: fmtSleep(vitals.sleepHours) })
-        : t('Connected')
+      const r = (n: number) => Math.round(n)
+      // The headline value, and which metric it used — so the sub never repeats it.
+      let value: string
+      let shown: 'recovery' | 'sleep' | 'rhr' | null
+      if (vitals.recovery != null) { value = t('{n}% recovered', { n: r(vitals.recovery) }); shown = 'recovery' }
+      else if (vitals.sleepHours != null) { value = t('Slept {v}', { v: fmtSleep(vitals.sleepHours) }); shown = 'sleep' }
+      else if (vitals.restingHr != null) { value = t('Resting HR {n}', { n: r(vitals.restingHr) }); shown = 'rhr' }
+      else { value = t('Connected'); shown = null }
       const parts: string[] = []
-      if (vitals.sleepHours != null) parts.push(t('Slept {v}', { v: fmtSleep(vitals.sleepHours) }))
-      if (vitals.hrv != null) parts.push(`HRV ${Math.round(vitals.hrv)}ms`)
-      else if (vitals.restingHr != null && value !== t('Resting HR {n}', { n: Math.round(vitals.restingHr) }))
-        parts.push(t('Resting HR {n}', { n: Math.round(vitals.restingHr) }))
-      const sub = parts.join(' · ') || vitals.summary || t('Connected')
+      if (vitals.sleepHours != null && shown !== 'sleep') parts.push(t('Slept {v}', { v: fmtSleep(vitals.sleepHours) }))
+      if (vitals.hrv != null) parts.push(`HRV ${r(vitals.hrv)}ms`)
+      if (vitals.restingHr != null && shown !== 'rhr') parts.push(t('Resting HR {n}', { n: r(vitals.restingHr) }))
+      const sub = parts.join(' · ') || vitals.summary || t('Sleep, recovery, movement')
       return { ...w, value, sub }
     }
 
