@@ -488,7 +488,8 @@ app.post('/webhook', (req, res) => {
             const rich = /wrap/i.test(payload)
               ? require('./services/endOfDayWrap')
               : require('./services/morningBriefing');
-            await rich.sendForUser(u.id, { now: new Date() });
+            // The tap opens the 24h window — deliver the FULL rich version now.
+            await rich.sendForUser(u.id, { now: new Date(), full: true });
             console.log(`[webhook] ▶ (${phoneNumber}) button "${payload}" → rich send`);
           } catch (err) {
             console.warn('[webhook] button rich send failed:', err.message);

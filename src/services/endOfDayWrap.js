@@ -131,7 +131,7 @@ function templateParams(user, agg) {
   ];
 }
 
-async function sendForUser(userId, { now = new Date(), send = true } = {}) {
+async function sendForUser(userId, { now = new Date(), send = true, full = false } = {}) {
   const user = usersRepo.getById(userId);
   if (!user) return { text: '', sent: false, skipped: 'no_user' };
 
@@ -143,16 +143,21 @@ async function sendForUser(userId, { now = new Date(), send = true } = {}) {
   if (send) {
     try {
       if (wa().ready()) {
-        await wa().sendProactiveMessage(user, text, {
-          now,
-          logLabel: 'wrap',
-          templateName: require('../config').whatsappCloud.wrapTemplate,
-          templateParams: templateParams(user, agg),
-          // Dormant users get a "tap to see it" nudge; the tap opens the window
-          // and the webhook re-sends this exact rich wrap free-form.
-          readyPayload: 'SHOW_WRAP',
-          readyParams: [user.name || 'there', "day's wrap"],
-        });
+        if (full) {
+          // On-demand full version (user tapped "View") — direct rich text.
+          await require('../whatsapp/client').sendMessage(user.phone, text);
+        } else {
+          // SCHEDULED send: concise "tap to view" nudge only, not the full wrap.
+          await wa().sendProactiveMessage(user, text, {
+            now,
+            logLabel: 'wrap',
+            templateName: require('../config').whatsappCloud.wrapTemplate,
+            templateParams: templateParams(user, agg),
+            nudgeOnly: true,
+            readyPayload: 'SHOW_WRAP',
+            readyParams: [user.name || 'there', "day's wrap"],
+          });
+        }
         sent = true;
       }
       else console.log('[endOfDayWrap] (WA not ready) wrap for', user.phone);

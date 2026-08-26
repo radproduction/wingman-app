@@ -227,7 +227,7 @@ function prettyStatus(s) {
  * Build, store, and (best-effort) send a morning briefing for one user.
  * @returns {Promise<{text:string, sent:boolean}>}
  */
-async function sendForUser(userId, { now = new Date(), send = true } = {}) {
+async function sendForUser(userId, { now = new Date(), send = true, full = false } = {}) {
   const user = usersRepo.getById(userId);
   if (!user) return { text: '', sent: false, skipped: 'no_user' };
 
@@ -252,16 +252,25 @@ async function sendForUser(userId, { now = new Date(), send = true } = {}) {
   if (send) {
     try {
       if (wa().ready()) {
-        await wa().sendProactiveMessage(user, text, {
-          now,
-          logLabel: 'briefing',
-          templateName: require('../config').whatsappCloud.briefingTemplate,
-          templateParams: templateParams(user, agg),
-          // Dormant users get a "tap to see it" nudge; the tap opens the window
-          // and the webhook re-sends this exact rich text free-form.
-          readyPayload: 'SHOW_BRIEFING',
-          readyParams: [user.name || 'there', 'morning briefing'],
-        });
+        if (full) {
+          // On-demand full version (user tapped "View Briefing") — send the rich
+          // text directly. Only ever happens when the user just tapped, so the
+          // window is open and it isn't proactive spam.
+          await require('../whatsapp/client').sendMessage(user.phone, text);
+        } else {
+          // SCHEDULED send: only the concise "tap to view" nudge — never the full
+          // free-form wall of text. The tap opens the window and the webhook calls
+          // this again with full:true to deliver the rich version.
+          await wa().sendProactiveMessage(user, text, {
+            now,
+            logLabel: 'briefing',
+            templateName: require('../config').whatsappCloud.briefingTemplate,
+            templateParams: templateParams(user, agg),
+            nudgeOnly: true,
+            readyPayload: 'SHOW_BRIEFING',
+            readyParams: [user.name || 'there', 'morning briefing'],
+          });
+        }
         sent = true;
       } else console.log('[morningBriefing] (WA not ready) briefing for', user.phone);
     } catch (err) {

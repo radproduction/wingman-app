@@ -74,6 +74,9 @@ async function scanUser(userId, { maxResults = 50 } = {}) {
 
   let newItems = 0;
   let urgent = 0;
+  // Collect urgent emails and send ONE digest at the end, so a batch of urgent
+  // mail is a single message — not one ping per email (the "double double" spam).
+  const urgentItems = [];
 
   for (const { id, account } of items) {
     if (emailItemsRepo.existsByGmailId(userId, id)) continue; // de-dupe
@@ -158,12 +161,16 @@ async function scanUser(userId, { maxResults = 50 } = {}) {
       console.warn('[emailScanner] followup detection failed:', err.message);
     }
 
-    // Urgent alert
+    // Collect urgent items for a single digest after the scan.
     if (analysis.category === 'urgent') {
       urgent++;
-      await sendUrgentAlert(user, msg.sender, analysis.summary);
+      urgentItems.push({ sender: msg.sender, summary: analysis.summary });
     }
   }
+
+  // One urgent digest for the whole scan (deduped by subject+sender so two near
+  // identical notices — e.g. the same Apps Script failure — don't both show).
+  if (urgentItems.length) await sendUrgentDigest(user, urgentItems);
 
   // Record last scan time
   usersRepo.updatePreferences(userId, { lastEmailScan: new Date().toISOString() });
@@ -225,8 +232,28 @@ function fanOut(userId, emailItemId, analysis) {
   }
 }
 
-async function sendUrgentAlert(user, sender, summary) {
-  const text = `🚨 Urgent email from ${cleanSender(sender)}: ${summary}`;
+async function sendUrgentDigest(user, items) {
+  // Collapse exact repeats (same sender + same summary) so a mailbox that got two
+  // near-identical notices doesn't produce two lines.
+  const seen = new Set();
+  const uniq = [];
+  for (const it of items) {
+    const key = `${cleanSender(it.sender)}|${String(it.summary || '').trim().toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    uniq.push(it);
+  }
+
+  let text;
+  if (uniq.length === 1) {
+    text = `🚨 Urgent email from ${cleanSender(uniq[0].sender)}: ${uniq[0].summary}`;
+  } else {
+    const lines = [`🚨 *${uniq.length} urgent emails:*`];
+    for (const it of uniq.slice(0, 5)) lines.push(`• ${cleanSender(it.sender)}: ${it.summary}`);
+    if (uniq.length > 5) lines.push(`…and ${uniq.length - 5} more.`);
+    text = lines.join('\n');
+  }
+
   try {
     if (wa().ready()) {
       await wa().sendMessage(user.phone, text);
@@ -234,7 +261,7 @@ async function sendUrgentAlert(user, sender, summary) {
       console.log('[emailScanner] (WA not ready) would alert:', text);
     }
   } catch (err) {
-    console.warn('[emailScanner] urgent alert failed:', err.message);
+    console.warn('[emailScanner] urgent digest failed:', err.message);
   }
 }
 

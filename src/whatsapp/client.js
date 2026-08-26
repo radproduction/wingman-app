@@ -368,6 +368,7 @@ async function sendProactiveMessage(user, text, {
   readyTemplate = config.whatsappCloud.briefingReadyTemplate, // nudge template WITH a quick-reply button
   readyPayload = null,       // caller opts in by passing a button payload (e.g. 'SHOW_BRIEFING')
   readyParams = null,        // body params for the nudge (e.g. [name, 'morning briefing'])
+  nudgeOnly = false,         // force the concise "tap to view" nudge even in-window (no full free-form)
   logLabel = 'proactive',
 } = {}) {
   if (!user || !user.phone) throw new Error('user with phone is required');
@@ -377,8 +378,18 @@ async function sendProactiveMessage(user, text, {
     return sendMessage(digits, text);
   }
 
-  // Inside the 24h window a free-form message delivers (and is richer), so use it.
-  if (isWithinCustomerWindow(user, now) || !useTemplate) {
+  // Scheduled briefings/wraps request nudge-only: a concise "tap to view" template
+  // instead of the full free-form wall of text (the user gets the full version on
+  // tap). If we genuinely can't nudge (no template configured), fall back to the
+  // free-form so a briefing is never silently lost.
+  const canNudge = !!(readyTemplate && readyPayload);
+  if (nudgeOnly && !canNudge) {
+    return sendMessage(digits, text);
+  }
+
+  // Inside the 24h window a free-form message delivers (and is richer), so use it —
+  // unless the caller asked for nudge-only.
+  if (!nudgeOnly && (isWithinCustomerWindow(user, now) || !useTemplate)) {
     return sendMessage(digits, text);
   }
 
