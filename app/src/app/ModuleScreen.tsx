@@ -12,11 +12,18 @@ export const ModuleScreen = ({
   k,
   back = 'home',
   footer,
+  heroValue,
+  heroSub,
+  brief,
   children,
 }: {
   k: ModuleKey | BusinessKey
   back?: string
   footer?: ReactNode
+  // Optional live overrides — pass real values so the hero/brief aren't the seed.
+  heroValue?: string
+  heroSub?: string
+  brief?: string
   children: ReactNode
 }) => {
   const head = localize(moduleHead(k))
@@ -25,8 +32,8 @@ export const ModuleScreen = ({
       {}
       <div className="wg-mod__hero wg-card-line">
         <span className="wg-mod__tx">
-          <span className="wg-mod__val">{head.value}</span>
-          <span className="wg-mod__sub">{head.sub}</span>
+          <span className="wg-mod__val">{heroValue ?? head.value}</span>
+          <span className="wg-mod__sub">{heroSub ?? head.sub}</span>
         </span>
         <span className={`wg-chip ${head.tone} lg`}>
           <Icon name={head.icon} size={24} variant="duotone" />
@@ -35,7 +42,7 @@ export const ModuleScreen = ({
 
       <div className="wg-brief-line">
         <IconSpark size={16} />
-        <span>{head.brief}</span>
+        <span>{brief ?? head.brief}</span>
       </div>
 
       {children}

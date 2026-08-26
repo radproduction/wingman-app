@@ -231,6 +231,31 @@ router.get(['/health-data', '/health'], (req, res) => {
     const num = (m) => (by[m] ? Number(by[m].value) : null);
     let summary = null;
     try { summary = require('../services/health').summaryLine(u.id); } catch (_) { /* optional */ }
+
+    // Per-metric detail for the Health screen: latest value, the user's own
+    // recent baseline (their normal), and a short normalised series for a
+    // sparkline. All REAL — empty arrays/nulls when there isn't enough history.
+    const detail = (metric) => {
+      const rows = healthRepo.since(u.id, metric, 9);
+      const vals = rows.map((r) => Number(r.value)).filter((v) => Number.isFinite(v));
+      let series = [];
+      if (vals.length) {
+        const recent = vals.slice(-7);
+        const max = Math.max(...recent);
+        const min = Math.min(...recent);
+        const span = max - min || 1;
+        series = recent.map((v) => Math.round((((v - min) / span) * 0.8 + 0.2) * 100) / 100);
+      }
+      let baseline = null;
+      try { const b = healthRepo.baseline(u.id, metric); if (b) baseline = Math.round(b.mean * 10) / 10; } catch (_) { /* none */ }
+      return { value: num(metric), baseline, series };
+    };
+
+    // Sleep over the last 7 nights, for the week chart.
+    const week = healthRepo.since(u.id, 'sleep_hours', 8)
+      .slice(-7)
+      .map((r) => ({ at: r.recorded_at, hours: Number(r.value) }));
+
     res.json({
       health: {
         connected: all.length > 0,
@@ -240,11 +265,19 @@ router.get(['/health-data', '/health'], (req, res) => {
         resting_heart_rate: num('resting_heart_rate'),
         steps: num('steps'),
         summary,
+        reads: {
+          sleep_hours: detail('sleep_hours'),
+          hrv: detail('hrv'),
+          recovery: detail('recovery'),
+          resting_heart_rate: detail('resting_heart_rate'),
+          steps: detail('steps'),
+        },
+        week,
       },
       mock: false,
     });
   } catch (e) {
-    res.json({ health: { connected: false, sleep_hours: null, hrv: null, steps: null }, mock: false });
+    res.json({ health: { connected: false, sleep_hours: null, hrv: null, steps: null, reads: {}, week: [] }, mock: false });
   }
 });
 
