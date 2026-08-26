@@ -2012,6 +2012,7 @@
 }
 
 .wg-tile {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -2051,8 +2052,12 @@
   opacity: 0.5;
   cursor: default;
 }
+/* Absolute so it never adds width to the tile head — on small screens the flex
+   pill was widening the row and pushing the grid into a horizontal scroll. */
 .wg-tile__soon {
-  margin-inline-start: auto;
+  position: absolute;
+  top: var(--space-12);
+  inset-inline-end: var(--space-12);
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.02em;
@@ -2061,6 +2066,7 @@
   background: var(--home-surface-2, rgba(127, 127, 127, 0.16));
   border-radius: 999px;
   padding: 2px 8px;
+  pointer-events: none;
 }
 
 .wg-card {
