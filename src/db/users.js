@@ -237,9 +237,16 @@ function mergeDuplicatePhones() {
   }
 
   const dupGroups = [...groups.values()].filter((list) => list.length > 1);
-  if (!dupGroups.length) return 0;
+  // Accounts with an unusable phone (e.g. "92" — a half-finished onboarding that
+  // captured only the country code). They can never receive a WhatsApp message
+  // and, if a Gmail got linked to them, cause a DUPLICATE scan/alert of that inbox
+  // alongside the real account. Remove them.
+  const junk = rows.filter((r) => String(r.phone || '').replace(/\D/g, '').length < 7);
+
+  if (!dupGroups.length && !junk.length) return 0;
 
   let removed = 0;
+  const deleted = new Set();
   // Deleting a whole account touches many tables, and some reference each other
   // (e.g. bills.source_email_id → email_items), so a fixed delete order can trip
   // an intermediate FOREIGN KEY. Since we're removing the entire account, disable
@@ -254,16 +261,19 @@ function mergeDuplicatePhones() {
         // Keep the primary's OWN phone as-is (the most dialable of the group).
         for (const d of list.slice(1)) {
           try { db.prepare('UPDATE sessions SET user_id = ? WHERE user_id = ?').run(primary.id, d.id); } catch (_) { /* no sessions */ }
-          deleteUserCascade(d.id);
-          removed++;
+          deleteUserCascade(d.id); deleted.add(d.id); removed++;
         }
+      }
+      for (const j of junk) {
+        if (deleted.has(j.id)) continue;
+        deleteUserCascade(j.id); deleted.add(j.id); removed++;
       }
     });
     tx();
   } finally {
     db.pragma('foreign_keys = ON');
   }
-  if (removed) console.log(`[users] removed ${removed} duplicate account(s) by phone`);
+  if (removed) console.log(`[users] cleaned up ${removed} duplicate/invalid account(s)`);
   return removed;
 }
 
