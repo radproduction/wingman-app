@@ -6,9 +6,23 @@ const DEFAULT_SKILLS = [
   'travel_assistant', 'bill_tracker', 'delivery_tracker', 'people_crm', 'followup_tracker',
 ];
 
-/** Find a user by their WhatsApp phone number (digits only). */
+/** Canonical phone form: digits only, no leading zeros, no '+'. */
+function normPhone(p) {
+  return String(p || '').replace(/\D/g, '').replace(/^0+/, '');
+}
+
+/**
+ * Find a user by their WhatsApp phone number. Historically phones were stored
+ * inconsistently (some with a leading '+', some without), which let the same
+ * person end up with two rows — and two of every proactive message. We now match
+ * on the normalized form so a lookup always finds the one real account.
+ */
 function getByPhone(phone) {
-  const row = db.prepare('SELECT * FROM users WHERE phone = ?').get(phone);
+  let row = db.prepare('SELECT * FROM users WHERE phone = ?').get(phone);
+  if (!row) {
+    const n = normPhone(phone);
+    if (n) row = db.prepare('SELECT * FROM users WHERE phone = ? OR phone = ?').get(n, `+${n}`);
+  }
   return hydrate(row);
 }
 
@@ -17,15 +31,22 @@ function getById(id) {
   return hydrate(row);
 }
 
-/** Create a new user with just a phone number. */
+/**
+ * Create a new user with just a phone number — stored in the canonical form.
+ * If a row already exists under ANY format, reuse it instead of making a
+ * duplicate (the root cause of the double accounts).
+ */
 function create({ phone, name = null } = {}) {
+  const norm = normPhone(phone) || String(phone || '');
+  const existing = getByPhone(norm);
+  if (existing) return existing;
   const id = uuid();
   db.prepare(`
     INSERT INTO users (id, phone, name, preferences)
     VALUES (@id, @phone, @name, @preferences)
   `).run({
     id,
-    phone,
+    phone: norm,
     name,
     preferences: JSON.stringify({}),
   });
@@ -114,20 +135,90 @@ function hasSkill(user, skill) {
   return skills.includes(skill);
 }
 
+/** Rank a row for "which duplicate to keep": onboarded > has-Gmail > has-webmail. */
+function accountScore(x) {
+  return (x.onboarding_complete ? 4 : 0) + (x.gmail_token ? 2 : 0) + (x.webmail_address ? 1 : 0);
+}
+
+/**
+ * Collapse rows to ONE per normalized phone, so proactive jobs (briefings,
+ * alerts, mail scans) send exactly one message per person even if duplicate
+ * accounts exist. Keeps the most complete / most recent row.
+ */
+function dedupeByPhone(rows) {
+  const best = new Map();
+  for (const r of rows) {
+    const k = normPhone(r.phone);
+    if (!k) { best.set(`__${r.id}`, r); continue; } // no phone → never merge
+    const cur = best.get(k);
+    if (
+      !cur ||
+      accountScore(r) > accountScore(cur) ||
+      (accountScore(r) === accountScore(cur) && String(r.created_at || '') > String(cur.created_at || ''))
+    ) {
+      best.set(k, r);
+    }
+  }
+  return [...best.values()];
+}
+
 /** All users that have connected Gmail (have a gmail_token). */
 function listConnectedEmailUsers() {
   const rows = db.prepare('SELECT * FROM users WHERE gmail_token IS NOT NULL').all();
-  return rows.map(hydrate);
+  return dedupeByPhone(rows).map(hydrate);
 }
 
 /** All users (hydrated). */
 function listAll() {
-  return db.prepare('SELECT * FROM users').all().map(hydrate);
+  return dedupeByPhone(db.prepare('SELECT * FROM users').all()).map(hydrate);
 }
 
 /** Only fully-onboarded users (used by proactive schedulers). */
 function listOnboarded() {
-  return db.prepare('SELECT * FROM users WHERE onboarding_complete = 1').all().map(hydrate);
+  return dedupeByPhone(db.prepare('SELECT * FROM users WHERE onboarding_complete = 1').all()).map(hydrate);
+}
+
+/**
+ * One-time cleanup of the duplicate accounts that already exist: for each set of
+ * rows that share a normalized phone, keep the best one (and give it the clean
+ * canonical phone), and neuter the rest — no deletes (so nothing referencing them
+ * breaks), just marked not-onboarded with a parked phone so they never send
+ * anything or get matched again. Safe to run on every boot.
+ */
+function mergeDuplicatePhones() {
+  const rows = db.prepare('SELECT * FROM users').all();
+  const groups = new Map();
+  for (const r of rows) {
+    const k = normPhone(r.phone);
+    if (!k) continue;
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(r);
+  }
+
+  let neutered = 0;
+  const tx = db.transaction(() => {
+    for (const [k, list] of groups) {
+      if (list.length < 2) continue;
+      list.sort((a, b) =>
+        accountScore(b) - accountScore(a) ||
+        String(b.created_at || '').localeCompare(String(a.created_at || '')),
+      );
+      const primary = list[0];
+      // Neuter the extras FIRST so the canonical phone is free for the primary.
+      for (const d of list.slice(1)) {
+        // Keep the app working: point any of the duplicate's sessions at the primary.
+        try { db.prepare('UPDATE sessions SET user_id = ? WHERE user_id = ?').run(primary.id, d.id); } catch (_) { /* no sessions */ }
+        db.prepare("UPDATE users SET onboarding_complete = 0, phone = ? WHERE id = ?").run(`merged:${d.id}`, d.id);
+        neutered++;
+      }
+      if (primary.phone !== k) {
+        db.prepare('UPDATE users SET phone = ? WHERE id = ?').run(k, primary.id);
+      }
+    }
+  });
+  tx();
+  if (neutered) console.log(`[users] merged ${neutered} duplicate account(s) by phone`);
+  return neutered;
 }
 
 /** Merge a patch into the user's preferences JSON and persist. */
@@ -191,5 +282,5 @@ module.exports = {
   DEFAULT_SKILLS,
   getByPhone, getById, create, update, hydrate, isOnboarded, hasSkill,
   listConnectedEmailUsers, listAll, listOnboarded, updatePreferences,
-  completeOnboarding, toPublic,
+  completeOnboarding, toPublic, normPhone, mergeDuplicatePhones,
 };

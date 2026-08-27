@@ -792,6 +792,11 @@ function start() {
   // 1) Initialize database schema
   initSchema();
 
+  // 1b) Merge any duplicate accounts that share a phone (created before phones
+  // were normalized), so a person gets exactly one of each proactive message.
+  try { require('./db/users').mergeDuplicatePhones(); }
+  catch (e) { console.warn('[server] duplicate-account merge skipped:', e.message); }
+
   // 2) Initialize WhatsApp client (prints QR to terminal + serves it at /admin/qr)
   if (config.disableWhatsapp) {
     console.log('[server] DISABLE_WHATSAPP=1 — skipping WhatsApp init (API/dashboard only).');
