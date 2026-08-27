@@ -178,12 +178,30 @@ function listOnboarded() {
   return dedupeByPhone(db.prepare('SELECT * FROM users WHERE onboarding_complete = 1').all()).map(hydrate);
 }
 
+// Every table that hangs off a user, so a duplicate can be fully removed without
+// leaving orphans or tripping a foreign-key constraint. `sessions` is handled
+// separately (repointed to the primary, not deleted) so the app login survives.
+const USER_CHILD_TABLES = [
+  'conversations', 'tasks', 'email_items', 'bills', 'deliveries', 'calendar_events',
+  'travel', 'health_data', 'contacts', 'briefings', 'reminders', 'followups',
+  'work_sessions', 'wearable_accounts', 'automations', 'meetings', 'user_memory',
+  'google_accounts',
+];
+
+/** Hard-delete a user and everything referencing them (children first). */
+function deleteUserCascade(id) {
+  for (const tbl of USER_CHILD_TABLES) {
+    try { db.prepare(`DELETE FROM ${tbl} WHERE user_id = ?`).run(id); } catch (_) { /* table may not exist */ }
+  }
+  db.prepare('DELETE FROM users WHERE id = ?').run(id);
+}
+
 /**
  * One-time cleanup of the duplicate accounts that already exist: for each set of
- * rows that share a normalized phone, keep the best one (and give it the clean
- * canonical phone), and neuter the rest — no deletes (so nothing referencing them
- * breaks), just marked not-onboarded with a parked phone so they never send
- * anything or get matched again. Safe to run on every boot.
+ * rows that share a normalized phone, keep the best one (giving it the clean
+ * canonical phone) and DELETE the extras — but first repoint their app sessions
+ * to the primary so the user stays logged in to the right account. Safe to run on
+ * every boot (a no-op once there's only one row per phone).
  */
 function mergeDuplicatePhones() {
   const rows = db.prepare('SELECT * FROM users').all();
@@ -195,7 +213,7 @@ function mergeDuplicatePhones() {
     groups.get(k).push(r);
   }
 
-  let neutered = 0;
+  let removed = 0;
   const tx = db.transaction(() => {
     for (const [k, list] of groups) {
       if (list.length < 2) continue;
@@ -204,12 +222,11 @@ function mergeDuplicatePhones() {
         String(b.created_at || '').localeCompare(String(a.created_at || '')),
       );
       const primary = list[0];
-      // Neuter the extras FIRST so the canonical phone is free for the primary.
+      // Remove the extras FIRST so the canonical phone is free for the primary.
       for (const d of list.slice(1)) {
-        // Keep the app working: point any of the duplicate's sessions at the primary.
         try { db.prepare('UPDATE sessions SET user_id = ? WHERE user_id = ?').run(primary.id, d.id); } catch (_) { /* no sessions */ }
-        db.prepare("UPDATE users SET onboarding_complete = 0, phone = ? WHERE id = ?").run(`merged:${d.id}`, d.id);
-        neutered++;
+        deleteUserCascade(d.id);
+        removed++;
       }
       if (primary.phone !== k) {
         db.prepare('UPDATE users SET phone = ? WHERE id = ?').run(k, primary.id);
@@ -217,8 +234,8 @@ function mergeDuplicatePhones() {
     }
   });
   tx();
-  if (neutered) console.log(`[users] merged ${neutered} duplicate account(s) by phone`);
-  return neutered;
+  if (removed) console.log(`[users] removed ${removed} duplicate account(s) by phone`);
+  return removed;
 }
 
 /** Merge a patch into the user's preferences JSON and persist. */
@@ -282,5 +299,5 @@ module.exports = {
   DEFAULT_SKILLS,
   getByPhone, getById, create, update, hydrate, isOnboarded, hasSkill,
   listConnectedEmailUsers, listAll, listOnboarded, updatePreferences,
-  completeOnboarding, toPublic, normPhone, mergeDuplicatePhones,
+  completeOnboarding, toPublic, normPhone, mergeDuplicatePhones, deleteUserCascade,
 };
