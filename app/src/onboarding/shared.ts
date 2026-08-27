@@ -212,9 +212,17 @@ export function useOnboarding() {
   // ── Real auth against the Wingman backend (via src/data/api) ──────────
   const [busy, setBusy] = useState(false)
 
-  // E.164 digits: country code + number, minus a stray leading zero.
-  const phoneE164 = () =>
-    state.cc.replace(/\D/g, '') + state.phone.replace(/\D/g, '').replace(/^0+/, '')
+  // E.164 digits: country code + number, minus a stray leading zero. Guard
+  // against a DOUBLED country code — if the user left/typed "92" in the number
+  // field too, don't produce "9292…" (that made an invalid number → "could not
+  // send the code"). A PK mobile after +92 starts with 3, never the country code,
+  // so stripping a leading cc from the number field here is safe.
+  const phoneE164 = () => {
+    const cc = state.cc.replace(/\D/g, '')
+    let num = state.phone.replace(/\D/g, '').replace(/^0+/, '')
+    if (cc && num.startsWith(cc) && num.length > cc.length + 6) num = num.slice(cc.length)
+    return cc + num
+  }
 
   // Ask the backend to send the WhatsApp OTP. Returns an error message or null.
   const sendCode = async (): Promise<string | null> => {

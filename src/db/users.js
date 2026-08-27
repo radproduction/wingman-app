@@ -6,9 +6,25 @@ const DEFAULT_SKILLS = [
   'travel_assistant', 'bill_tracker', 'delivery_tracker', 'people_crm', 'followup_tracker',
 ];
 
-/** Canonical phone form: digits only, no leading zeros, no '+'. */
+/**
+ * Canonical phone key for MATCHING (not for sending). Matches on the last 10
+ * digits so the SAME person's number unifies across every format seen in the
+ * wild: 03007070177, 3007070177, 923007070177, +923007070177 → all "3007070177".
+ * (Earlier we only stripped '+'/leading-zeros, which missed the country-code
+ * form — that's how 0300… and 92300… ended up as two accounts.)
+ */
 function normPhone(p) {
-  return String(p || '').replace(/\D/g, '').replace(/^0+/, '');
+  const d = String(p || '').replace(/\D/g, '');
+  if (!d) return '';
+  return d.length > 10 ? d.slice(-10) : d.replace(/^0+/, '');
+}
+
+/** Prefer a full, dialable international number when choosing which row to keep. */
+function phoneQuality(p) {
+  const d = String(p || '').replace(/\D/g, '');
+  if (d.length >= 11 && d.length <= 13 && !d.startsWith('0')) return 2; // e.g. 923001234567
+  if (d.length === 10) return 1;                                        // bare 10-digit
+  return 0;                                                             // 0300…, "92", junk
 }
 
 /**
@@ -21,7 +37,13 @@ function getByPhone(phone) {
   let row = db.prepare('SELECT * FROM users WHERE phone = ?').get(phone);
   if (!row) {
     const n = normPhone(phone);
-    if (n) row = db.prepare('SELECT * FROM users WHERE phone = ? OR phone = ?').get(n, `+${n}`);
+    if (n) {
+      // Match on the normalized (last-10) key across all stored formats. The user
+      // base is small, so a scan is fine; prefer the most dialable row on ties.
+      const matches = db.prepare('SELECT * FROM users').all().filter((r) => normPhone(r.phone) === n);
+      matches.sort((a, b) => phoneQuality(b.phone) - phoneQuality(a.phone));
+      row = matches[0] || null;
+    }
   }
   return hydrate(row);
 }
@@ -140,10 +162,17 @@ function accountScore(x) {
   return (x.onboarding_complete ? 4 : 0) + (x.gmail_token ? 2 : 0) + (x.webmail_address ? 1 : 0);
 }
 
+/** Comparator, best row FIRST: completeness, then dialable phone, then recency. */
+function accountCmp(a, b) {
+  return (accountScore(b) - accountScore(a))
+    || (phoneQuality(b.phone) - phoneQuality(a.phone))
+    || String(b.created_at || '').localeCompare(String(a.created_at || ''));
+}
+
 /**
  * Collapse rows to ONE per normalized phone, so proactive jobs (briefings,
  * alerts, mail scans) send exactly one message per person even if duplicate
- * accounts exist. Keeps the most complete / most recent row.
+ * accounts exist. Keeps the most complete / most dialable / most recent row.
  */
 function dedupeByPhone(rows) {
   const best = new Map();
@@ -151,13 +180,7 @@ function dedupeByPhone(rows) {
     const k = normPhone(r.phone);
     if (!k) { best.set(`__${r.id}`, r); continue; } // no phone → never merge
     const cur = best.get(k);
-    if (
-      !cur ||
-      accountScore(r) > accountScore(cur) ||
-      (accountScore(r) === accountScore(cur) && String(r.created_at || '') > String(cur.created_at || ''))
-    ) {
-      best.set(k, r);
-    }
+    if (!cur || accountCmp(r, cur) < 0) best.set(k, r);
   }
   return [...best.values()];
 }
@@ -217,19 +240,14 @@ function mergeDuplicatePhones() {
   const tx = db.transaction(() => {
     for (const [k, list] of groups) {
       if (list.length < 2) continue;
-      list.sort((a, b) =>
-        accountScore(b) - accountScore(a) ||
-        String(b.created_at || '').localeCompare(String(a.created_at || '')),
-      );
+      list.sort(accountCmp); // best (most complete / most dialable / recent) first
       const primary = list[0];
-      // Remove the extras FIRST so the canonical phone is free for the primary.
+      // Keep the primary's OWN phone as-is (it's the most dialable of the group);
+      // never overwrite it with the normalized key, which is only a match code.
       for (const d of list.slice(1)) {
         try { db.prepare('UPDATE sessions SET user_id = ? WHERE user_id = ?').run(primary.id, d.id); } catch (_) { /* no sessions */ }
         deleteUserCascade(d.id);
         removed++;
-      }
-      if (primary.phone !== k) {
-        db.prepare('UPDATE users SET phone = ? WHERE id = ?').run(k, primary.id);
       }
     }
   });
