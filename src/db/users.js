@@ -236,22 +236,33 @@ function mergeDuplicatePhones() {
     groups.get(k).push(r);
   }
 
+  const dupGroups = [...groups.values()].filter((list) => list.length > 1);
+  if (!dupGroups.length) return 0;
+
   let removed = 0;
-  const tx = db.transaction(() => {
-    for (const [k, list] of groups) {
-      if (list.length < 2) continue;
-      list.sort(accountCmp); // best (most complete / most dialable / recent) first
-      const primary = list[0];
-      // Keep the primary's OWN phone as-is (it's the most dialable of the group);
-      // never overwrite it with the normalized key, which is only a match code.
-      for (const d of list.slice(1)) {
-        try { db.prepare('UPDATE sessions SET user_id = ? WHERE user_id = ?').run(primary.id, d.id); } catch (_) { /* no sessions */ }
-        deleteUserCascade(d.id);
-        removed++;
+  // Deleting a whole account touches many tables, and some reference each other
+  // (e.g. bills.source_email_id → email_items), so a fixed delete order can trip
+  // an intermediate FOREIGN KEY. Since we're removing the entire account, disable
+  // FK enforcement for the sweep (must be toggled OUTSIDE a transaction) and
+  // restore it after — no orphans because we delete every child table ourselves.
+  db.pragma('foreign_keys = OFF');
+  try {
+    const tx = db.transaction(() => {
+      for (const list of dupGroups) {
+        list.sort(accountCmp); // best (most complete / most dialable / recent) first
+        const primary = list[0];
+        // Keep the primary's OWN phone as-is (the most dialable of the group).
+        for (const d of list.slice(1)) {
+          try { db.prepare('UPDATE sessions SET user_id = ? WHERE user_id = ?').run(primary.id, d.id); } catch (_) { /* no sessions */ }
+          deleteUserCascade(d.id);
+          removed++;
+        }
       }
-    }
-  });
-  tx();
+    });
+    tx();
+  } finally {
+    db.pragma('foreign_keys = ON');
+  }
   if (removed) console.log(`[users] removed ${removed} duplicate account(s) by phone`);
   return removed;
 }
