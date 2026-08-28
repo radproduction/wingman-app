@@ -103,13 +103,9 @@ async function dumpJoinDebug(page, tag) {
   } catch (e) { console.log('[meet][debug] button dump failed:', e.message); }
 }
 
-/**
- * Join the meeting. Resolves once the bot is admitted and in the call.
- */
-async function joinMeet(page, { url, botName, admitTimeoutMs = 300000, onStatus = () => {} }) {
-  console.log('[meet] opening', url);
+/** One pre-join pass: open the URL, enter the guest name, mute, click join. */
+async function prepareAndKnock(page, url, botName) {
   await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
-
   // Meet's pre-join UI is heavy JS — let it settle (longer on a 1 vCPU host).
   await page.waitForTimeout(5000);
 
@@ -130,25 +126,40 @@ async function joinMeet(page, { url, botName, admitTimeoutMs = 300000, onStatus 
   }
 
   await muteSelfAndCam(page);
-
-  onStatus('waiting');
-  const clicked = await clickJoin(page);
-  if (!clicked) {
-    await dumpJoinDebug(page, 'join');
-    throw new Error('MEET_JOIN_BUTTON_NOT_FOUND');
-  }
-  console.log('[meet] clicked join — waiting for host to admit…');
-
-  const admitted = await waitForInCall(page, admitTimeoutMs);
-  if (!admitted) {
-    await dumpJoinDebug(page, 'admit');
-    throw new Error('NOT_ADMITTED_TIMEOUT');
-  }
-  console.log('[meet] admitted — in the call');
-  return true;
+  return clickJoin(page);
 }
 
-/** Poll for an in-call indicator. */
+/**
+ * Join the meeting. Knocks up to `maxKnocks` times so a busy host has several
+ * chances (and enough time) to admit. Resolves once admitted and in the call.
+ */
+async function joinMeet(page, { url, botName, admitTimeoutMs = 300000, onStatus = () => {}, maxKnocks = 3 }) {
+  console.log('[meet] opening', url);
+  // Each knock waits up to ~2 min for the host, then re-knocks.
+  const perKnockMs = Math.min(admitTimeoutMs, 120000);
+
+  for (let knock = 1; knock <= maxKnocks; knock++) {
+    console.log(`[meet] join attempt ${knock}/${maxKnocks}`);
+    const clicked = await prepareAndKnock(page, url, botName);
+    if (!clicked) {
+      await dumpJoinDebug(page, 'join');
+      if (knock === maxKnocks) throw new Error('MEET_JOIN_BUTTON_NOT_FOUND');
+      continue;
+    }
+    onStatus('waiting');
+    console.log(`[meet] ✋ KNOCKING — host must click "Admit" for "${botName}" (waiting up to ${Math.round(perKnockMs / 1000)}s)`);
+
+    const res = await waitForInCall(page, perKnockMs);
+    if (res === 'admitted') { console.log('[meet] admitted — in the call'); return true; }
+    console.log(`[meet] not admitted this round (${res})${knock < maxKnocks ? ' — knocking again…' : ''}`);
+  }
+
+  await dumpJoinDebug(page, 'admit');
+  throw new Error('NOT_ADMITTED');
+}
+
+/** Poll for an in-call indicator. Returns 'admitted' | 'denied' | 'timeout'.
+ *  Logs a heartbeat so the host knows the bot is still waiting to be let in. */
 async function waitForInCall(page, timeoutMs) {
   const deadline = Date.now() + timeoutMs;
   const inCallSelectors = [
@@ -157,17 +168,23 @@ async function waitForInCall(page, timeoutMs) {
     'button[aria-label*="Show everyone" i]',
     'button[aria-label*="Chat with everyone" i]',
   ];
+  let lastBeat = 0;
   while (Date.now() < deadline) {
     for (const sel of inCallSelectors) {
-      try { if (await page.locator(sel).first().isVisible()) return true; } catch (_) { /* ignore */ }
+      try { if (await page.locator(sel).first().isVisible()) return 'admitted'; } catch (_) { /* ignore */ }
     }
     try {
-      const denied = await page.locator('text=/you can.?t join|was denied|no one responded|removed you/i').first().isVisible();
-      if (denied) { console.log('[meet] join was denied/timed out by host'); return false; }
+      const denied = await page.locator('text=/you can.?t join|was denied|no one responded|removed you|returning to home/i').first().isVisible();
+      if (denied) { console.log('[meet] host did not admit in time (Meet booted the knock)'); return 'denied'; }
     } catch (_) { /* ignore */ }
+
+    if (Date.now() - lastBeat > 15000) {
+      lastBeat = Date.now();
+      console.log('[meet] …still waiting for the host to admit the bot…');
+    }
     await page.waitForTimeout(2500);
   }
-  return false;
+  return 'timeout';
 }
 
 /**
