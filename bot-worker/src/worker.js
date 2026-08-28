@@ -36,6 +36,7 @@ async function getBrowser() {
   if (browser && browser.isConnected()) return browser;
   browser = await chromium.launch({
     headless: false, // real Chrome under Xvfb — Meet/Zoom behave far better than headless
+    ignoreDefaultArgs: ['--enable-automation'], // drop the "controlled by automation" flag
     args: [
       '--no-sandbox', '--disable-setuid-sandbox',
       '--use-fake-ui-for-media-stream',       // auto-accept the mic/cam permission prompt
@@ -57,6 +58,24 @@ async function handleJob(job) {
     storageState: STORAGE_STATE,
     viewport: { width: 1280, height: 720 },
     userAgent: UA,
+    locale: 'en-US',
+  });
+  // Stealth: hide the tell-tale automation signals Google Meet checks before it
+  // will route an anonymous knock to the host. navigator.webdriver=true is the
+  // big one; the rest round out a normal-looking browser.
+  await context.addInitScript(() => {
+    Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+    Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+    Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+    // A minimal window.chrome, like real Chrome exposes.
+    window.chrome = window.chrome || { runtime: {} };
+    const orig = navigator.permissions && navigator.permissions.query;
+    if (orig) {
+      navigator.permissions.query = (p) =>
+        p && p.name === 'notifications'
+          ? Promise.resolve({ state: Notification.permission })
+          : orig(p);
+    }
   });
   const page = await context.newPage();
   const outPath = path.join(os.tmpdir(), `wm_rec_${id}.ogg`);
