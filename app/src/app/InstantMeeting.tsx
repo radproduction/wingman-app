@@ -9,7 +9,7 @@ import './app.css'
 import './business.css'
 import './dashboard.css'
 
-type Who = { name: string; phone?: string }
+type Who = { name: string; phone?: string; email?: string }
 
 export const InstantMeeting = () => {
   const contacts = useContacts()
@@ -17,6 +17,7 @@ export const InstantMeeting = () => {
   const [who, setWho] = useState<Who[]>([])
   const [extra, setExtra] = useState('')
   const [extraPhone, setExtraPhone] = useState('')
+  const [extraEmail, setExtraEmail] = useState('')
   const [confirmed, setConfirmed] = useState(false)
   const [starting, setStarting] = useState(false)
 
@@ -28,17 +29,19 @@ export const InstantMeeting = () => {
     const name = extra.trim()
     if (!name || has(name)) return
     const phone = extraPhone.replace(/[^0-9+]/g, '').trim()
-    setWho((w) => [...w, { name, ...(phone ? { phone } : {}) }])
+    const email = extraEmail.trim()
+    setWho((w) => [...w, { name, ...(phone ? { phone } : {}), ...(email ? { email } : {}) }])
     setExtra('')
     setExtraPhone('')
+    setExtraEmail('')
   }
 
   const begin = (recording: boolean) => {
     if (starting) return
     setStarting(true)
-    // Carry each attendee's real email (known contact) + any WhatsApp number, so
-    // the meeting's summary can actually be sent to them.
-    const attendees = who.map((p) => ({ name: p.name, email: emailForName(p.name), phone: p.phone }))
+    // Carry each attendee's email (typed, else looked up from contacts) + any
+    // WhatsApp number, so the meeting's summary can actually be sent to them.
+    const attendees = who.map((p) => ({ name: p.name, email: p.email ?? emailForName(p.name), phone: p.phone }))
     const id = createInstantMeeting({ title, attendees })
     void startAssist(id, recording)
     navigate(`meetings/${id}/live`)
@@ -106,7 +109,7 @@ export const InstantMeeting = () => {
         <div className="wg-inst__who">
           {who.map((p) => (
             <button className="wg-gal__size on" key={p.name} aria-pressed onClick={() => toggle(p.name)}>
-              {p.name}{p.phone ? ' 📱' : ''} ✕
+              {p.name}{p.email ? ' ✉️' : ''}{p.phone ? ' 📱' : ''} ✕
             </button>
           ))}
         </div>
@@ -127,16 +130,30 @@ export const InstantMeeting = () => {
         </button>
       </div>
       {extra.trim() && (
-        <label className="wg-field wg-field--free wg-card-line" style={{ marginTop: 'var(--space-8)' }}>
-          <input
-            value={extraPhone}
-            onChange={(e) => setExtraPhone(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && addExtra()}
-            inputMode="tel"
-            placeholder={t('WhatsApp number (optional, e.g. 923001234567)')}
-            aria-label={t('Attendee WhatsApp number')}
-          />
-        </label>
+        <>
+          <label className="wg-field wg-field--free wg-card-line" style={{ marginTop: 'var(--space-8)' }}>
+            <input
+              value={extraEmail}
+              onChange={(e) => setExtraEmail(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && addExtra()}
+              type="email"
+              inputMode="email"
+              autoCapitalize="off"
+              placeholder={t('Email (optional — to send them the notes)')}
+              aria-label={t('Attendee email')}
+            />
+          </label>
+          <label className="wg-field wg-field--free wg-card-line" style={{ marginTop: 'var(--space-8)' }}>
+            <input
+              value={extraPhone}
+              onChange={(e) => setExtraPhone(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && addExtra()}
+              inputMode="tel"
+              placeholder={t('WhatsApp number (optional, e.g. 923001234567)')}
+              aria-label={t('Attendee WhatsApp number')}
+            />
+          </label>
+        </>
       )}
       {}
       {suggestions.length > 0 && (
