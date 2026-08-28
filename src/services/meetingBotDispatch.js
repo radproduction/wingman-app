@@ -65,6 +65,8 @@ function dispatchForEvent(userId, evRow) {
  */
 function dispatchForUrl(userId, { meetingUrl, provider = null, title = 'Meeting', startTime = null, attendees = [] } = {}) {
   if (!meetingUrl) throw new Error('meetingUrl required');
+  // Defensive: collapse an accidental double scheme ("https://https://…").
+  meetingUrl = String(meetingUrl).trim().replace(/^https?:\/\/(https?:\/\/)/i, '$1');
   const meeting = meetingsRepo.create(userId, {
     title, type: 'Client', virtual: true, attendees, status: 'scheduled', meetingAt: startTime,
   });
