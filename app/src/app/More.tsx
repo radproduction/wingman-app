@@ -57,7 +57,7 @@ export const More = () => {
           <div className="wg-panel__scroll">
             <button className="wg-account wg-card-line" data-feedback="header" onClick={() => navigate('profile')}>
               <span className="wg-account__ava">
-                <img src={avatarUrl} alt="" />
+                <img src={profile.avatarUrl || avatarUrl} alt="" referrerPolicy="no-referrer" />
               </span>
               <div className="wg-account__tx">
                 <div className="wg-account__name">{profile.name}</div>

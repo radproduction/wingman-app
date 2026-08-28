@@ -58,6 +58,7 @@ CREATE TABLE IF NOT EXISTS users (
   enabled_skills TEXT DEFAULT '["travel_assistant","bill_tracker","delivery_tracker","people_crm","followup_tracker"]',
   tone TEXT DEFAULT 'friendly',                  -- 'professional' | 'casual' | 'friendly'
   communication_style TEXT DEFAULT 'concise',    -- 'concise' | 'detailed'
+  avatar_url TEXT,                               -- the user's Google profile photo URL
   created_at TEXT DEFAULT (datetime('now'))
 );
 

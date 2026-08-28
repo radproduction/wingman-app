@@ -1,13 +1,15 @@
 import { HeaderBrand } from './HeaderBrand'
 import { Icon, IconWhatsapp } from './icons'
 import { useUnreadCount } from '../data/notices'
+import { useProfile } from '../data/store'
 import { t } from '../i18n'
 import { navigate } from '../shell/nav'
 import { openWhatsApp } from '../shell/whatsapp'
-import avatarUrl from '../assets/avatar.jpg'
+import fallbackAvatar from '../assets/avatar.jpg'
 
 export const AppHeader = () => {
   const unread = useUnreadCount()
+  const profile = useProfile()
   return (
     <header className="wg-appbar" data-feedback="header">
       <button className="wg-wa" aria-label={t('Wingman on WhatsApp — online')} onClick={() => openWhatsApp()}>
@@ -25,7 +27,7 @@ export const AppHeader = () => {
           {unread > 0 && <i className="wg-bell__dot" aria-hidden="true" />}
         </button>
         <button className="wg-avatar" aria-label={t('Your account')} onClick={() => navigate('profile')}>
-          <img src={avatarUrl} alt="" />
+          <img src={profile.avatarUrl || fallbackAvatar} alt="" referrerPolicy="no-referrer" />
         </button>
       </div>
     </header>

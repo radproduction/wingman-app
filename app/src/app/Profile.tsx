@@ -14,7 +14,7 @@ export const Profile = () => {
   <SubScreen title="Account settings" back="more" className="wg-profile">
     <div className="wg-prof">
       <span className="wg-prof__ava">
-        <img src={avatarUrl} alt="" />
+        <img src={profile.avatarUrl || avatarUrl} alt="" referrerPolicy="no-referrer" />
       </span>
       <div className="wg-prof__name">{profile.name}</div>
       <div className="wg-prof__sub">{t(profile.workspace)}</div>

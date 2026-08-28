@@ -112,6 +112,7 @@ function applyMigrations() {
       ['quiet_hours_start', 'TEXT'],
       ['quiet_hours_end', 'TEXT'],
       ['runs_business', 'INTEGER DEFAULT 1'],
+      ['avatar_url', 'TEXT'],
     ],
     tasks: [
       ['completed_at', 'TEXT'],

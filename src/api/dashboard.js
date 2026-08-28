@@ -54,17 +54,42 @@ function requireRepo(name) {
 }
 
 // ── /api/me ──────────────────────────────────────────────────────────
-router.get('/me', (req, res) => {
+router.get('/me', async (req, res) => {
   const u = resolveUser(req);
   if (!u) return res.json({ ...mock.user, wingman_number: config.wingmanNumber || null, whatsapp_connected: false, mock: true });
   // "Connected" = the user has actually exchanged a message with Wingman on
   // WhatsApp (so the card reassures them the link is live).
   const convo = requireRepo('conversations');
   const whatsappConnected = !!(convo && convo.historyForUser(u.id, 1).length);
+
+  // Real email + Google profile photo, so the header avatar and the profile
+  // screen show the actual user. Prefer the primary Google account email; the
+  // avatar is fetched once from the OpenID userinfo endpoint and cached.
+  let email = u.webmail_address || null;
+  let avatarUrl = u.avatar_url || null;
+  try {
+    const ga = require('../db/googleAccounts').getPrimary(u.id);
+    if (ga && ga.email) email = ga.email;
+  } catch (_) { /* none linked */ }
+  if (require('../auth/googleAuth').isConnected(u) && (!avatarUrl || !email)) {
+    try {
+      const ident = await require('../services/gmail').getIdentity(u);
+      if (ident) {
+        if (!email && ident.email) email = ident.email;
+        if (ident.picture && ident.picture !== u.avatar_url) {
+          avatarUrl = ident.picture;
+          usersRepo.update(u.id, { avatar_url: ident.picture });
+        }
+      }
+    } catch (_) { /* best-effort — keep whatever we have */ }
+  }
+
   res.json({
     id: u.id,
     phone: u.phone,
     name: u.name || null,
+    email,
+    avatar_url: avatarUrl,
     timezone: u.timezone || 'Asia/Karachi',
     work_hours_start: u.work_hours_start,
     work_hours_end: u.work_hours_end,
@@ -73,6 +98,8 @@ router.get('/me', (req, res) => {
     briefing_time: u.briefing_time,
     debrief_time: u.debrief_time,
     proactiveness_level: u.proactiveness_level,
+    autonomy_level: u.autonomy_level || null,
+    runs_business: u.runs_business == null ? null : !!u.runs_business,
     enabled_skills: u.enabled_skills,
     tone: u.tone,
     communication_style: u.communication_style,
@@ -83,6 +110,7 @@ router.get('/me', (req, res) => {
     webmail_address: u.webmail_address || null,
     wingman_number: config.wingmanNumber || null,
     whatsapp_connected: whatsappConnected,
+    created_at: u.created_at || null,
     mock: false,
   });
 });

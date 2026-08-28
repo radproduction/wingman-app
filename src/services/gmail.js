@@ -272,4 +272,20 @@ async function getProfile(user, account = null) {
   return { emailAddress: res.data.emailAddress };
 }
 
-module.exports = { listMessageIds, getMessage, sendMessage, forwardMessage, buildRawMime, extractBody, getProfile, accountsFor };
+/**
+ * The user's Google identity — email, display name and profile PHOTO — via the
+ * OpenID userinfo endpoint (covered by the profile/email scopes we request).
+ * Used to show their real Gmail avatar + email in the app.
+ */
+async function getIdentity(user, account = null) {
+  const auth = googleAuth.getAuthorizedClient(user, 'gmail', account);
+  const oauth2 = google.oauth2({ version: 'v2', auth });
+  const res = await oauth2.userinfo.get();
+  return {
+    email: res.data.email || null,
+    name: res.data.name || null,
+    picture: res.data.picture || null,
+  };
+}
+
+module.exports = { listMessageIds, getMessage, sendMessage, forwardMessage, buildRawMime, extractBody, getProfile, getIdentity, accountsFor };

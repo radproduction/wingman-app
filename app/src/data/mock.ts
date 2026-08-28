@@ -104,6 +104,7 @@ export const profile = {
   briefing: '7:00 AM',
   wrap: '8:00 PM',
   since: 'With you since July 2026',
+  avatarUrl: '',
 }
 
 export const agent = {

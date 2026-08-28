@@ -3,9 +3,16 @@ import { SubScreen } from './SubScreen'
 import { IconCheck, IconSpark } from './icons'
 import { CC_FLAGS, COUNTRY_CODES, ZONES, formatTime } from '../onboarding/shared'
 import { saveProfile, useProfile, type Profile } from '../data/store'
+import { api } from '../data/api'
 import { t } from '../i18n'
 import { goBack } from '../shell/nav'
 import './app.css'
+
+// Persist a settings change to the backend (best-effort) so it survives a reload
+// and reaches the WhatsApp assistant — not just the local cache.
+const persist = (patch: Record<string, unknown>) => {
+  void api.updateMe(patch).catch(() => {})
+}
 
 export type FieldKey = 'name' | 'phone' | 'email' | 'timezone' | 'workday' | 'briefing' | 'wrap'
 
@@ -96,7 +103,10 @@ const Name = ({ p }: { p: Profile }) => {
       hint={t('What I call you in briefings and messages.')}
       dirty={v.trim() !== p.name}
       error={v.trim().length < 2 ? t('I need something to call you.') : undefined}
-      onSave={() => saveProfile({ name: v.trim() })}
+      onSave={() => {
+        saveProfile({ name: v.trim() })
+        persist({ name: v.trim() })
+      }}
     >
       <div className="wg-field">
         <input autoComplete="name" placeholder={t('Your name')} value={v} onChange={(e) => setV(e.target.value)} />
@@ -171,7 +181,10 @@ const Timezone = ({ p }: { p: Profile }) => {
       title="Time zone"
       hint={t('I plan your day and time your briefings around this.')}
       dirty={v !== p.timezone}
-      onSave={() => saveProfile({ timezone: v })}
+      onSave={() => {
+        saveProfile({ timezone: v })
+        persist({ timezone: v })
+      }}
     >
       <div className="wg-options">
         {zones.map((z) => (
@@ -200,7 +213,10 @@ const Workday = ({ p }: { p: Profile }) => {
       hint={t('The hours I treat as yours. Outside them I keep things to the briefing.')}
       dirty={next !== p.workday}
       error={end <= start ? t('Your day would end before it starts.') : undefined}
-      onSave={() => saveProfile({ workday: next })}
+      onSave={() => {
+        saveProfile({ workday: next })
+        persist({ work_hours_start: start, work_hours_end: end })
+      }}
     >
       <TimeField label={t('Starts')} value={start} onChange={setStart} />
       <TimeField label={t('Ends')} value={end} onChange={setEnd} />
@@ -216,7 +232,10 @@ const Briefing = ({ p }: { p: Profile }) => {
       title="Morning briefing"
       hint={t('When your day lands on WhatsApp.')}
       dirty={next !== p.briefing}
-      onSave={() => saveProfile({ briefing: next })}
+      onSave={() => {
+        saveProfile({ briefing: next })
+        persist({ briefing_time: v })
+      }}
     >
       <TimeField label={t('Arrives at')} value={v} onChange={setV} />
     </EditShell>
@@ -231,7 +250,10 @@ const Wrap = ({ p }: { p: Profile }) => {
       title="Evening wrap-up"
       hint={t('When I close the day out with you.')}
       dirty={next !== p.wrap}
-      onSave={() => saveProfile({ wrap: next })}
+      onSave={() => {
+        saveProfile({ wrap: next })
+        persist({ debrief_time: v })
+      }}
     >
       <TimeField label={t('Arrives at')} value={v} onChange={setV} />
     </EditShell>
