@@ -74,6 +74,17 @@ function listForUser(userId, limit = 50) {
     .all(userId, limit);
 }
 
+/** Recall-driven sessions still in flight — polled until Recall says done. */
+function listRecallActive(limit = 50) {
+  return db.prepare(`
+    SELECT * FROM meeting_bots
+    WHERE recall_bot_id IS NOT NULL
+      AND status NOT IN ('done', 'failed', 'cancelled')
+    ORDER BY created_at ASC
+    LIMIT ?
+  `).all(limit);
+}
+
 /** Sessions the worker still needs to run (fresh dispatches), oldest first. */
 function listDispatchable(limit = 20) {
   return db.prepare(`
@@ -93,6 +104,7 @@ const FIELDS = {
   error: 'error',
   recordingUrl: 'recording_url', recording_url: 'recording_url',
   scheduledAt: 'scheduled_at', scheduled_at: 'scheduled_at',
+  recallBotId: 'recall_bot_id', recall_bot_id: 'recall_bot_id',
 };
 
 function update(id, patch = {}) {
@@ -122,5 +134,5 @@ function isActive(status) {
 
 module.exports = {
   create, getById, getForUser, findActiveForEvent, listForUser,
-  listDispatchable, update, remove, isActive,
+  listDispatchable, listRecallActive, update, remove, isActive,
 };

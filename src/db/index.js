@@ -139,6 +139,10 @@ function applyMigrations() {
       ['meeting_url', 'TEXT'],
       ['meeting_provider', 'TEXT'],
     ],
+    meeting_bots: [
+      // Recall.ai bot id, when Recall drives the join instead of the self-host worker.
+      ['recall_bot_id', 'TEXT'],
+    ],
     bills: [
       // When we last alerted about this bill, so overdue bills don't re-notify daily.
       ['last_alerted_at', 'TEXT'],

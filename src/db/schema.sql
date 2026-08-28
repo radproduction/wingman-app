@@ -417,6 +417,7 @@ CREATE TABLE IF NOT EXISTS meeting_bots (
   meeting_url TEXT NOT NULL,      -- the join link the worker opens
   provider TEXT,                  -- 'meet' | 'zoom' | 'teams'
   bot_name TEXT,                  -- display name in the call, e.g. 'Wingman Notetaker'
+  recall_bot_id TEXT,             -- Recall.ai bot id when the Recall engine drives the join
   -- scheduled → dispatched → joining → waiting → recording → processing → done | failed | cancelled
   status TEXT DEFAULT 'scheduled',
   worker_token TEXT,              -- per-session secret the worker presents to post audio/status

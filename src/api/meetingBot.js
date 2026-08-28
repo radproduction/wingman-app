@@ -53,7 +53,7 @@ router.post('/meetings/join', express.json(), async (req, res) => {
   } else if (b.meetingUrl) {
     const link = calendar.extractMeetingLink({ location: String(b.meetingUrl), description: '' });
     if (!link.meetingUrl) return res.status(400).json({ error: 'That does not look like a Meet/Zoom/Teams link' });
-    session = dispatch.dispatchForUrl(u.id, {
+    session = await dispatch.dispatchForUrl(u.id, {
       meetingUrl: link.meetingUrl,
       provider: link.meetingProvider,
       title: b.title || 'Meeting',

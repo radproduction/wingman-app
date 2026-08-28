@@ -106,6 +106,14 @@ function init() {
   const brief = cron.schedule('*/15 * * * *', () => runBriefingTick(new Date()));
   jobs.push(brief);
 
+  // Recall.ai notetaker bots — poll frequently so meeting notes land soon after
+  // the call ends. No-op unless RECALL_API_KEY is set.
+  const recallTick = cron.schedule('*/2 * * * *', async () => {
+    try { await require('./recallPoll').runOnce(); }
+    catch (e) { console.warn('[scheduler] recall poll error:', e.message); }
+  });
+  jobs.push(recallTick);
+
   console.log('[scheduler] registered hourly tick (alerts 09:00, travel) + every 15 min: calendar-sync/meeting-prep/meeting-complete/task-due and briefing/debrief at each user\'s own set time, per-user TZ');
   return jobs;
 }

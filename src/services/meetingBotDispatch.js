@@ -18,9 +18,31 @@ const BOT_NAME = process.env.BOT_NAME || 'Wingman Notetaker';
 // it joins as a guest (Google blocks uninvited bots; invited ones join directly).
 const BOT_EMAIL = process.env.BOT_GOOGLE_EMAIL || '';
 
-/** A worker must be configured for any of this to do anything. */
+/** Enabled if either engine is configured: Recall.ai, or the self-host worker. */
 function enabled() {
-  return !!process.env.BOT_WORKER_TOKEN;
+  return require('./recall').enabled() || !!process.env.BOT_WORKER_TOKEN;
+}
+
+/**
+ * Hand a freshly-created session to Recall.ai: create the bot for the meeting URL
+ * and store its id + move the session to 'joining'. recallPoll then drives it to
+ * done. Best-effort — a failure marks the session failed but never throws.
+ */
+async function startRecall(session, meetingUrl) {
+  const recall = require('./recall');
+  if (!recall.enabled() || !session) return session;
+  try {
+    const bot = await recall.createBot({ meetingUrl, botName: BOT_NAME, metadata: { sessionId: session.id } });
+    if (bot && bot.id) {
+      console.log(`[botDispatch] recall bot ${bot.id} dispatched for session ${session.id}`);
+      return botsRepo.update(session.id, { recallBotId: bot.id, status: 'joining' });
+    }
+    throw new Error('recall returned no bot id');
+  } catch (e) {
+    console.warn('[botDispatch] recall createBot failed:', e.message);
+    botsRepo.update(session.id, { status: 'failed', error: `recall: ${e.message}`.slice(0, 400) });
+    return botsRepo.getById(session.id);
+  }
 }
 
 /**
@@ -58,8 +80,9 @@ async function dispatchForEvent(userId, evRow) {
   const existing = botsRepo.findActiveForEvent(userId, evRow.gcal_event_id);
   if (existing) return existing;
 
-  // Put the bot on the guest list first, so it joins as an invited participant.
-  await inviteBotToEvent(userId, evRow);
+  // Self-host only: put our bot account on the guest list so it joins as an
+  // invited participant. Recall runs its own bot, so this doesn't apply there.
+  if (!require('./recall').enabled()) await inviteBotToEvent(userId, evRow);
 
   const meeting = meetingsRepo.create(userId, {
     title: evRow.title || 'Meeting',
@@ -70,7 +93,7 @@ async function dispatchForEvent(userId, evRow) {
     meetingAt: evRow.start_time || null,
   });
 
-  return botsRepo.create(userId, {
+  const session = botsRepo.create(userId, {
     meetingId: meeting.id,
     gcalEventId: evRow.gcal_event_id,
     meetingUrl: evRow.meeting_url,
@@ -78,26 +101,28 @@ async function dispatchForEvent(userId, evRow) {
     botName: BOT_NAME,
     scheduledAt: evRow.start_time || null,
   });
+  return startRecall(session, evRow.meeting_url);
 }
 
 /**
  * Manual "Join with Wingman" for a raw meeting URL (no calendar event). Always
  * creates a fresh session + meeting.
  */
-function dispatchForUrl(userId, { meetingUrl, provider = null, title = 'Meeting', startTime = null, attendees = [] } = {}) {
+async function dispatchForUrl(userId, { meetingUrl, provider = null, title = 'Meeting', startTime = null, attendees = [] } = {}) {
   if (!meetingUrl) throw new Error('meetingUrl required');
   // Defensive: collapse an accidental double scheme ("https://https://…").
   meetingUrl = String(meetingUrl).trim().replace(/^https?:\/\/(https?:\/\/)/i, '$1');
   const meeting = meetingsRepo.create(userId, {
     title, type: 'Client', virtual: true, attendees, status: 'scheduled', meetingAt: startTime,
   });
-  return botsRepo.create(userId, {
+  const session = botsRepo.create(userId, {
     meetingId: meeting.id,
     meetingUrl,
     provider,
     botName: BOT_NAME,
     scheduledAt: startTime,
   });
+  return startRecall(session, meetingUrl);
 }
 
 /**

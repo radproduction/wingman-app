@@ -141,35 +141,19 @@ function createTasksFromSummary(user, meeting) {
 }
 
 /**
- * Full pipeline for one recording.
+ * Turn an existing transcript into the summary + downstream actions (email the
+ * user, create tasks). Shared by the audio path and the Recall path (which gets
+ * a ready-made transcript). Persists notes + summary on the meeting.
  *
- * @param {object} user
- * @param {object} meeting          a persisted meetings row (must belong to user)
- * @param {Buffer} buffer           the audio bytes
- * @param {string} mime             content-type of the audio
- * @param {object} [opts]
- * @param {boolean} [opts.emailUser=false]   email the summary to the user (+ attendees)
- * @param {boolean} [opts.createTasks=false] turn action items into tasks
- * @param {boolean} [opts.saveToDrive=true]  save the audio to Google Drive
- * @returns {Promise<{meeting, transcript, summary, recordingUrl, email, tasks}>}
+ * @returns {Promise<{meeting, summary, email, tasks}>}
  */
-async function processAudio(user, meeting, buffer, mime, opts = {}) {
-  const { emailUser = false, createTasks = false, saveToDrive = true } = opts;
-  if (!Buffer.isBuffer(buffer) || !buffer.length) throw new Error('NO_AUDIO');
-
-  const transcript = await transcribeAudio(buffer, mime);
-  meetingsRepo.update(user.id, meeting.id, { notes: transcript });
+async function processTranscript(user, meeting, transcript, opts = {}) {
+  const { emailUser = false, createTasks = false } = opts;
+  if (transcript) meetingsRepo.update(user.id, meeting.id, { notes: transcript });
 
   const summary = await meetingNotes.summarize({ title: meeting.title, attendees: meeting.attendees, notes: transcript });
   meetingsRepo.update(user.id, meeting.id, { summary, status: 'summary-ready' });
 
-  let recordingUrl = null;
-  if (saveToDrive) {
-    recordingUrl = await saveRecordingToDrive(user, meeting, buffer, mime);
-    if (recordingUrl) meetingsRepo.update(user.id, meeting.id, { recordingUrl });
-  }
-
-  // Re-read so email/tasks see the persisted summary + recording link.
   const fresh = meetingsRepo.getForUser(user.id, meeting.id);
 
   let email = null;
@@ -190,11 +174,34 @@ async function processAudio(user, meeting, buffer, mime, opts = {}) {
     catch (e) { console.warn('[meetingIngest] task creation failed:', e.message); }
   }
 
-  return { meeting: meetingsRepo.getForUser(user.id, meeting.id), transcript, summary, recordingUrl, email, tasks };
+  return { meeting: meetingsRepo.getForUser(user.id, meeting.id), summary, email, tasks };
+}
+
+/**
+ * Full pipeline for one recording: transcribe → (Drive save) → summary → email →
+ * tasks. Both the app's manual upload and the self-hosted bot funnel through here.
+ *
+ * @returns {Promise<{meeting, transcript, summary, recordingUrl, email, tasks}>}
+ */
+async function processAudio(user, meeting, buffer, mime, opts = {}) {
+  const { emailUser = false, createTasks = false, saveToDrive = true } = opts;
+  if (!Buffer.isBuffer(buffer) || !buffer.length) throw new Error('NO_AUDIO');
+
+  const transcript = await transcribeAudio(buffer, mime);
+
+  let recordingUrl = null;
+  if (saveToDrive) {
+    recordingUrl = await saveRecordingToDrive(user, meeting, buffer, mime);
+    if (recordingUrl) meetingsRepo.update(user.id, meeting.id, { recordingUrl });
+  }
+
+  const out = await processTranscript(user, meeting, transcript, { emailUser, createTasks });
+  return { ...out, transcript, recordingUrl };
 }
 
 module.exports = {
   processAudio,
+  processTranscript,
   transcribeAudio,
   saveRecordingToDrive,
   createTasksFromSummary,
