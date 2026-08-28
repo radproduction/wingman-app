@@ -180,6 +180,8 @@ CREATE TABLE IF NOT EXISTS calendar_events (
   attendees TEXT DEFAULT '[]',
   status TEXT,
   has_conflict INTEGER DEFAULT 0,
+  meeting_url TEXT,                 -- Google Meet / Zoom / Teams join link, if any
+  meeting_provider TEXT,           -- 'meet' | 'zoom' | 'teams' | null
   created_at TEXT DEFAULT (datetime('now'))
 );
 
@@ -402,3 +404,33 @@ CREATE TABLE IF NOT EXISTS meetings (
   updated_at TEXT DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_meetings_user ON meetings(user_id);
+
+-- ─── Meeting notetaker bot sessions ─────────────────────────────────
+-- One row per attempt to send the Wingman bot into a live call. The browser
+-- worker (separate host) drives the join/record; the backend owns scheduling,
+-- status, and turning the returned audio into a summary via the meeting pipeline.
+CREATE TABLE IF NOT EXISTS meeting_bots (
+  id TEXT PRIMARY KEY,
+  user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+  meeting_id TEXT,                 -- our meetings.id (created up front so the app shows it)
+  gcal_event_id TEXT,             -- calendar event that triggered it (null for manual joins)
+  meeting_url TEXT NOT NULL,      -- the join link the worker opens
+  provider TEXT,                  -- 'meet' | 'zoom' | 'teams'
+  bot_name TEXT,                  -- display name in the call, e.g. 'Wingman Notetaker'
+  -- scheduled → dispatched → joining → waiting → recording → processing → done | failed | cancelled
+  status TEXT DEFAULT 'scheduled',
+  worker_token TEXT,              -- per-session secret the worker presents to post audio/status
+  scheduled_at TEXT,              -- when the meeting starts (ISO)
+  started_at TEXT,                -- when the worker actually joined
+  ended_at TEXT,                  -- when recording stopped
+  error TEXT,                     -- last failure reason, if any
+  recording_url TEXT,             -- Drive link once saved
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_meeting_bots_user ON meeting_bots(user_id);
+CREATE INDEX IF NOT EXISTS idx_meeting_bots_status ON meeting_bots(status);
+-- Not UNIQUE: a cancelled/failed attempt must be able to be re-dispatched, so a
+-- second row for the same event is allowed. dispatchForEvent() guards against
+-- two *active* sessions via findActiveForEvent().
+CREATE INDEX IF NOT EXISTS idx_meeting_bots_event ON meeting_bots(user_id, gcal_event_id);

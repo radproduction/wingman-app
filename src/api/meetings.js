@@ -12,66 +12,12 @@ const router = express.Router();
 const meetingsRepo = require('../db/meetings');
 const meetingNotes = require('../services/meetingNotes');
 const meetingMailer = require('../services/meetingMailer');
-const tasksRepo = require('../db/tasks');
-const t = require('../utils/time');
+const meetingIngest = require('../services/meetingIngest');
 
 function requireUser(req, res) {
   if (req.user) return req.user;
   res.status(401).json({ error: 'Not signed in' });
   return null;
-}
-
-// Action priority label → task priority number (1 = highest).
-function priorityNum(p) {
-  return p === 'High' ? 1 : p === 'Low' ? 5 : 3;
-}
-
-const WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-
-/**
- * Turn an action item's free-text "due" ("Tomorrow at 3:00 PM", "Friday",
- * "Next week", "Today") into an ISO datetime in the user's timezone, so the task
- * gets a real reminder. Returns null when no date can be read (task has no due).
- */
-function parseDueToISO(due, tz = 'Asia/Karachi', now = new Date()) {
-  const s = String(due || '').trim().toLowerCase();
-  if (!s || s.includes('no date')) return null;
-
-  let dayOffset = null;
-  if (s.includes('today')) dayOffset = 0;
-  else if (s.includes('tomorrow')) dayOffset = 1;
-  else if (s.includes('next week')) dayOffset = 7;
-  else if (s.includes('this week')) dayOffset = 2;
-  else {
-    for (let i = 0; i < 7; i++) {
-      if (s.includes(WEEKDAYS[i])) {
-        const todayDow = now.getDay();
-        let diff = (i - todayDow + 7) % 7;
-        if (diff === 0) diff = 7; // "Friday" said on a Friday → next Friday
-        dayOffset = diff;
-        break;
-      }
-    }
-  }
-  if (dayOffset == null) return null;
-
-  // Time of day (default 9:00 AM when none is stated).
-  let hour = 9;
-  let minute = 0;
-  const ampm = s.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)/);
-  if (ampm) {
-    hour = parseInt(ampm[1], 10) % 12;
-    if (ampm[3] === 'pm') hour += 12;
-    minute = ampm[2] ? parseInt(ampm[2], 10) : 0;
-  } else {
-    const h24 = s.match(/\b(\d{1,2}):(\d{2})\b/);
-    if (h24) { hour = parseInt(h24[1], 10); minute = parseInt(h24[2], 10); }
-  }
-
-  const startOfDay = t.startOfDayISO(tz, dayOffset, now); // YYYY-MM-DDT00:00:00±HH:MM
-  const offset = startOfDay.slice(-6);
-  const datePart = startOfDay.slice(0, 10);
-  return `${datePart}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00${offset}`;
 }
 
 // ── list / get ──────────────────────────────────────────────────────
@@ -154,81 +100,25 @@ router.post('/meetings/:id/finalize', async (req, res) => {
   res.json({ meeting: meetingsRepo.getForUser(u.id, base.id), email });
 });
 
-// ── transcribe: audio recording → Whisper → notes → summary ─────────
-const AUDIO_EXT = {
-  'audio/webm': 'webm', 'audio/mp4': 'mp4', 'audio/mpeg': 'mp3',
-  'audio/wav': 'wav', 'audio/ogg': 'ogg', 'audio/aac': 'mp4', 'video/mp4': 'mp4',
-};
-function extOfType(ct) {
-  const base = String(ct || '').split(';')[0].trim().toLowerCase();
-  return AUDIO_EXT[base] || 'webm';
-}
-
+// ── transcribe: audio recording → transcript → summary (+ Drive save) ─────────
 router.post('/meetings/:id/transcribe', express.raw({ type: () => true, limit: '25mb' }), async (req, res) => {
   const u = requireUser(req, res);
   if (!u) return;
   const m = meetingsRepo.getForUser(u.id, req.params.id);
   if (!m) return res.status(404).json({ error: 'Meeting not found' });
 
-  const gemini = require('../services/geminiTranscribe');
-  const voice = require('../services/voice');
-  if (!gemini.enabled() && !voice.enabled()) {
-    return res.status(501).json({ error: 'Transcription is not available' });
-  }
-
   const audio = req.body;
   if (!Buffer.isBuffer(audio) || !audio.length) return res.status(400).json({ error: 'No audio received' });
-  const ct = req.headers['content-type'];
 
-  // Primary: Gemini (handles mixed Roman Urdu + English). Fallback: Whisper.
-  // Both errors are logged so a failure is diagnosable, not a silent 502.
-  let transcript = null;
-  if (gemini.enabled()) {
-    try {
-      transcript = await gemini.transcribe(audio, (ct || '').split(';')[0].trim());
-    } catch (e) {
-      console.warn('[meetings] gemini transcribe failed:', e.message);
-    }
-  }
-  if (!transcript && voice.enabled()) {
-    try {
-      transcript = await voice.transcribe(audio, { filename: `meeting.${extOfType(ct)}` });
-    } catch (e) {
-      console.warn('[meetings] whisper transcribe failed:', e.message);
-    }
-  }
-  if (!transcript) return res.status(502).json({ error: 'Could not transcribe the recording' });
-
-  meetingsRepo.update(u.id, m.id, { notes: transcript });
-  let summary;
   try {
-    summary = await meetingNotes.summarize({ title: m.title, attendees: m.attendees, notes: transcript });
+    const out = await meetingIngest.processAudio(u, m, audio, req.headers['content-type'], { saveToDrive: true });
+    res.json({ meeting: out.meeting, transcript: out.transcript });
   } catch (e) {
-    console.warn('[meetings] summarize failed:', e.message);
-    return res.status(502).json({ error: 'Could not summarize the recording' });
+    if (e.message === 'TRANSCRIPTION_UNAVAILABLE') return res.status(501).json({ error: 'Transcription is not available' });
+    if (e.message === 'NO_AUDIO') return res.status(400).json({ error: 'No audio received' });
+    console.warn('[meetings] transcribe failed:', e.message);
+    return res.status(502).json({ error: 'Could not transcribe the recording' });
   }
-  meetingsRepo.update(u.id, m.id, { summary, status: 'summary-ready' });
-
-  // Save the actual audio recording to the user's Google Drive (best-effort —
-  // never fails the transcription). Only when Drive is connected.
-  try {
-    if (require('../auth/googleAuth').isConnected(u)) {
-      const drive = require('../services/drive');
-      const ext = extOfType(ct);
-      const stamp = new Date().toISOString().slice(0, 16).replace('T', ' ');
-      const up = await drive.uploadFile(u, {
-        name: `${m.title || 'Meeting'} — ${stamp}.${ext}`,
-        mimeType: (ct || 'audio/webm').split(';')[0].trim(),
-        buffer: audio,
-        folderName: 'Wingman Meetings',
-      });
-      if (up && up.link) meetingsRepo.update(u.id, m.id, { recordingUrl: up.link });
-    }
-  } catch (e) {
-    console.warn('[meetings] drive recording save failed:', e.message);
-  }
-
-  res.json({ meeting: meetingsRepo.getForUser(u.id, m.id), transcript });
 });
 
 // ── create-tasks: turn the summary's action items into REAL tasks (+reminders) ─
@@ -237,24 +127,7 @@ router.post('/meetings/:id/create-tasks', (req, res) => {
   if (!u) return;
   const m = meetingsRepo.getForUser(u.id, req.params.id);
   if (!m) return res.status(404).json({ error: 'Meeting not found' });
-  const actions = (m.summary && Array.isArray(m.summary.actions)) ? m.summary.actions : [];
-  if (!actions.length) return res.json({ created: 0, tasks: [] });
-
-  const tz = u.timezone || 'Asia/Karachi';
-  // Don't double-create if this meeting's tasks were already made.
-  const existing = new Set(
-    tasksRepo.listForUser(u.id, { includeCompleted: true, limit: 500 }).map((x) => String(x.title || '').toLowerCase()),
-  );
-  const created = [];
-  for (const a of actions) {
-    const title = String(a.task || '').trim();
-    if (!title || existing.has(title.toLowerCase())) continue;
-    const dueDate = parseDueToISO(a.due, tz);
-    const task = tasksRepo.create({ userId: u.id, title, source: 'meeting', priority: priorityNum(a.priority), dueDate });
-    created.push({ id: task.id, title, due_date: dueDate });
-    existing.add(title.toLowerCase());
-  }
-  meetingsRepo.update(u.id, m.id, { tasksCreated: true });
+  const created = meetingIngest.createTasksFromSummary(u, m);
   res.json({ created: created.length, tasks: created });
 });
 

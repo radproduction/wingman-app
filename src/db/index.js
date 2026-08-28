@@ -133,6 +133,12 @@ function applyMigrations() {
       ['recording_url', 'TEXT'],
       ['tasks_created', 'INTEGER DEFAULT 0'],
     ],
+    calendar_events: [
+      // The Meet/Zoom/Teams join link (+ which provider), so the notetaker bot
+      // knows where to go. Older caches predate these columns.
+      ['meeting_url', 'TEXT'],
+      ['meeting_provider', 'TEXT'],
+    ],
     bills: [
       // When we last alerted about this bill, so overdue bills don't re-notify daily.
       ['last_alerted_at', 'TEXT'],

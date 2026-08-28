@@ -120,12 +120,47 @@ function toAttendees(list) {
     .map((email) => ({ email }));
 }
 
+// Recognise a video-call link and tag its provider, so the notetaker bot knows
+// where to join. Google Meet lives in hangoutLink / conferenceData; Zoom and
+// Teams usually only appear in the location or description text.
+const MEETING_PATTERNS = [
+  { provider: 'meet', re: /https:\/\/meet\.google\.com\/[a-z0-9-]+/i },
+  { provider: 'zoom', re: /https:\/\/[a-z0-9.-]*zoom\.us\/(?:j|w|my)\/[^\s"'<>)]+/i },
+  { provider: 'teams', re: /https:\/\/teams\.microsoft\.com\/l\/meetup-join\/[^\s"'<>)]+/i },
+];
+
+/**
+ * Pull a join URL + provider out of a Google event. Prefers the structured
+ * conferenceData/hangoutLink (most reliable for Meet), then falls back to
+ * scanning the location and description text (Zoom/Teams). Returns
+ * { meetingUrl, meetingProvider } with nulls when there's no call attached.
+ */
+function extractMeetingLink(ev) {
+  // 1) Structured conference data (video entry point).
+  const entries = (ev.conferenceData && ev.conferenceData.entryPoints) || [];
+  const video = entries.find((e) => e && e.entryPointType === 'video' && e.uri);
+  if (video && video.uri) {
+    const m = MEETING_PATTERNS.find((p) => p.re.test(video.uri));
+    return { meetingUrl: video.uri, meetingProvider: m ? m.provider : 'meet' };
+  }
+  if (ev.hangoutLink) return { meetingUrl: ev.hangoutLink, meetingProvider: 'meet' };
+
+  // 2) Scan free text (location first, then description).
+  const haystack = `${ev.location || ''}\n${ev.description || ''}`;
+  for (const p of MEETING_PATTERNS) {
+    const found = haystack.match(p.re);
+    if (found) return { meetingUrl: found[0], meetingProvider: p.provider };
+  }
+  return { meetingUrl: null, meetingProvider: null };
+}
+
 /**
  * Map a Google event resource into our normalized shape.
  */
 function normalize(ev) {
   const startTime = ev.start && (ev.start.dateTime || ev.start.date);
   const endTime = ev.end && (ev.end.dateTime || ev.end.date);
+  const { meetingUrl, meetingProvider } = extractMeetingLink(ev);
   return {
     gcalEventId: ev.id,
     title: ev.summary || '(no title)',
@@ -136,6 +171,8 @@ function normalize(ev) {
     allDay: !!(ev.start && ev.start.date && !ev.start.dateTime),
     attendees: (ev.attendees || []).map((a) => a.email),
     status: ev.status,
+    meetingUrl,
+    meetingProvider,
   };
 }
 
@@ -348,4 +385,5 @@ module.exports = {
   findEvents,
   resolveRange,
   normalize,
+  extractMeetingLink,
 };

@@ -27,6 +27,8 @@ function upsert(userId, ev) {
     attendees: JSON.stringify(ev.attendees || []),
     status: ev.status || null,
     has_conflict: ev.hasConflict ? 1 : 0,
+    meeting_url: ev.meetingUrl || null,
+    meeting_provider: ev.meetingProvider || null,
   };
 
   if (existing) {
@@ -35,7 +37,8 @@ function upsert(userId, ev) {
         title=@title, description=@description, location=@location,
         account_id=COALESCE(@account_id, account_id), account_email=COALESCE(@account_email, account_email),
         start_time=@start_time, end_time=@end_time, all_day=@all_day,
-        attendees=@attendees, status=@status, has_conflict=@has_conflict
+        attendees=@attendees, status=@status, has_conflict=@has_conflict,
+        meeting_url=@meeting_url, meeting_provider=@meeting_provider
       WHERE id=@id
     `).run({ ...row, id: existing.id });
     return existing.id;
@@ -45,10 +48,10 @@ function upsert(userId, ev) {
   db.prepare(`
     INSERT INTO calendar_events
       (id, user_id, gcal_event_id, account_id, account_email, title, description, location,
-       start_time, end_time, all_day, attendees, status, has_conflict)
+       start_time, end_time, all_day, attendees, status, has_conflict, meeting_url, meeting_provider)
     VALUES
       (@id, @user_id, @gcal_event_id, @account_id, @account_email, @title, @description, @location,
-       @start_time, @end_time, @all_day, @attendees, @status, @has_conflict)
+       @start_time, @end_time, @all_day, @attendees, @status, @has_conflict, @meeting_url, @meeting_provider)
   `).run({ ...row, id });
   return id;
 }
@@ -115,6 +118,19 @@ function listEndingBetween(userId, fromIso, toIso) {
   `).all(userId, fromIso, toIso);
 }
 
+/** Upcoming events that carry a video-call link, starting within [fromIso, toIso).
+ *  Used by the notetaker dispatcher to decide who to send the bot to. */
+function listJoinableBetween(userId, fromIso, toIso) {
+  return db.prepare(`
+    SELECT * FROM calendar_events
+    WHERE user_id = ?
+      AND meeting_url IS NOT NULL AND meeting_url <> ''
+      AND start_time IS NOT NULL AND start_time >= ? AND start_time < ?
+      AND (status IS NULL OR status <> 'cancelled')
+    ORDER BY start_time ASC
+  `).all(userId, fromIso, toIso);
+}
+
 function deleteByAccount(userId, accountId) {
   return db.prepare(`
     DELETE FROM calendar_events
@@ -128,5 +144,6 @@ function deleteAllForUser(userId) {
 
 module.exports = {
   upsert, cacheEvents, removeByGcalId, listCached, listStartingBetween,
-  listForUser, listEndingBetween, findByGcalId, deleteByAccount, deleteAllForUser,
+  listForUser, listEndingBetween, findByGcalId, listJoinableBetween,
+  deleteByAccount, deleteAllForUser,
 };

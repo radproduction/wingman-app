@@ -76,6 +76,7 @@ async function runBriefingTick(now = new Date()) {
 async function runMeetingPrepTick(now = new Date()) {
   try {
     await calendarSync.syncAllUsers({ now });   // refresh cache from Google first
+    await require('./meetingBotDispatch').runAllUsers({ now }); // queue notetaker bot for upcoming calls (opt-in; inert w/o worker)
     await meetingPrep.runAllUsers({ now });      // reminders before meetings
     await meetingComplete.runAllUsers({ now });  // "that wrapped up" after meetings
     await leaveByAlerts.runAllUsers({ now });    // "leave by X" for events with a location
