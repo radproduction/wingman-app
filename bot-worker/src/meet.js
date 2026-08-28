@@ -148,6 +148,11 @@ async function joinMeet(page, { url, botName, admitTimeoutMs = 300000, onStatus 
     }
     onStatus('waiting');
     console.log(`[meet] ✋ KNOCKING — host must click "Admit" for "${botName}" (waiting up to ${Math.round(perKnockMs / 1000)}s)`);
+    // Show what the bot sees while knocking ("Asking to be let in…" = knock sent).
+    try {
+      const txt = (await page.evaluate(() => (document.body && document.body.innerText) || '')).slice(0, 220).replace(/\n+/g, ' | ');
+      console.log('[meet][debug] knock-screen text:', txt);
+    } catch (_) { /* ignore */ }
 
     const res = await waitForInCall(page, perKnockMs);
     if (res === 'admitted') { console.log('[meet] admitted — in the call'); return true; }

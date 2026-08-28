@@ -15,6 +15,11 @@ data/*.db
 .wwebjs_auth/
 .wwebjs_cache/
 
+# Bot notetaker signed-in Google session — SECRET, never commit
+google-state.json
+bot-worker/google-state.json
+*.state.json
+
 # Logs
 *.log
 npm-debug.log*

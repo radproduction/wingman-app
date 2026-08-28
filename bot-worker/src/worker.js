@@ -31,6 +31,32 @@ const UA = process.env.BOT_USER_AGENT ||
   'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
 let browser = null;
+let signInChecked = false;
+
+/** One-time: confirm the STORAGE_STATE session is actually signed into Google,
+ *  so we can tell "signed in but host didn't admit" from "state didn't load". */
+async function verifySignIn(context) {
+  if (!STORAGE_STATE) { console.log('[worker] no STORAGE_STATE — running ANONYMOUS'); return; }
+  const page = await context.newPage();
+  try {
+    await page.goto('https://myaccount.google.com/', { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await page.waitForTimeout(3000);
+    const url = page.url();
+    if (/signin|ServiceLogin|accounts\.google\.com/i.test(url)) {
+      console.log('[worker] ⚠️ STORAGE_STATE loaded but NOT signed in (session invalid/expired) — re-run login.js');
+    } else {
+      const email = await page.evaluate(() => {
+        const m = (document.body.innerText || '').match(/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i);
+        return m ? m[0] : null;
+      });
+      console.log('[worker] ✅ signed in as:', email || '(account page loaded, email not shown)');
+    }
+  } catch (e) {
+    console.log('[worker] sign-in check failed:', e.message);
+  } finally {
+    await page.close().catch(() => {});
+  }
+}
 
 async function getBrowser() {
   if (browser && browser.isConnected()) return browser;
@@ -78,6 +104,9 @@ async function handleJob(job) {
     }
   });
   const page = await context.newPage();
+
+  if (!signInChecked) { signInChecked = true; try { await verifySignIn(context); } catch (_) {} }
+
   const outPath = path.join(os.tmpdir(), `wm_rec_${id}.ogg`);
   const recorder = new recorderMod.Recorder(outPath);
   let recording = false;
