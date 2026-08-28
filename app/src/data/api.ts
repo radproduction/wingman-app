@@ -46,14 +46,16 @@ export type ServerMeeting = {
   company?: string
   location?: string
   virtual?: boolean
-  attendees?: { name?: string; email?: string; role?: string }[]
+  attendees?: { name?: string; email?: string; role?: string; phone?: string }[]
   notes?: string
   summary?: ServerMeetingSummary | null
   status?: string
   meeting_at?: string
   emailed_at?: string
+  recording_url?: string | null
 }
 export type EmailResult = { sent: string[]; failed: string[]; skipped: boolean; reason?: string }
+export type AttendeeNotify = { sent: string[]; failed: { name: string; reason: string }[]; skipped?: string }
 
 export type GoogleAccount = { id: string; email: string | null; is_primary: boolean; connected_at: string }
 
@@ -139,6 +141,14 @@ export const api = {
     req<{ meeting: ServerMeeting; email: EmailResult | null }>('POST', `/meetings/${encodeURIComponent(id)}/finalize`, body),
   sendMeeting: (id: string) =>
     req<{ email: EmailResult | null }>('POST', `/meetings/${encodeURIComponent(id)}/send`),
+  // Turn the meeting's action items into real tasks (which then get reminders).
+  createMeetingTasks: (id: string) =>
+    req<{ created: number; tasks: { id: string; title: string; due_date: string | null }[] }>(
+      'POST', `/meetings/${encodeURIComponent(id)}/create-tasks`,
+    ),
+  // Send the summary to attendees' WhatsApp numbers.
+  notifyAttendees: (id: string) =>
+    req<AttendeeNotify>('POST', `/meetings/${encodeURIComponent(id)}/notify-attendees`),
   // Upload a meeting recording → backend transcribes (Whisper) + summarizes (Claude).
   transcribeMeeting: async (id: string, blob: Blob, mime: string) => {
     const res = await fetch(`${BASE}/api/meetings/${encodeURIComponent(id)}/transcribe`, {

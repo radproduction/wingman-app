@@ -9,35 +9,42 @@ import './app.css'
 import './business.css'
 import './dashboard.css'
 
+type Who = { name: string; phone?: string }
+
 export const InstantMeeting = () => {
   const contacts = useContacts()
   const [title, setTitle] = useState('')
-  const [who, setWho] = useState<string[]>([])
+  const [who, setWho] = useState<Who[]>([])
   const [extra, setExtra] = useState('')
+  const [extraPhone, setExtraPhone] = useState('')
   const [confirmed, setConfirmed] = useState(false)
   const [starting, setStarting] = useState(false)
 
-  const toggle = (name: string) => setWho((w) => (w.includes(name) ? w.filter((n) => n !== name) : [...w, name]))
+  const has = (name: string) => who.some((p) => p.name === name)
+  const toggle = (name: string) =>
+    setWho((w) => (w.some((p) => p.name === name) ? w.filter((p) => p.name !== name) : [...w, { name }]))
 
   const addExtra = () => {
     const name = extra.trim()
-    if (!name || who.includes(name)) return
-    setWho((w) => [...w, name])
+    if (!name || has(name)) return
+    const phone = extraPhone.replace(/[^0-9+]/g, '').trim()
+    setWho((w) => [...w, { name, ...(phone ? { phone } : {}) }])
     setExtra('')
+    setExtraPhone('')
   }
 
   const begin = (recording: boolean) => {
     if (starting) return
     setStarting(true)
-    // Carry each attendee's real email (if they're a known contact) so the
-    // meeting's notes can actually be sent to them.
-    const attendees = who.map((name) => ({ name, email: emailForName(name) }))
+    // Carry each attendee's real email (known contact) + any WhatsApp number, so
+    // the meeting's summary can actually be sent to them.
+    const attendees = who.map((p) => ({ name: p.name, email: emailForName(p.name), phone: p.phone }))
     const id = createInstantMeeting({ title, attendees })
     void startAssist(id, recording)
     navigate(`meetings/${id}/live`)
   }
 
-  const people = extra.trim() && !who.includes(extra.trim()) ? [...who, extra.trim()] : who
+  const people = extra.trim() && !has(extra.trim()) ? [...who, { name: extra.trim() }] : who
 
   // Searchable, capped suggestions so a big address book never becomes a long
   // scroll: filter by the query (name or email), hide already-picked, show ≤8.
@@ -46,7 +53,7 @@ export const InstantMeeting = () => {
     ? contacts.filter((c) => c.name.toLowerCase().includes(q) || (c.email ?? '').toLowerCase().includes(q))
     : contacts
   )
-    .filter((c) => !who.includes(c.name))
+    .filter((c) => !has(c.name))
     .slice(0, 8)
 
   return (
@@ -97,9 +104,9 @@ export const InstantMeeting = () => {
       {}
       {who.length > 0 && (
         <div className="wg-inst__who">
-          {who.map((name) => (
-            <button className="wg-gal__size on" key={name} aria-pressed onClick={() => toggle(name)}>
-              {name} ✕
+          {who.map((p) => (
+            <button className="wg-gal__size on" key={p.name} aria-pressed onClick={() => toggle(p.name)}>
+              {p.name}{p.phone ? ' 📱' : ''} ✕
             </button>
           ))}
         </div>
@@ -119,6 +126,18 @@ export const InstantMeeting = () => {
           <IconPlus size={18} />
         </button>
       </div>
+      {extra.trim() && (
+        <label className="wg-field wg-field--free wg-card-line" style={{ marginTop: 'var(--space-8)' }}>
+          <input
+            value={extraPhone}
+            onChange={(e) => setExtraPhone(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && addExtra()}
+            inputMode="tel"
+            placeholder={t('WhatsApp number (optional, e.g. 923001234567)')}
+            aria-label={t('Attendee WhatsApp number')}
+          />
+        </label>
+      )}
       {}
       {suggestions.length > 0 && (
         <div className="wg-inst__who">
@@ -152,7 +171,7 @@ export const InstantMeeting = () => {
           </li>
           <li>
             <IconCheck size={16} />
-            {t('The audio is turned into text and then discarded — the recording itself is not stored.')}
+            {t('If Google Drive is connected, I save the full recording to your “Wingman Meetings” folder; otherwise the audio is discarded after transcribing.')}
           </li>
           <li>
             <IconCheck size={16} />

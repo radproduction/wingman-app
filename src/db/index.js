@@ -128,6 +128,10 @@ function applyMigrations() {
       ['account_id', 'TEXT'],
       ['account_email', 'TEXT'],
     ],
+    meetings: [
+      ['recording_url', 'TEXT'],
+      ['tasks_created', 'INTEGER DEFAULT 0'],
+    ],
     bills: [
       // When we last alerted about this bill, so overdue bills don't re-notify daily.
       ['last_alerted_at', 'TEXT'],

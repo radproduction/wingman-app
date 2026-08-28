@@ -395,6 +395,8 @@ CREATE TABLE IF NOT EXISTS meetings (
   status TEXT DEFAULT 'scheduled', -- scheduled | in-progress | processing | summary-ready | completed | cancelled
   meeting_at TEXT,               -- ISO time the meeting happened
   emailed_at TEXT,               -- when the summary was emailed out
+  recording_url TEXT,            -- Google Drive link to the saved audio recording
+  tasks_created INTEGER DEFAULT 0, -- 1 once action items were turned into real tasks
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now'))
 );

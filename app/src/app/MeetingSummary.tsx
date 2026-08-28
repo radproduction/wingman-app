@@ -14,6 +14,8 @@ import {
   resetAction,
   actionDone,
   sendMeetingSummary,
+  createMeetingTasks,
+  notifyAttendees,
   type Meeting,
   type ProposedAction,
 } from '../data/meetings'
@@ -52,6 +54,7 @@ const ACTION_LINK: Record<ProposedAction['kind'], { label: string; route: string
   meeting: { label: 'View calendar', route: 'calendar' },
   email: { label: 'View draft', route: 'email' },
   whatsapp: undefined,
+  attendees: undefined,
 }
 
 const ProposedCard = ({
@@ -84,12 +87,39 @@ const ProposedCard = ({
       })
       return
     }
+    // Create REAL tasks (with due-time reminders) on the backend; fall back to the
+    // local list for the seed/demo meetings that never synced.
+    if (action.kind === 'tasks') {
+      void createMeetingTasks(meetingId).then((n) => {
+        decideAction(meetingId, action.id, 'approved')
+        if (n != null) {
+          toast(t('{n} tasks created — I’ll remind you when each is due.', { n }), 'checkCircle')
+        } else {
+          onCreateTasks?.()
+        }
+      })
+      return
+    }
+    // Send the summary to attendees' WhatsApp (works for numbers reachable by the
+    // business; honest when it can't).
+    if (action.kind === 'attendees') {
+      void notifyAttendees(meetingId).then((res) => {
+        if (res && res.sent.length) {
+          decideAction(meetingId, action.id, 'approved')
+          toast(t('Sent to {n} on WhatsApp.', { n: res.sent.length }), 'checkCircle')
+        } else if (res && res.skipped === 'no_attendee_phones') {
+          toast(t('No attendee WhatsApp numbers saved — add one to send.'), 'chat')
+        } else {
+          toast(t("Couldn’t reach them on WhatsApp (they must message Wingman first). Try email."), 'alert')
+        }
+      })
+      return
+    }
     decideAction(meetingId, action.id, 'approved')
     if (action.kind === 'whatsapp') {
       const m = meetingById(meetingId)
       openWhatsApp(m ? summaryToText(m) : t('Here is my meeting summary.'))
     }
-    if (action.kind === 'tasks') onCreateTasks?.()
   }
 
   if (decision === 'approved') {
@@ -353,10 +383,20 @@ const FullSummary = ({ m }: { m: Meeting }) => {
       <div className="wg-panel-head">
         <h2>{t('Recording')}</h2>
       </div>
-      {recorded ? (
+      {s.recordingUrl ? (
         <div className="wg-bc__summary wg-card-line">
           <Icon name="volume" size={18} variant="duotone" />
-          <p>{t('I turned the audio into the transcript above, then discarded the recording — nothing is stored to play or delete.')}</p>
+          <p>
+            {t('The full recording is saved to your Google Drive (in “Wingman Meetings”).')}{' '}
+            <a href={s.recordingUrl} target="_blank" rel="noreferrer" className="wg-link">
+              {t('Open recording')}
+            </a>
+          </p>
+        </div>
+      ) : recorded ? (
+        <div className="wg-bc__summary wg-card-line">
+          <Icon name="volume" size={18} variant="duotone" />
+          <p>{t('I turned the audio into the transcript above. Connect Google Drive and I’ll also save the full recording there next time.')}</p>
         </div>
       ) : (
         <div className="wg-bc__summary wg-card-line">

@@ -1,6 +1,7 @@
 'use strict';
 
 const { google } = require('googleapis');
+const { Readable } = require('stream');
 const googleAuth = require('../auth/googleAuth');
 const documentReader = require('./documentReader');
 
@@ -148,6 +149,36 @@ async function createDoc(user, { name, content = '', folderName } = {}) {
   return { id: res.data.id, name: res.data.name, link: res.data.webViewLink };
 }
 
+/** Find a folder by name, creating it (at Drive root) if it doesn't exist. */
+async function getOrCreateFolderId(drive, folderName) {
+  if (!folderName || !folderName.trim()) return null;
+  const existing = await resolveFolderId(drive, folderName);
+  if (existing) return existing;
+  const res = await drive.files.create({
+    requestBody: { name: folderName.trim(), mimeType: FOLDER_MIME },
+    fields: 'id',
+  });
+  return res.data.id;
+}
+
+/**
+ * Upload a BINARY file (e.g. a meeting audio recording) to the user's Drive,
+ * into a named folder (created if missing). Returns the file's view link.
+ */
+async function uploadFile(user, { name, mimeType = 'application/octet-stream', buffer, folderName } = {}) {
+  if (!buffer || !buffer.length) throw new Error('EMPTY_FILE');
+  const drive = driveFor(user);
+  const requestBody = { name: name || 'file', mimeType };
+  const parentId = folderName ? await getOrCreateFolderId(drive, folderName) : null;
+  if (parentId) requestBody.parents = [parentId];
+  const res = await drive.files.create({
+    requestBody,
+    media: { mimeType, body: Readable.from(buffer) },
+    fields: 'id,name,webViewLink',
+  });
+  return { id: res.data.id, name: res.data.name, link: res.data.webViewLink };
+}
+
 /** Create a folder (optionally inside a named parent folder). */
 async function createFolder(user, { name, folderName } = {}) {
   const drive = driveFor(user);
@@ -239,6 +270,6 @@ async function move(user, { fileId, folderName } = {}) {
 }
 
 module.exports = {
-  search, readFile, createDoc, createSheet, createFolder,
+  search, readFile, createDoc, createSheet, createFolder, uploadFile,
   share, trashFile, rename, move,
 };

@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react'
 import { NOW, type ChipTone } from './mock'
 import type { IconName } from '../app/icons'
-import { api, ApiError, type ServerMeetingSummary, type ServerMeeting, type EmailResult } from './api'
+import { api, ApiError, type ServerMeetingSummary, type ServerMeeting, type EmailResult, type AttendeeNotify } from './api'
 import { toast } from '../shell/toast'
 
 
@@ -43,7 +43,7 @@ export const MEETING_STATUS: Record<MeetingStatus, { label: string; tone: 'go' |
   cancelled: { label: 'Cancelled', tone: 'off' },
 }
 
-export type Attendee = { name: string; initial: string; role?: string; person?: boolean; email?: string }
+export type Attendee = { name: string; initial: string; role?: string; person?: boolean; email?: string; phone?: string }
 
 export type BriefSection = {
   key: string
@@ -69,7 +69,7 @@ export type ActionItem = {
 
 export type ProposedAction = {
   id: string
-  kind: 'tasks' | 'email' | 'meeting' | 'whatsapp'
+  kind: 'tasks' | 'email' | 'meeting' | 'whatsapp' | 'attendees'
   label: string
   detail: string
   tone: ChipTone
@@ -88,6 +88,7 @@ export type MeetingSummary = {
   transcript: { at: string; speaker: string; text: string }[]
   recorded?: boolean
   recording: { duration: string; retention: string }
+  recordingUrl?: string
   proposedActions: ProposedAction[]
 }
 
@@ -835,7 +836,7 @@ const nowLabel = () => {
 
 export type InstantDraft = {
   title: string
-  attendees: { name: string; email?: string }[]
+  attendees: { name: string; email?: string; phone?: string }[]
   type?: Meeting['type']
   project?: string
 }
@@ -849,6 +850,7 @@ export const createInstantMeeting = (d: InstantDraft): string => {
     initial: a.name.trim().charAt(0).toUpperCase() || '?',
     person: true,
     ...(a.email ? { email: a.email } : {}),
+    ...(a.phone ? { phone: a.phone } : {}),
   }))
   const m: Meeting = {
     id,
@@ -880,12 +882,29 @@ export const renameInstantMeeting = (id: string, title: string) =>
 
 const INSTANT_ACTIONS: ProposedAction[] = [
   {
+    id: 'ins-tasks',
+    kind: 'tasks',
+    label: 'Create tasks & reminders',
+    detail: "Turn the action items into real tasks with their deadlines — I'll remind you on WhatsApp when each is due.",
+    tone: 'lavender',
+    icon: 'task',
+  },
+  {
     id: 'ins-whatsapp',
     kind: 'whatsapp',
     label: 'Send summary to WhatsApp',
     detail: 'Send these notes and action items to your WhatsApp so you have them on your phone.',
     tone: 'mint',
     icon: 'chat',
+  },
+  {
+    id: 'ins-attendees',
+    kind: 'attendees',
+    label: "Send to attendees' WhatsApp",
+    detail: "Send the summary to the attendees who have a WhatsApp number saved. (WhatsApp only delivers to people who've messaged Wingman recently.)",
+    tone: 'peach',
+    icon: 'chat',
+    external: true,
   },
   {
     id: 'ins-email',
@@ -936,6 +955,7 @@ const serverToSummary = (
   seconds: number,
   notes: LiveNote[],
   recorded: boolean,
+  recordingUrl?: string | null,
 ): MeetingSummary => {
   const mins = Math.max(1, Math.round(seconds / 60))
   const actions: ActionItem[] = (s?.actions ?? []).map((a) => ({
@@ -954,6 +974,7 @@ const serverToSummary = (
     transcript: notes.map((n) => ({ at: n.at, speaker: 'Note', text: n.text })),
     recorded,
     recording: { duration: `${mins} min`, retention: retentionLine(recorded) },
+    ...(recordingUrl ? { recordingUrl } : {}),
     proposedActions: INSTANT_ACTIONS,
   }
 }
@@ -988,7 +1009,7 @@ const processInstant = async (
     const created = await api.createMeeting({
       title: m.title,
       type: m.type,
-      attendees: m.attendees.map((a) => ({ name: a.name, email: a.email, role: a.role })),
+      attendees: m.attendees.map((a) => ({ name: a.name, email: a.email, role: a.role, phone: a.phone })),
       notes: notesText,
       status: 'processing',
       meetingAt: new Date().toISOString(),
@@ -996,10 +1017,12 @@ const processInstant = async (
     // Recorded audio → transcribe on the backend (Whisper) then summarize; else
     // the typed notes → Claude. If transcription fails, fall back to the notes.
     let serverSummary: ServerMeetingSummary | null | undefined
+    let recordingUrl: string | null | undefined
     if (audio && audio.blob.size > 0) {
       try {
         const res = await api.transcribeMeeting(created.meeting.id, audio.blob, audio.mime)
         serverSummary = res.meeting.summary
+        recordingUrl = res.meeting.recording_url
       } catch (e) {
         // Surface WHY transcription failed, then fall back to typed notes.
         const why = e instanceof ApiError ? `Transcription failed (${e.status})` : 'Transcription failed'
@@ -1013,7 +1036,7 @@ const processInstant = async (
       const res = await api.finalizeMeeting(created.meeting.id)
       serverSummary = res.meeting.summary
     }
-    applyInstantSummary(id, mins, serverToSummary(serverSummary, seconds, notes, recorded || !!audio), created.meeting.id)
+    applyInstantSummary(id, mins, serverToSummary(serverSummary, seconds, notes, recorded || !!audio, recordingUrl), created.meeting.id)
   } catch {
     applyInstantSummary(id, mins, localSummary(seconds, notes, recorded))
   }
@@ -1029,11 +1052,34 @@ export const deleteInstantMeeting = (id: string) =>
  * result, or null if it can't send (not synced / offline / Gmail not connected).
  */
 export const sendMeetingSummary = async (id: string): Promise<EmailResult | null> => {
-  const m = state.instants.find((x) => x.id === id)
+  const m = meetingById(id)
   if (!m?.serverId) return null
   try {
     const res = await api.sendMeeting(m.serverId)
     return res.email
+  } catch {
+    return null
+  }
+}
+
+/** Turn the meeting's action items into real tasks (which then get reminders). */
+export const createMeetingTasks = async (id: string): Promise<number | null> => {
+  const m = meetingById(id)
+  if (!m?.serverId) return null
+  try {
+    const res = await api.createMeetingTasks(m.serverId)
+    return res.created
+  } catch {
+    return null
+  }
+}
+
+/** Send the summary to attendees' WhatsApp numbers (best-effort). */
+export const notifyAttendees = async (id: string): Promise<AttendeeNotify | null> => {
+  const m = meetingById(id)
+  if (!m?.serverId) return null
+  try {
+    return await api.notifyAttendees(m.serverId)
   } catch {
     return null
   }
@@ -1084,6 +1130,7 @@ const mapServerSummaryFull = (s: ServerMeetingSummary | null | undefined): Meeti
 const serverToMeeting = (s: ServerMeeting): Meeting => {
   const w = meetingWhen(s.meeting_at)
   const summary = mapServerSummaryFull(s.summary)
+  if (summary && s.recording_url) summary.recordingUrl = s.recording_url
   const status: MeetingStatus =
     s.status === 'processing'
       ? 'processing'
@@ -1107,6 +1154,7 @@ const serverToMeeting = (s: ServerMeeting): Meeting => {
         initial: name.trim().charAt(0).toUpperCase() || '?',
         person: true,
         ...(a.email ? { email: a.email } : {}),
+        ...(a.phone ? { phone: a.phone } : {}),
       }
     }),
     company: s.company || 'Meeting',
@@ -1168,6 +1216,7 @@ export const actionDone: Record<ProposedAction['kind'], string> = {
   email: 'Email draft prepared',
   meeting: 'Follow-up meeting scheduled',
   whatsapp: 'Summary sent to WhatsApp',
+  attendees: 'Sent to attendees',
 }
 
 export { NOW }

@@ -85,6 +85,12 @@ function update(userId, id, patch = {}) {
     } else if (k === 'meetingAt') {
       sets.push('meeting_at = @meeting_at');
       vals.meeting_at = v || null;
+    } else if (k === 'recordingUrl' || k === 'recording_url') {
+      sets.push('recording_url = @recording_url');
+      vals.recording_url = v || null;
+    } else if (k === 'tasksCreated' || k === 'tasks_created') {
+      sets.push('tasks_created = @tasks_created');
+      vals.tasks_created = v ? 1 : 0;
     } else if (SCALAR[k]) {
       sets.push(`${k} = @${k}`);
       vals[k] = v == null ? null : v;
