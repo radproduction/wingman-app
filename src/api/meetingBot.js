@@ -89,6 +89,18 @@ router.post('/meetings/auto-join', express.json(), (req, res) => {
   res.json({ autoJoinMeetings: enabled });
 });
 
+// Turn Drive recording save on/off for bot meetings. Off (default) = transcribe
+// only, nothing stored → no Drive space used. Turn on once Drive has room.
+router.post('/meetings/recording', express.json(), (req, res) => {
+  const u = requireUser(req, res);
+  if (!u) return;
+  const enabled = !!(req.body && req.body.enabled);
+  const prefs = u.preferences || {};
+  prefs.saveMeetingRecording = enabled;
+  usersRepo.update(u.id, { preferences: prefs });
+  res.json({ saveMeetingRecording: enabled });
+});
+
 router.post('/meetings/bots/:id/cancel', (req, res) => {
   const u = requireUser(req, res);
   if (!u) return;
@@ -172,8 +184,12 @@ router.post('/bot/sessions/:id/audio', botAuth, express.raw({ type: () => true, 
 
   botsRepo.update(s.id, { status: 'processing', endedAt: new Date().toISOString() });
   try {
+    // Only save the audio to Drive when the user opted in — otherwise transcribe
+    // only (no stored recording, no Drive space used). Default off, because the
+    // client's Drive was full.
+    const saveToDrive = !!(user.preferences && user.preferences.saveMeetingRecording);
     const out = await meetingIngest.processAudio(user, meeting, audio, req.headers['content-type'], {
-      emailUser: true, createTasks: true, saveToDrive: true,
+      emailUser: true, createTasks: true, saveToDrive,
     });
     botsRepo.update(s.id, { status: 'done', recordingUrl: out.recordingUrl || null });
     try { await notifyReady(user, out.meeting); } catch (_) { /* best-effort */ }
