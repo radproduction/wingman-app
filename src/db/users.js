@@ -185,9 +185,27 @@ function dedupeByPhone(rows) {
   return [...best.values()];
 }
 
+// A phone we could actually WhatsApp. Half-finished/junk rows (e.g. only a
+// country code) can't receive a message AND, if a mailbox is linked to them,
+// cause a DUPLICATE scan/alert of that inbox alongside the real account. Keep
+// them out of every proactive send + shared-inbox scan (not just the boot sweep).
+function hasUsablePhone(r) {
+  return String((r && r.phone) || '').replace(/\D/g, '').length >= 7;
+}
+
 /** All users that have connected Gmail (have a gmail_token). */
 function listConnectedEmailUsers() {
-  const rows = db.prepare('SELECT * FROM users WHERE gmail_token IS NOT NULL').all();
+  const rows = db.prepare('SELECT * FROM users WHERE gmail_token IS NOT NULL').all().filter(hasUsablePhone);
+  return dedupeByPhone(rows).map(hydrate);
+}
+
+/** Users with a webmail (IMAP) mailbox connected — deduped, so a duplicate
+ *  account never double-alerts the same inbox. */
+function listWebmailUsers() {
+  const rows = db
+    .prepare("SELECT * FROM users WHERE webmail_address IS NOT NULL AND webmail_address != ''")
+    .all()
+    .filter(hasUsablePhone);
   return dedupeByPhone(rows).map(hydrate);
 }
 
@@ -198,7 +216,7 @@ function listAll() {
 
 /** Only fully-onboarded users (used by proactive schedulers). */
 function listOnboarded() {
-  return dedupeByPhone(db.prepare('SELECT * FROM users WHERE onboarding_complete = 1').all()).map(hydrate);
+  return dedupeByPhone(db.prepare('SELECT * FROM users WHERE onboarding_complete = 1').all().filter(hasUsablePhone)).map(hydrate);
 }
 
 // Every table that hangs off a user, so a duplicate can be fully removed without
@@ -337,6 +355,6 @@ function toPublic(user) {
 module.exports = {
   DEFAULT_SKILLS,
   getByPhone, getById, create, update, hydrate, isOnboarded, hasSkill,
-  listConnectedEmailUsers, listAll, listOnboarded, updatePreferences,
+  listConnectedEmailUsers, listWebmailUsers, listAll, listOnboarded, updatePreferences,
   completeOnboarding, toPublic, normPhone, mergeDuplicatePhones, deleteUserCascade,
 };

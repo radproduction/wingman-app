@@ -34,6 +34,9 @@ const jobs = [];
  */
 async function runHourlyTick(now = new Date()) {
   try {
+    // Collapse any duplicate/junk accounts created since boot, so proactive jobs
+    // never send twice to the same person (was boot-only before).
+    try { require('../db/users').mergeDuplicatePhones(); } catch (_) { /* best-effort */ }
     await require('./googleTasks').syncAllUsers({ now });
     await taskIntents.runDailyReminders({ hour: 9, now });
     await billAlerts.runDueUsers({ hour: 9, now });

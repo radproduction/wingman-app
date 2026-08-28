@@ -150,10 +150,9 @@ async function checkUser(userId, { send = true } = {}) {
 
 /** Sweep every connected mailbox. Never throws. */
 async function runAllUsers({ send = true } = {}) {
-  const { db } = require('../db');
-  const rows = db.prepare(
-    "SELECT id FROM users WHERE webmail_address IS NOT NULL AND webmail_address != ''"
-  ).all();
+  // Deduped by phone (+ junk phones excluded) so a duplicate account never
+  // double-alerts the same inbox — matches every other proactive sweep.
+  const rows = require('../db/users').listWebmailUsers();
 
   const results = [];
   for (const row of rows) {
