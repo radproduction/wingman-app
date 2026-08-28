@@ -37,6 +37,8 @@ async function runHourlyTick(now = new Date()) {
     // Collapse any duplicate/junk accounts created since boot, so proactive jobs
     // never send twice to the same person (was boot-only before).
     try { require('../db/users').mergeDuplicatePhones(); } catch (_) { /* best-effort */ }
+    // Trim the WhatsApp send-dedup guard (rows only matter for ~2 min).
+    try { require('../db').db.prepare("DELETE FROM wa_send_dedup WHERE created_at < datetime('now','-1 hour')").run(); } catch (_) { /* best-effort */ }
     await require('./googleTasks').syncAllUsers({ now });
     await taskIntents.runDailyReminders({ hour: 9, now });
     await billAlerts.runDueUsers({ hour: 9, now });

@@ -10,10 +10,33 @@ const engine = require('../engine/conversation');
 const cloudApi = require('./cloudApi');
 const documentReader = require('../services/documentReader');
 
+const crypto = require('crypto');
+
 let client = null;
 let isReady = false;
 let latestQr = null;         // most recent QR string (null once authenticated)
 let lastQrAt = null;         // timestamp of the latest QR
+
+/**
+ * Atomically reserve the right to send THIS text to THIS number in the current
+ * ~2-minute window. Returns false when an identical send already reserved the
+ * slot — i.e. a duplicate — so the caller can skip it. Race-safe across
+ * processes via the wa_send_dedup PRIMARY KEY (protects against a brief
+ * two-container overlap on redeploy, or any accidental double-send). Never
+ * blocks a send on its own error.
+ */
+function reserveSend(phoneNumber, text) {
+  try {
+    const digits = String(phoneNumber || '').replace(/\D/g, '');
+    const bucket = Math.floor(Date.now() / 120000); // 2-minute window
+    const hash = crypto.createHash('sha1').update(String(text || '')).digest('hex').slice(0, 16);
+    const key = `${digits}:${hash}:${bucket}`;
+    const info = db.prepare('INSERT OR IGNORE INTO wa_send_dedup (key) VALUES (?)').run(key);
+    return info.changes === 1; // 1 → reserved (send it); 0 → identical send already went (skip)
+  } catch (_) {
+    return true; // guard must never swallow a legitimate message
+  }
+}
 
 /**
  * Normalize a phone number / chat id into a WhatsApp chat id (xxxx@c.us).
@@ -270,6 +293,13 @@ function initWhatsApp() {
  * @returns {Promise<Object>} the sent message
  */
 async function sendMessage(phoneNumber, text) {
+  // Suppress an identical message to the same number within the dedup window
+  // (double-send / two-instance overlap guard).
+  if (!reserveSend(phoneNumber, text)) {
+    console.log(`[whatsapp] duplicate suppressed (${String(phoneNumber).replace(/\D/g, '')}): ${String(text || '').slice(0, 60)}…`);
+    return { duplicate: true };
+  }
+
   // Cloud API path (official Graph API) — used in production.
   if (cloudApi.ready()) {
     const digits = digitsOnly(phoneNumber);

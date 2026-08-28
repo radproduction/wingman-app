@@ -429,6 +429,16 @@ CREATE TABLE IF NOT EXISTS meeting_bots (
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now'))
 );
+-- ─── Outbound WhatsApp de-dup guard ────────────────────────────────
+-- Atomic reservation so the SAME message to the SAME number can't be sent
+-- twice within a short window — protects against a brief two-instance overlap
+-- during a redeploy (or any accidental double-send). Keyed on
+-- (digits:text-hash:2-min-bucket); INSERT OR IGNORE = one wins, the other skips.
+CREATE TABLE IF NOT EXISTS wa_send_dedup (
+  key TEXT PRIMARY KEY,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
 CREATE INDEX IF NOT EXISTS idx_meeting_bots_user ON meeting_bots(user_id);
 CREATE INDEX IF NOT EXISTS idx_meeting_bots_status ON meeting_bots(status);
 -- Not UNIQUE: a cancelled/failed attempt must be able to be re-dispatched, so a
