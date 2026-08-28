@@ -95,15 +95,31 @@ Test a single job without the loop:
 docker run --rm --env-file .env -e RUN_ONCE=1 wingman-bot
 ```
 
-## Meet that blocks anonymous guests ("Signed-in bot account")
-Some corporate Meets don't allow guest join. For those, run the bot signed in:
+## Signed-in bot account (needed in practice)
+Google blocks *anonymous* automated joins — the bot's knock never reaches the
+host. So the bot must be signed into a real Google account. Use a **dedicated**
+account named "Wingman Notetaker", not a personal one.
 
-1. On a desktop, once: `npx playwright open --save-storage=google-state.json https://accounts.google.com`
-   and log into the bot's Google account.
-2. Copy `google-state.json` into the worker (mount or COPY it), and set
-   `STORAGE_STATE=/app/google-state.json` in `.env`.
-
-Use a dedicated Google account for the bot, not a personal one.
+1. On a machine with a screen (your PC), once:
+   ```
+   cd bot-worker
+   npm install
+   node login.js
+   ```
+   A Chrome window opens — log into the bot's Google account, then press ENTER.
+   It writes `google-state.json`.
+2. Get `google-state.json` onto the host next to the worker, then run the worker
+   with it mounted + pointed at:
+   ```
+   docker run -d --name wingman-bot --restart unless-stopped \
+     --network host --shm-size=1g \
+     -e STORAGE_STATE=/app/google-state.json \
+     -v /root/wingman/bot-worker/google-state.json:/app/google-state.json:ro \
+     --env-file /root/wingman/bot-worker/.env \
+     wingman-bot
+   ```
+The session can expire after weeks — re-run `login.js` and replace the file when
+the bot starts failing to join.
 
 ## Scaling (concurrent meetings)
 One container = one meeting at a time (single default Pulse sink). To run N at
