@@ -1,0 +1,15 @@
+{
+  "name": "wingman-bot-worker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Wingman meeting notetaker — headless browser bot that joins Google Meet / Zoom, records the call audio, and hands it back to the Wingman backend for transcription + summary. Runs on a dedicated host (not the app droplet).",
+  "main": "src/worker.js",
+  "scripts": {
+    "start": "node src/worker.js",
+    "once": "RUN_ONCE=1 node src/worker.js"
+  },
+  "engines": { "node": ">=18" },
+  "dependencies": {
+    "playwright": "^1.47.0"
+  }
+}
