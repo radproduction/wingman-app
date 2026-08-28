@@ -402,7 +402,7 @@ export const ActionRow = ({ a, onOpen }: { a: ActionItem; onOpen?: () => void })
         tapQuiet()
         toggleActionItem(a.id)
         if (a.status !== 'done')
-          toast(t('Action item completed.'), 'checkCircle', 4000, {
+          toast(t('Task completed.'), 'checkCircle', 4000, {
             label: t('Undo'),
             onAct: () => toggleActionItem(a.id),
           })
@@ -435,7 +435,7 @@ const ActionsWidget = ({ size, onAdd }: { size: WidgetSize; onAdd: () => void })
       <Glance
         icon="checkCircle"
         tone="blue"
-        title="Action items"
+        title="Tasks"
         value={open.length === 0 ? t('None open') : String(open.length)}
         sub={list[0] ? t(list[0].title) : t('Nothing outstanding')}
         onOpen={() => navigate('tasks')}
@@ -447,14 +447,14 @@ const ActionsWidget = ({ size, onAdd }: { size: WidgetSize; onAdd: () => void })
       <Head
         icon="checkCircle"
         tone="blue"
-        title="Action items"
+        title="Tasks"
         end={open.length > 0 ? t('{n} open', { n: open.length }) : t('View all')}
         onEnd={() => navigate('tasks')}
       />
       {list.length === 0 ? (
         <Empty
-          line="No action items open. I create them from your meetings, and you can add one yourself any time."
-          cta="Add an action item"
+          line="No tasks open. I create them from your meetings, and you can add one yourself any time."
+          cta="Add a task"
           onCta={onAdd}
         />
       ) : (
@@ -468,7 +468,7 @@ const ActionsWidget = ({ size, onAdd }: { size: WidgetSize; onAdd: () => void })
           {size === 'lg' && (
             <div className="wg-wgt__foot">
               <button className="wg-btn sm soft" onClick={onAdd}>
-                <IconPlus size={14} /> {t('Add an action item')}
+                <IconPlus size={14} /> {t('Add a task')}
               </button>
             </div>
           )}

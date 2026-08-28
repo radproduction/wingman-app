@@ -52,7 +52,7 @@ export const ActionSheet = ({
     if (!clean) return
     if (edit) {
       updateActionItem(edit.id, { title: clean, owner, dueIn, priority, note: note.trim() || undefined })
-      toast(t('Action item updated.'), 'checkCircle')
+      toast(t('Task updated.'), 'checkCircle')
       onSaved?.(edit.id)
     } else {
       const id = addActionItem({ title: clean, owner, dueIn, priority, note, meetingId, meeting, project })
@@ -68,7 +68,7 @@ export const ActionSheet = ({
   return (
     <Sheet open={open} onClose={onClose} labelledBy="wg-action-title">
       <h2 className="wm-sheet__title" id="wg-action-title">
-        {edit ? t('Edit action item') : t('New action item')}
+        {edit ? t('Edit task') : t('New task')}
       </h2>
       {meeting && !edit && <p className="wm-sheet__body-tx">{t('From {name}', { name: t(meeting) })}</p>}
 
@@ -143,7 +143,7 @@ export const ActionSheet = ({
 
       <div className="wm-sheet__acts">
         <button className="wg-btn full" disabled={!title.trim()} onClick={save}>
-          {edit ? t('Save changes') : t('Add action item')}
+          {edit ? t('Save changes') : t('Add task')}
         </button>
         <button className="wg-btn full quiet" onClick={onClose}>
           {t('Cancel')}

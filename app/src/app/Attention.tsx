@@ -43,7 +43,7 @@ export const Attention = () => {
       action={
         <button
           className="wg-subbar__act"
-          aria-label={t('Add an action item')}
+          aria-label={t('Add a task')}
           onClick={() => {
             setEdit(undefined)
             setOpen(true)

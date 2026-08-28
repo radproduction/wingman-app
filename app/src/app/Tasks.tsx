@@ -101,13 +101,13 @@ export const Tasks = () => {
 
                 {}
                 <div className="wg-panel-head">
-                  <h2>{t('Action items')}</h2>
+                  <h2>{t('Tasks')}</h2>
                   <span>{openActions.length}</span>
                 </div>
                 {openActions.length === 0 ? (
                   <div className="wg-brief-line">
                     <IconCheck size={16} />
-                    <span>{t('No action items open. I create them from your meetings, and you can add one yourself.')}</span>
+                    <span>{t('No tasks open. I create them from your meetings, and you can add one yourself.')}</span>
                   </div>
                 ) : (
                   <div className="wg-set-list wg-card-line wg-att__list">
@@ -117,7 +117,7 @@ export const Tasks = () => {
                   </div>
                 )}
                 <button className="wg-btn full soft" onClick={() => setEdit('new')}>
-                  <IconPlus size={16} /> {t('Add an action item')}
+                  <IconPlus size={16} /> {t('Add a task')}
                 </button>
 
                 {}
