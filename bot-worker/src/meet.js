@@ -192,12 +192,35 @@ async function waitForInCall(page, timeoutMs) {
   return 'timeout';
 }
 
+/** Best-effort participant count (incl. the bot). Returns null if unknown. */
+async function countParticipants(page) {
+  try {
+    return await page.evaluate(() => {
+      const ids = document.querySelectorAll('[data-participant-id]');
+      if (ids.length) {
+        return new Set([...ids].map((n) => n.getAttribute('data-participant-id'))).size;
+      }
+      // Fallback: a count shown on the people/everyone control.
+      const btn = document.querySelector('button[aria-label*="everyone" i], button[aria-label*="participant" i], button[aria-label*="people" i]');
+      if (btn) {
+        const m = ((btn.getAttribute('aria-label') || '') + ' ' + (btn.innerText || '')).match(/\d+/);
+        if (m) return parseInt(m[0], 10);
+      }
+      return null;
+    });
+  } catch (_) {
+    return null;
+  }
+}
+
 /**
- * Resolve when the meeting ends: the bot is removed, everyone leaves, the call
- * ends, or the max duration is hit.
+ * Resolve when the meeting ends: the bot is removed, everyone else leaves (bot
+ * alone), the call ends, or the max duration is hit. Leaving when alone frees
+ * the (serial) worker instead of recording an empty room for the full cap.
  */
-async function waitForMeetingEnd(page, { maxMs }) {
+async function waitForMeetingEnd(page, { maxMs, aloneMs = 90000 }) {
   const deadline = Date.now() + maxMs;
+  let aloneSince = 0;
   while (Date.now() < deadline) {
     try {
       const ended = await page.locator('text=/you.?ve left the meeting|call ended|return to home screen|you were removed|meeting ended/i').first().isVisible();
@@ -211,6 +234,17 @@ async function waitForMeetingEnd(page, { maxMs }) {
       try { leaveVisible = await page.locator('button[aria-label*="Leave call" i]').first().isVisible(); } catch (_) {}
       if (!leaveVisible) { console.log('[meet] leave control gone — assuming ended'); return 'ended'; }
     }
+
+    // Everyone else left (only the bot remains) → leave after a short grace, so
+    // the bot never sits recording an empty call and blocking the next meeting.
+    const n = await countParticipants(page);
+    if (n != null && n <= 1) {
+      if (!aloneSince) { aloneSince = Date.now(); console.log('[meet] alone in the call — will leave if no one returns'); }
+      else if (Date.now() - aloneSince > aloneMs) { console.log('[meet] alone too long — leaving'); return 'alone'; }
+    } else if (n != null) {
+      aloneSince = 0;
+    }
+
     await page.waitForTimeout(5000);
   }
   console.log('[meet] max duration reached');
