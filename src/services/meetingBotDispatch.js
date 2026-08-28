@@ -14,10 +14,28 @@ const botsRepo = require('../db/meetingBots');
 const calendarEvents = require('../db/calendarEvents');
 
 const BOT_NAME = process.env.BOT_NAME || 'Wingman Notetaker';
+// The bot's own Google account. When set, we auto-invite it to each meeting so
+// it joins as a guest (Google blocks uninvited bots; invited ones join directly).
+const BOT_EMAIL = process.env.BOT_GOOGLE_EMAIL || '';
 
 /** A worker must be configured for any of this to do anything. */
 function enabled() {
   return !!process.env.BOT_WORKER_TOKEN;
+}
+
+/**
+ * Auto-invite the bot to a calendar event's guest list, so it joins directly
+ * instead of gate-crashing (which Google blocks). Best-effort — never throws.
+ */
+async function inviteBotToEvent(userId, evRow) {
+  if (!BOT_EMAIL || !evRow || !evRow.gcal_event_id) return;
+  try {
+    const calendar = require('./calendar');
+    const added = await calendar.addAttendee(userId, evRow.gcal_event_id, BOT_EMAIL, { notify: false });
+    if (added) console.log(`[botDispatch] auto-invited ${BOT_EMAIL} to event ${evRow.gcal_event_id}`);
+  } catch (e) {
+    console.warn('[botDispatch] auto-invite failed:', e.message);
+  }
 }
 
 /** Map a cached calendar_events row → attendees array for the meeting record. */
@@ -34,11 +52,14 @@ function attendeesFromEvent(evRow) {
  * creates the meetings row the summary will land in. Idempotent per event.
  * @returns {object|null} the bot session, or null if the event has no join link
  */
-function dispatchForEvent(userId, evRow) {
+async function dispatchForEvent(userId, evRow) {
   if (!evRow || !evRow.meeting_url) return null;
 
   const existing = botsRepo.findActiveForEvent(userId, evRow.gcal_event_id);
   if (existing) return existing;
+
+  // Put the bot on the guest list first, so it joins as an invited participant.
+  await inviteBotToEvent(userId, evRow);
 
   const meeting = meetingsRepo.create(userId, {
     title: evRow.title || 'Meeting',
@@ -83,7 +104,7 @@ function dispatchForUrl(userId, { meetingUrl, provider = null, title = 'Meeting'
  * For one user, dispatch bots to joinable events starting within the lookahead
  * window. Only runs when the user opted in (preferences.autoJoinMeetings).
  */
-function runForUser(userId, { now = new Date(), lookaheadMin = 16 } = {}) {
+async function runForUser(userId, { now = new Date(), lookaheadMin = 16 } = {}) {
   const user = usersRepo.getById(userId);
   if (!user) return [];
   const prefs = user.preferences || {};
@@ -97,7 +118,7 @@ function runForUser(userId, { now = new Date(), lookaheadMin = 16 } = {}) {
   for (const ev of events) {
     try {
       const before = botsRepo.findActiveForEvent(userId, ev.gcal_event_id);
-      const session = dispatchForEvent(userId, ev);
+      const session = await dispatchForEvent(userId, ev);
       if (session && !before) created.push(session);
     } catch (e) {
       console.warn('[botDispatch] event dispatch failed:', e.message);
@@ -111,7 +132,7 @@ async function runAllUsers({ now = new Date(), lookaheadMin = 16 } = {}) {
   const users = usersRepo.listOnboarded();
   const out = [];
   for (const u of users) {
-    const created = runForUser(u.id, { now, lookaheadMin });
+    const created = await runForUser(u.id, { now, lookaheadMin });
     if (created.length) out.push({ phone: u.phone, dispatched: created.length });
   }
   if (out.length) console.log('[botDispatch] dispatched notetaker bots:', JSON.stringify(out));

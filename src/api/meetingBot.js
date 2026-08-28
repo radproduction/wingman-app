@@ -39,7 +39,7 @@ function requireUser(req, res) {
 
 // Send the notetaker bot to a calendar event (by gcalEventId) or a raw meeting
 // URL. Creates the session + a meeting record; the worker picks it up.
-router.post('/meetings/join', express.json(), (req, res) => {
+router.post('/meetings/join', express.json(), async (req, res) => {
   const u = requireUser(req, res);
   if (!u) return;
   const b = req.body || {};
@@ -49,7 +49,7 @@ router.post('/meetings/join', express.json(), (req, res) => {
     const ev = calendarEvents.findByGcalId(u.id, b.gcalEventId);
     if (!ev) return res.status(404).json({ error: 'Event not found' });
     if (!ev.meeting_url) return res.status(400).json({ error: 'That event has no video link' });
-    session = dispatch.dispatchForEvent(u.id, ev);
+    session = await dispatch.dispatchForEvent(u.id, ev);
   } else if (b.meetingUrl) {
     const link = calendar.extractMeetingLink({ location: String(b.meetingUrl), description: '' });
     if (!link.meetingUrl) return res.status(400).json({ error: 'That does not look like a Meet/Zoom/Teams link' });

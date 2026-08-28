@@ -291,6 +291,34 @@ async function createEvent(userId, { title, startTime, endTime, description = ''
 }
 
 /**
+ * Add a single attendee to an event without disturbing the rest. Used to
+ * auto-invite the notetaker bot so it joins as a guest — Google blocks uninvited
+ * (gate-crashing) bots, but an invited one on the guest list joins directly.
+ * Silent by default (no email blast to the other guests).
+ *
+ * @returns {Promise<boolean>} true if newly added, false if already present
+ */
+async function addAttendee(userId, eventId, email, { notify = false } = {}) {
+  const lower = String(email || '').trim().toLowerCase();
+  if (!lower) return false;
+  const user = loadUser(userId);
+  const cal = calendarFor(user, accountForEvent(userId, eventId));
+
+  const cur = await cal.events.get({ calendarId: 'primary', eventId });
+  const attendees = Array.isArray(cur.data.attendees) ? cur.data.attendees.slice() : [];
+  if (attendees.some((a) => String(a.email || '').toLowerCase() === lower)) return false;
+  attendees.push({ email: lower });
+
+  await cal.events.patch({
+    calendarId: 'primary',
+    eventId,
+    requestBody: { attendees },
+    sendUpdates: notify ? 'all' : 'none',
+  });
+  return true;
+}
+
+/**
  * Update / reschedule an event.
  *
  * @param {string} userId
@@ -380,6 +408,7 @@ module.exports = {
   getEvents,
   createEvent,
   updateEvent,
+  addAttendee,
   deleteEvent,
   checkConflicts,
   findEvents,
