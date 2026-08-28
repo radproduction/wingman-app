@@ -416,6 +416,15 @@ const FullSummary = ({ m }: { m: Meeting }) => {
         <Related icon="mail" tone="sand" name="Related emails" route="email" />
       </div>
 
+      <button
+        className="wg-btn full"
+        style={{ marginTop: 'var(--space-20)' }}
+        onClick={() => navigate('home')}
+      >
+        <IconCheck size={18} />
+        {t('Done — back to home')}
+      </button>
+
       <ActionSheet
         open={edit !== null}
         onClose={() => setEdit(null)}
