@@ -138,16 +138,30 @@ function listJoinableBetween(userId, fromIso, toIso) {
  * not only when dispatched before the start).
  */
 function listActiveOrUpcoming(userId, nowIso, lookaheadMin) {
-  const soonIso = new Date(new Date(nowIso).getTime() + lookaheadMin * 60000).toISOString();
-  return db.prepare(`
+  const now = new Date(nowIso).getTime();
+  const soon = now + lookaheadMin * 60000;
+  // Pull the candidates in SQL, but decide "is it ongoing / about to start" in
+  // JS on ABSOLUTE instants. Google stores start/end with each event's own UTC
+  // offset (…Z, +00:00, +05:00), so a lexical SQL string compare against a Z
+  // timestamp is wrong whenever offsets differ — that quietly broke auto-join.
+  // Date.parse() normalises every offset to the same epoch, so this is correct
+  // regardless of the calendar's timezone.
+  const rows = db.prepare(`
     SELECT * FROM calendar_events
     WHERE user_id = ?
       AND meeting_url IS NOT NULL AND meeting_url <> ''
       AND (status IS NULL OR status <> 'cancelled')
-      AND start_time IS NOT NULL AND start_time <= ?
-      AND (end_time IS NULL OR end_time > ?)
-    ORDER BY start_time ASC
-  `).all(userId, soonIso, nowIso);
+      AND start_time IS NOT NULL
+  `).all(userId);
+  return rows
+    .filter((e) => {
+      const s = Date.parse(e.start_time);
+      if (Number.isNaN(s) || s > soon) return false;         // not started / too far ahead
+      const end = e.end_time ? Date.parse(e.end_time) : NaN;
+      if (!Number.isNaN(end) && end <= now) return false;    // already ended
+      return true;
+    })
+    .sort((a, b) => Date.parse(a.start_time) - Date.parse(b.start_time));
 }
 
 function deleteByAccount(userId, accountId) {
