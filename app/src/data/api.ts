@@ -136,14 +136,14 @@ export const api = {
   // ── Meeting notetaker (user preference; on = Wingman auto-joins + notes) ──
   setAutoJoin: (enabled: boolean) => req<{ autoJoinMeetings: boolean }>('POST', '/meetings/auto-join', { enabled }),
   setMeetingRecording: (enabled: boolean) => req<{ saveMeetingRecording: boolean }>('POST', '/meetings/recording', { enabled }),
-  // Send the Wingman bot into a live meeting right now — paste any Meet/Zoom/Teams
-  // link and the bot joins within ~30s. Reliable, instant, no calendar needed.
-  joinMeeting: (meetingUrl: string) =>
+  // Send the Wingman bot into a meeting right now. From the calendar, pass the
+  // event's gcalEventId (the bot joins that exact meeting); or pass a raw
+  // Meet/Zoom/Teams link. Either way the bot joins within ~30s — reliable and
+  // timezone-independent.
+  joinMeeting: (body: { gcalEventId?: string; meetingUrl?: string }) =>
     req<{ session: BotSession | null; queued: boolean; workerReady: boolean; note?: string }>(
-      'POST', '/meetings/join', { meetingUrl },
+      'POST', '/meetings/join', body,
     ),
-  // This user's notetaker bot sessions with live status (joining/recording/done/…).
-  meetingBots: () => get<{ sessions: BotSession[] }>('/meetings/bots'),
 
   // ── Data (domain modules map these onto the UI's shapes) ──
   dashboard: () => get<Record<string, unknown>>('/dashboard'),

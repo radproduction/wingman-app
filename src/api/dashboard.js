@@ -139,6 +139,9 @@ router.get('/calendar', async (req, res) => {
   }, mock.calendar, !u);
   const norm = data.map((e) => ({
     id: e.id,
+    // Google's own event id — the app passes this to /meetings/join so the
+    // notetaker bot joins this exact meeting ("Bring Wingman now").
+    gcal_event_id: e.gcal_event_id || null,
     title: e.title,
     location: e.location || null,
     start_time: e.start_time,
@@ -147,6 +150,9 @@ router.get('/calendar', async (req, res) => {
       : (typeof e.attendees === 'string' ? safeParse(e.attendees, []) : []),
     status: e.status || 'confirmed',
     has_conflict: !!e.has_conflict,
+    // Video-call link (Meet/Zoom/Teams), so the app can offer "Bring Wingman".
+    meeting_url: e.meeting_url || null,
+    meeting_provider: e.meeting_provider || null,
   }));
   res.json({ events: norm, mock: isMock });
 });

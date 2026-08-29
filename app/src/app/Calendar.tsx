@@ -11,6 +11,8 @@ import { Sheet } from '../shell/Sheet'
 import { routeByKey, LEVEL_LABEL } from '../data/mobility'
 import { navigate } from '../shell/nav'
 import { openWhatsApp } from '../shell/whatsapp'
+import { api } from '../data/api'
+import { toast } from '../shell/toast'
 import { usePullToRefresh } from '../shell/usePullToRefresh'
 import { PullSpacer } from '../shell/PullSpacer'
 import {
@@ -372,7 +374,28 @@ export const Calendar = () => {
   )
 }
 
-const EventSheet = ({ ev, onClose }: { ev: AgendaEvent; onClose: () => void }) => (
+const EventSheet = ({ ev, onClose }: { ev: AgendaEvent; onClose: () => void }) => {
+  const [sending, setSending] = useState(false)
+
+  // Send the Wingman notetaker bot into THIS meeting right now. Uses the Google
+  // event id so the bot joins this exact call — works no matter the timezone or
+  // whether the meeting "should" have started yet. The bot joins in ~30s and
+  // waits for the user to admit it.
+  const bringWingman = async () => {
+    if (sending) return
+    setSending(true)
+    try {
+      await api.joinMeeting({ gcalEventId: ev.gcalEventId, meetingUrl: ev.meetingUrl })
+      toast(t('Wingman is joining — admit it when it knocks.'), 'check')
+      onClose()
+    } catch (e) {
+      toast(e instanceof Error ? e.message : t('Could not send Wingman.'), 'alert')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  return (
   <>
     <div className="wm-ap__head">
       <span className={`wg-chip ${ev.tone} sm`}>
@@ -416,6 +439,12 @@ const EventSheet = ({ ev, onClose }: { ev: AgendaEvent; onClose: () => void }) =
     </div>
 
     <div className="wm-sheet__acts">
+      {}
+      {ev.meetingUrl && (
+        <button className="wg-btn full" disabled={sending} onClick={bringWingman}>
+          <IconSpark size={18} /> {sending ? t('Bringing Wingman…') : t('Bring Wingman now')}
+        </button>
+      )}
       <button
         className="wg-btn full wa"
         onClick={() => {
@@ -430,4 +459,5 @@ const EventSheet = ({ ev, onClose }: { ev: AgendaEvent; onClose: () => void }) =
       </button>
     </div>
   </>
-)
+  )
+}

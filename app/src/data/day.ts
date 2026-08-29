@@ -151,12 +151,15 @@ export const peekFor = (iso: string) => {
 
 type ServerEvent = {
   id?: string
+  gcal_event_id?: string | null
   title?: string
   location?: string | null
   start_time?: string
   end_time?: string
   attendees?: unknown[]
   has_conflict?: boolean
+  meeting_url?: string | null
+  meeting_provider?: string | null
 }
 
 let realDays: Record<string, CalEvent[]> | null = null
@@ -169,9 +172,18 @@ const subscribeCal = (fn: () => void) => {
 // Screens that read the calendar call this so they re-render when it loads.
 export const useCalendarData = () => useSyncExternalStore(subscribeCal, () => calVersion)
 
-const two = (n: number) => String(n).padStart(2, '0')
-const localDate = (d: Date) => `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())}`
-const localTime = (d: Date) => `${two(d.getHours())}:${two(d.getMinutes())}`
+// Read the date + time EXACTLY as written in the event's RFC3339 string, i.e.
+// in the event's own calendar timezone — the same wall-clock the user sees in
+// Google Calendar. This is deliberately NOT converted to the device's timezone:
+// `new Date(str).getHours()` would shift a "10:45 PM" event to whatever the
+// phone's clock says, which is what made the app show wrong times. All-day
+// events are date-only (no time part) → `time` comes back ''.
+const RFC = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2}))?/
+const wallParts = (iso: string): { date: string; time: string } | null => {
+  const m = RFC.exec(iso || '')
+  if (!m) return null
+  return { date: `${m[1]}-${m[2]}-${m[3]}`, time: m[4] != null ? `${m[4]}:${m[5]}` : '' }
+}
 
 const durLabel = (start: Date, end?: Date): string => {
   if (!end || Number.isNaN(end.getTime())) return ''
@@ -186,19 +198,24 @@ const TONES: ChipTone[] = ['blue', 'lavender', 'mint', 'peach', 'sand', 'rose']
 
 const toEvent = (e: ServerEvent, i: number): CalEvent | null => {
   if (!e.start_time) return null
+  const wall = wallParts(e.start_time)
+  if (!wall) return null
+  // Duration is an absolute delta (end − start), so it's timezone-independent —
+  // safe to compute from parsed Dates even though we display wall-clock times.
   const start = new Date(e.start_time)
-  if (Number.isNaN(start.getTime())) return null
   const end = e.end_time ? new Date(e.end_time) : undefined
   const guests = Array.isArray(e.attendees) ? e.attendees.length : 0
   return {
-    time: localTime(start),
-    dur: durLabel(start, end),
+    time: wall.time,
+    dur: Number.isNaN(start.getTime()) ? '' : durLabel(start, end),
     title: e.title || t('Untitled'),
     sub: e.location || (guests ? plural(guests, { one: '{n} guest', other: '{n} guests' }) : ''),
     tone: TONES[i % TONES.length],
     icon: 'calendar',
     ...(e.location ? { place: e.location } : {}),
     ...(e.has_conflict ? { flag: t('Conflict') } : {}),
+    ...(e.meeting_url ? { meetingUrl: e.meeting_url } : {}),
+    ...(e.gcal_event_id ? { gcalEventId: e.gcal_event_id } : {}),
   }
 }
 
@@ -210,7 +227,11 @@ export const hydrateCalendar = async (): Promise<void> => {
     ;((res.events as ServerEvent[]) || []).forEach((e, i) => {
       const ev = toEvent(e, i)
       if (!ev || !e.start_time) return
-      const key = localDate(new Date(e.start_time))
+      // Group by the event's OWN calendar day (wall-clock), not the device's —
+      // so a late-night event doesn't slide onto the wrong day on a phone in a
+      // different timezone.
+      const key = wallParts(e.start_time)?.date
+      if (!key) return
       ;(map[key] ||= []).push(ev)
     })
     realDays = map

@@ -746,6 +746,11 @@ export type CalEvent = {
   flag?: string
   prep?: string
   place?: string
+  // Set for real Google events that carry a video-call link — drives the
+  // "Bring Wingman now" action on the event. gcalEventId lets the bot join
+  // this exact meeting; meetingUrl is the raw join link.
+  meetingUrl?: string
+  gcalEventId?: string
 }
 
 export type CalDay = {
