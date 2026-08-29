@@ -110,11 +110,12 @@ function init() {
   const brief = cron.schedule('*/15 * * * *', () => runBriefingTick(new Date()));
   jobs.push(brief);
 
-  // Notetaker bot — every 2 min: (1) AUTO-JOIN — for opted-in users, refresh
-  // their calendar and send the bot to any meeting about to start (so it joins on
-  // its own, no manual command); (2) poll Recall so notes land soon after the
-  // call ends. No-op unless a bot engine (RECALL_API_KEY) is configured.
-  const botTick = cron.schedule('*/2 * * * *', async () => {
+  // Notetaker bot — every MINUTE so auto-join feels near-instant: (1) AUTO-JOIN —
+  // for opted-in users, refresh their calendar and send the bot to any meeting
+  // that's ongoing or about to start (so it joins on its own, no manual command,
+  // within ~a minute of the user joining); (2) poll Recall so notes land soon
+  // after the call ends. No-op unless a bot engine (RECALL_API_KEY) is configured.
+  const botTick = cron.schedule('* * * * *', async () => {
     try { await require('./meetingBotDispatch').runAutoJoinTick({ now: new Date() }); }
     catch (e) { console.warn('[scheduler] auto-join error:', e.message); }
     try { await require('./recallPoll').runOnce(); }

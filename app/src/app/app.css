@@ -3948,6 +3948,37 @@
   flex: none;
 }
 
+/* Live status pill for notetaker bot sessions (Joining… / Recording / Notes ready). */
+.wg-note-chip {
+  flex: none;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: var(--pill-line);
+  border-radius: var(--radius-pill);
+  padding: var(--space-4) var(--space-12);
+  white-space: nowrap;
+}
+.wg-note-chip.blue {
+  color: var(--accent);
+  background: var(--accent-tonal);
+}
+.wg-note-chip.live {
+  color: var(--alert);
+  background: var(--chip-rose);
+}
+.wg-note-chip.done {
+  color: var(--ok);
+  background: var(--ok-tonal);
+}
+.wg-note-chip.fail {
+  color: var(--alert);
+  background: var(--chip-rose);
+}
+.wg-note-chip.muted {
+  color: var(--muted);
+  background: var(--card-tonal);
+}
+
 .wg-row-list--grouped {
   gap: 0;
   background: var(--home-surface);

@@ -59,6 +59,20 @@ export type AttendeeNotify = { sent: string[]; failed: { name: string; reason: s
 
 export type GoogleAccount = { id: string; email: string | null; is_primary: boolean; connected_at: string }
 
+// A notetaker bot session (meeting_bots row) — its live status drives the UI.
+export type BotSession = {
+  id: string
+  meeting_id?: string | null
+  meeting_url?: string | null
+  provider?: string | null
+  bot_name?: string | null
+  status?: string
+  recall_bot_id?: string | null
+  scheduled_at?: string | null
+  error?: string | null
+  created_at?: string
+}
+
 export class ApiError extends Error {
   status: number
   constructor(status: number, message: string) {
@@ -122,6 +136,14 @@ export const api = {
   // ── Meeting notetaker (user preference; on = Wingman auto-joins + notes) ──
   setAutoJoin: (enabled: boolean) => req<{ autoJoinMeetings: boolean }>('POST', '/meetings/auto-join', { enabled }),
   setMeetingRecording: (enabled: boolean) => req<{ saveMeetingRecording: boolean }>('POST', '/meetings/recording', { enabled }),
+  // Send the Wingman bot into a live meeting right now — paste any Meet/Zoom/Teams
+  // link and the bot joins within ~30s. Reliable, instant, no calendar needed.
+  joinMeeting: (meetingUrl: string) =>
+    req<{ session: BotSession | null; queued: boolean; workerReady: boolean; note?: string }>(
+      'POST', '/meetings/join', { meetingUrl },
+    ),
+  // This user's notetaker bot sessions with live status (joining/recording/done/…).
+  meetingBots: () => get<{ sessions: BotSession[] }>('/meetings/bots'),
 
   // ── Data (domain modules map these onto the UI's shapes) ──
   dashboard: () => get<Record<string, unknown>>('/dashboard'),
