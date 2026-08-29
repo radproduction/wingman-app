@@ -81,7 +81,6 @@ async function runBriefingTick(now = new Date()) {
 async function runMeetingPrepTick(now = new Date()) {
   try {
     await calendarSync.syncAllUsers({ now });   // refresh cache from Google first
-    await require('./meetingBotDispatch').runAllUsers({ now }); // queue notetaker bot for upcoming calls (opt-in; inert w/o worker)
     await meetingPrep.runAllUsers({ now });      // reminders before meetings
     await meetingComplete.runAllUsers({ now });  // "that wrapped up" after meetings
     await leaveByAlerts.runAllUsers({ now });    // "leave by X" for events with a location
@@ -111,13 +110,17 @@ function init() {
   const brief = cron.schedule('*/15 * * * *', () => runBriefingTick(new Date()));
   jobs.push(brief);
 
-  // Recall.ai notetaker bots — poll frequently so meeting notes land soon after
-  // the call ends. No-op unless RECALL_API_KEY is set.
-  const recallTick = cron.schedule('*/2 * * * *', async () => {
+  // Notetaker bot — every 2 min: (1) AUTO-JOIN — for opted-in users, refresh
+  // their calendar and send the bot to any meeting about to start (so it joins on
+  // its own, no manual command); (2) poll Recall so notes land soon after the
+  // call ends. No-op unless a bot engine (RECALL_API_KEY) is configured.
+  const botTick = cron.schedule('*/2 * * * *', async () => {
+    try { await require('./meetingBotDispatch').runAutoJoinTick({ now: new Date() }); }
+    catch (e) { console.warn('[scheduler] auto-join error:', e.message); }
     try { await require('./recallPoll').runOnce(); }
     catch (e) { console.warn('[scheduler] recall poll error:', e.message); }
   });
-  jobs.push(recallTick);
+  jobs.push(botTick);
 
   console.log('[scheduler] registered hourly tick (alerts 09:00, travel) + every 15 min: calendar-sync/meeting-prep/meeting-complete/task-due and briefing/debrief at each user\'s own set time, per-user TZ');
   return jobs;

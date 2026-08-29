@@ -178,4 +178,41 @@ async function runAllUsers({ now = new Date(), lookaheadMin = 16 } = {}) {
   return out;
 }
 
-module.exports = { enabled, dispatchForEvent, dispatchForUrl, runForUser, runAllUsers, BOT_NAME };
+/**
+ * Frequent auto-join tick (runs every ~2 min from the scheduler). For each user
+ * who opted in, refreshes their near-term Google Calendar and dispatches the bot
+ * to any meeting about to start — so the notetaker joins ON ITS OWN, with no
+ * manual command. `lookaheadMin` is short so the bot joins close to the start
+ * (not long before). dispatchForEvent is idempotent per event, so overlapping
+ * ticks never send two bots.
+ */
+async function runAutoJoinTick({ now = new Date(), lookaheadMin = 5 } = {}) {
+  if (!enabled()) return [];
+  const users = usersRepo.listOnboarded();
+  const out = [];
+  for (const u of users) {
+    const prefs = u.preferences || {};
+    if (!prefs.autoJoinMeetings) continue;
+    // Refresh this user's near-term calendar so even short-notice meetings are
+    // seen quickly (the 15-min sync alone could miss them).
+    try {
+      const calendar = require('./calendar');
+      await calendar.getEvents(u.id, {
+        from: now.toISOString(),
+        to: new Date(now.getTime() + 90 * 60 * 1000).toISOString(),
+      });
+    } catch (e) {
+      console.warn('[botDispatch] auto-join calendar refresh failed:', e.message);
+    }
+    try {
+      const created = await runForUser(u.id, { now, lookaheadMin });
+      if (created.length) out.push({ phone: u.phone, dispatched: created.length });
+    } catch (e) {
+      console.warn('[botDispatch] auto-join dispatch failed:', e.message);
+    }
+  }
+  if (out.length) console.log('[botDispatch] auto-join tick dispatched:', JSON.stringify(out));
+  return out;
+}
+
+module.exports = { enabled, dispatchForEvent, dispatchForUrl, runForUser, runAllUsers, runAutoJoinTick, BOT_NAME };
