@@ -1309,3 +1309,29 @@ video {
     display: none;
   }
 }
+
+/* Mobile: dashboard-preview cards become a horizontal swipe slider
+   (was a vertical/stacked list on phones) */
+@media (max-width: 767.98px) {
+  .wingman-workflow-assets-row {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    gap: 14px;
+    padding: 4px 12px 12px;
+  }
+  .wingman-workflow-assets-row::-webkit-scrollbar {
+    display: none;
+  }
+  .wingman-workflow-asset-col {
+    flex: 0 0 auto;
+    width: 80%;
+    max-width: 340px;
+    scroll-snap-align: center;
+  }
+  .wingman-workflow-card {
+    width: 100%;
+  }
+}
