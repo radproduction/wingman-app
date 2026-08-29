@@ -131,6 +131,25 @@ function listJoinableBetween(userId, fromIso, toIso) {
   `).all(userId, fromIso, toIso);
 }
 
+/**
+ * Events with a video link that are ONGOING or about to start — i.e. the bot
+ * should be in them right now: start_time <= now+lookahead AND not yet ended.
+ * This catches meetings the user is ALREADY in (so the bot still joins mid-call,
+ * not only when dispatched before the start).
+ */
+function listActiveOrUpcoming(userId, nowIso, lookaheadMin) {
+  const soonIso = new Date(new Date(nowIso).getTime() + lookaheadMin * 60000).toISOString();
+  return db.prepare(`
+    SELECT * FROM calendar_events
+    WHERE user_id = ?
+      AND meeting_url IS NOT NULL AND meeting_url <> ''
+      AND (status IS NULL OR status <> 'cancelled')
+      AND start_time IS NOT NULL AND start_time <= ?
+      AND (end_time IS NULL OR end_time > ?)
+    ORDER BY start_time ASC
+  `).all(userId, soonIso, nowIso);
+}
+
 function deleteByAccount(userId, accountId) {
   return db.prepare(`
     DELETE FROM calendar_events
@@ -144,6 +163,6 @@ function deleteAllForUser(userId) {
 
 module.exports = {
   upsert, cacheEvents, removeByGcalId, listCached, listStartingBetween,
-  listForUser, listEndingBetween, findByGcalId, listJoinableBetween,
+  listForUser, listEndingBetween, findByGcalId, listJoinableBetween, listActiveOrUpcoming,
   deleteByAccount, deleteAllForUser,
 };

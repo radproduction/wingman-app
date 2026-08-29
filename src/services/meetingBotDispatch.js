@@ -143,15 +143,15 @@ async function dispatchForUrl(userId, { meetingUrl, provider = null, title = 'Me
  * For one user, dispatch bots to joinable events starting within the lookahead
  * window. Only runs when the user opted in (preferences.autoJoinMeetings).
  */
-async function runForUser(userId, { now = new Date(), lookaheadMin = 16 } = {}) {
+async function runForUser(userId, { now = new Date(), lookaheadMin = 10 } = {}) {
   const user = usersRepo.getById(userId);
   if (!user) return [];
   const prefs = user.preferences || {};
   if (!prefs.autoJoinMeetings) return [];
 
-  const fromISO = new Date(now.getTime() - 60 * 1000).toISOString();       // 1 min grace
-  const toISO = new Date(now.getTime() + lookaheadMin * 60 * 1000).toISOString();
-  const events = calendarEvents.listJoinableBetween(userId, fromISO, toISO);
+  // Meetings that are ONGOING or about to start — so the bot joins even if the
+  // user is already inside the call (not only when we catch it before the start).
+  const events = calendarEvents.listActiveOrUpcoming(userId, now.toISOString(), lookaheadMin);
 
   const created = [];
   for (const ev of events) {
