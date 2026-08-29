@@ -17,12 +17,27 @@
  * object defensively so small shape differences don't break us.
  */
 
+const fs = require('fs');
+const path = require('path');
+
 const RECALL_KEY = process.env.RECALL_API_KEY || '';
 const RECALL_BASE = (process.env.RECALL_API_URL || 'https://us-west-2.recall.ai').replace(/\/+$/, '');
 const BOT_NAME = process.env.BOT_NAME || 'Wingman Notetaker';
 
 function enabled() {
   return !!RECALL_KEY;
+}
+
+// The bot's video-tile image (Wingman logo, 1280x720 jpeg). Recall broadcasts it
+// as the bot's camera so the call shows the logo instead of a letter avatar.
+// Cached after first read; null if the file is missing.
+let _avatar;
+function botAvatarB64() {
+  if (_avatar === undefined) {
+    try { _avatar = fs.readFileSync(path.join(__dirname, '..', 'assets', 'bot-avatar.jpg')).toString('base64'); }
+    catch (_) { _avatar = ''; }
+  }
+  return _avatar || null;
 }
 
 async function api(path, { method = 'GET', body } = {}) {
@@ -51,25 +66,31 @@ async function api(path, { method = 'GET', body } = {}) {
  */
 async function createBot({ meetingUrl, botName = BOT_NAME, metadata } = {}) {
   if (!meetingUrl) throw new Error('meetingUrl required');
-  const body = {
-    meeting_url: meetingUrl,
-    bot_name: botName,
-    // Use the platform's live captions as the transcript source (free). If the
-    // account rejects this shape, we still get a recording to fall back on.
-    recording_config: { transcript: { provider: { meeting_captions: {} } } },
-  };
-  if (metadata) body.metadata = metadata;
-  try {
-    return await api('/bot', { method: 'POST', body });
-  } catch (e) {
-    // Older/newer accounts may reject recording_config — retry bare.
-    if (/recording_config|transcript|provider|400/i.test(e.message)) {
-      const bare = { meeting_url: meetingUrl, bot_name: botName };
-      if (metadata) bare.metadata = metadata;
-      return api('/bot', { method: 'POST', body: bare });
+  const base = { meeting_url: meetingUrl, bot_name: botName };
+  if (metadata) base.metadata = metadata;
+
+  // Live captions as the transcript source (free). Plus the Wingman logo as the
+  // bot's video output when available.
+  const withTranscript = { ...base, recording_config: { transcript: { provider: { meeting_captions: {} } } } };
+  const avatar = botAvatarB64();
+  const full = avatar
+    ? { ...withTranscript, automatic_video_output: { in_call_recording: { kind: 'jpeg', b64_data: avatar } } }
+    : withTranscript;
+
+  // Try the richest config first, then progressively drop optional bits if the
+  // account/API version rejects a field (400) — so a bot is always created.
+  const attempts = [full, withTranscript, base];
+  let lastErr;
+  for (const body of attempts) {
+    try {
+      return await api('/bot', { method: 'POST', body });
+    } catch (e) {
+      lastErr = e;
+      // Only fall back on a request-shape rejection; auth/other errors throw.
+      if (!/\b400\b|invalid|unrecognized|unexpected|not allowed|unsupported/i.test(e.message)) throw e;
     }
-    throw e;
   }
+  throw lastErr;
 }
 
 async function getBot(botId) {
