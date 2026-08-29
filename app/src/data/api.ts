@@ -119,6 +119,10 @@ export const api = {
   updateMe: (patch: Record<string, unknown>) => req<{ user: unknown }>('PATCH', '/me', patch),
   completeOnboarding: (patch: Record<string, unknown>) => req<{ user: unknown }>('POST', '/onboarding/complete', patch),
 
+  // ── Meeting notetaker (user preference; on = Wingman auto-joins + notes) ──
+  setAutoJoin: (enabled: boolean) => req<{ autoJoinMeetings: boolean }>('POST', '/meetings/auto-join', { enabled }),
+  setMeetingRecording: (enabled: boolean) => req<{ saveMeetingRecording: boolean }>('POST', '/meetings/recording', { enabled }),
+
   // ── Data (domain modules map these onto the UI's shapes) ──
   dashboard: () => get<Record<string, unknown>>('/dashboard'),
   calendar: () => get<{ events: unknown[]; mock?: boolean }>('/calendar'),

@@ -100,6 +100,8 @@ router.get('/me', async (req, res) => {
     proactiveness_level: u.proactiveness_level,
     autonomy_level: u.autonomy_level || null,
     runs_business: u.runs_business == null ? null : !!u.runs_business,
+    auto_join_meetings: !!((u.preferences || {}).autoJoinMeetings),
+    save_meeting_recording: !!((u.preferences || {}).saveMeetingRecording),
     enabled_skills: u.enabled_skills,
     tone: u.tone,
     communication_style: u.communication_style,

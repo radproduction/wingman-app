@@ -16,6 +16,7 @@ import './app.css'
 
 const settings: { name: string; tone: string; icon: IconName; route: string }[] = [
   { name: 'Agent personality', tone: 'lavender', icon: 'spark', route: 'settings/personality' },
+  { name: 'Meeting notetaker', tone: 'mint', icon: 'checkCircle', route: 'settings/notetaker' },
   { name: 'Places & commute', tone: 'blue', icon: 'pin', route: 'places' },
   { name: 'Theme & appearance', tone: 'blue', icon: 'palette', route: 'settings/appearance' },
   { name: 'Language', tone: 'sand', icon: 'translate', route: 'settings/language' },
