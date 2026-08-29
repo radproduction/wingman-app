@@ -748,7 +748,14 @@ const WatchingWidget = ({ size }: { size: WidgetSize }) => {
     return w
   }
 
-  const tiles = (DAY.watching as WatchTile[]).map(dyn).slice(0, size === 'lg' ? 6 : 4)
+  // Order the home tiles: Business first, then the active modules, with the
+  // "coming soon" tiles (Travel, Deliveries) pushed to the end. Stable sort keeps
+  // each group's original order.
+  const rank = (w: WatchTile) => (w.key === 'business' ? 0 : SOON_TILES.has(w.key) ? 2 : 1)
+  const tiles = [...(DAY.watching as WatchTile[])]
+    .sort((a, b) => rank(a) - rank(b))
+    .map(dyn)
+    .slice(0, size === 'lg' ? 6 : 4)
 
   return (
     <>
