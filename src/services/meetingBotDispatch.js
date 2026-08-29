@@ -24,6 +24,20 @@ function enabled() {
 }
 
 /**
+ * The bot's display name in the call — personalised to the user: their first
+ * name + " Wingman" (e.g. "Aamir Wingman", "Fayyaz Wingman"). Falls back to
+ * BOT_NAME when the user has no name on file.
+ */
+function botNameForUser(userId) {
+  try {
+    const user = usersRepo.getById(userId);
+    const first = String((user && user.name) || '').trim().split(/\s+/)[0];
+    if (first) return `${first} Wingman`;
+  } catch (_) { /* fall back */ }
+  return BOT_NAME;
+}
+
+/**
  * Hand a freshly-created session to Recall.ai: create the bot for the meeting URL
  * and store its id + move the session to 'joining'. recallPoll then drives it to
  * done. Best-effort — a failure marks the session failed but never throws.
@@ -32,7 +46,7 @@ async function startRecall(session, meetingUrl) {
   const recall = require('./recall');
   if (!recall.enabled() || !session) return session;
   try {
-    const bot = await recall.createBot({ meetingUrl, botName: BOT_NAME, metadata: { sessionId: session.id } });
+    const bot = await recall.createBot({ meetingUrl, botName: session.bot_name || BOT_NAME, metadata: { sessionId: session.id } });
     if (bot && bot.id) {
       console.log(`[botDispatch] recall bot ${bot.id} dispatched for session ${session.id}`);
       return botsRepo.update(session.id, { recallBotId: bot.id, status: 'joining' });
@@ -98,7 +112,7 @@ async function dispatchForEvent(userId, evRow) {
     gcalEventId: evRow.gcal_event_id,
     meetingUrl: evRow.meeting_url,
     provider: evRow.meeting_provider || null,
-    botName: BOT_NAME,
+    botName: botNameForUser(userId),
     scheduledAt: evRow.start_time || null,
   });
   return startRecall(session, evRow.meeting_url);
@@ -119,7 +133,7 @@ async function dispatchForUrl(userId, { meetingUrl, provider = null, title = 'Me
     meetingId: meeting.id,
     meetingUrl,
     provider,
-    botName: BOT_NAME,
+    botName: botNameForUser(userId),
     scheduledAt: startTime,
   });
   return startRecall(session, meetingUrl);
