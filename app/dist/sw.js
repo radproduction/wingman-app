@@ -1,5 +1,5 @@
 
-const CACHE = 'wm-shell-v27'
+const CACHE = 'wm-shell-v28'
 
 const FONT_ORIGINS = ['https://fonts.googleapis.com', 'https://fonts.gstatic.com']
 const SHELL = [

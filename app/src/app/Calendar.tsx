@@ -37,6 +37,7 @@ import {
   initialOf,
   WEEKDAYS_SHORT,
   yearLabel,
+  hydrateCalendar,
   type AgendaEvent,
 } from '../data/day'
 import './app.css'
@@ -179,8 +180,14 @@ export const Calendar = () => {
   const trackRef = useRef<HTMLDivElement>(null)
   const { screenRef, tucked } = useFoldingBar(trackRef)
   const [nonce, setNonce] = useState(0)
+  // Re-pull the real Google calendar every time this screen opens, so a meeting
+  // you just created shows up without having to close and reopen the app.
+  useEffect(() => {
+    void hydrateCalendar()
+  }, [])
   const refresh = useCallback(() => {
     setNonce((n) => n + 1)
+    void hydrateCalendar()
     return revealHold()
   }, [])
   const [selected, setSelected] = useState(TODAY)
