@@ -1370,6 +1370,7 @@ export const email = {
 
 
 export type TaskItem = {
+  id?: string
   title: string
   due: string
   tone: ChipTone

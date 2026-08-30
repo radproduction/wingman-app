@@ -3239,6 +3239,24 @@
   color: var(--ok);
 }
 
+/* Delete button on a completed task row. */
+.wg-task__del {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  background: transparent;
+  transition: background var(--duration-quick) var(--ease), color var(--duration-quick) var(--ease);
+}
+.wg-task__del:active {
+  background: var(--chip-rose);
+  color: var(--alert);
+  transform: scale(0.94);
+}
+
 
 .wg-sub {
   gap: var(--space-12);

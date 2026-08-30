@@ -16,6 +16,27 @@ const read = (): Overrides => {
 }
 
 let overrides: Overrides = read()
+
+// Locally-hidden (deleted) tasks, keyed by title — so a delete disappears at once
+// and stays gone across reloads, even before the backend confirms.
+const RKEY = 'wingman.tasks.removed'
+const readRemoved = (): Set<string> => {
+  try {
+    const raw = localStorage.getItem(RKEY)
+    return new Set(raw ? (JSON.parse(raw) as string[]) : [])
+  } catch {
+    return new Set()
+  }
+}
+let removed = readRemoved()
+const persistRemoved = () => {
+  try {
+    localStorage.setItem(RKEY, JSON.stringify([...removed]))
+  } catch {
+    /* ignore */
+  }
+}
+
 let version = 0
 const listeners = new Set<() => void>()
 const subscribe = (fn: () => void) => {
@@ -61,6 +82,7 @@ const dueLabel = (iso?: string | null): string => {
 }
 
 const toItem = (t: ServerTask): TaskItem => ({
+  id: t.id,
   title: t.title || 'Untitled',
   due: dueLabel(t.due_date),
   tone: 'blue',
@@ -79,6 +101,7 @@ const projectServer = (list: ServerTask[]): TaskView => {
   const later: TaskItem[] = []
   const done: TaskItem[] = []
   for (const t of list) {
+    if (removed.has(t.title || '')) continue
     if (doneServer(t)) {
       done.push(toItem(t))
       continue
@@ -109,14 +132,14 @@ const projectSeed = (): TaskView => {
   const fallback = seed.groups[0]?.title ?? 'Today'
   const open = new Map<string, TaskItem[]>(seed.groups.map((g) => [g.title, []]))
   for (const { item, group } of ALL) {
-    if (doneSeed(item.title, group)) continue
+    if (removed.has(item.title) || doneSeed(item.title, group)) continue
     open.get(open.has(group) ? group : fallback)!.push(item)
   }
   const groups = seed.groups.map((g) => ({ title: g.title, items: open.get(g.title)! }))
   const done = [
     ...seed.done.filter((tk) => doneSeed(tk.title, 'Done')),
     ...seed.groups.flatMap((g) => g.items.filter((tk) => doneSeed(tk.title, g.title))),
-  ]
+  ].filter((tk) => !removed.has(tk.title))
   const openCount = groups.reduce((n, g) => n + g.items.length, 0)
   const total = openCount + done.length
   return { groups, done, openCount, progress: total ? done.length / total : 0 }
@@ -128,6 +151,16 @@ export const toggleTask = (title: string) => {
   write({ ...overrides, [title]: !wasDone })
   // Persist a real completion when we know the backend task id.
   if (!wasDone && t?.id) api.completeTask(t.id).catch(() => {})
+}
+
+/** Permanently delete a task: hide it locally at once, then remove it on the
+ *  backend (and on Google, server-side). Keyed by title, like everything here. */
+export const deleteTask = (title: string) => {
+  const t = server?.find((x) => x.title === title)
+  removed.add(title)
+  persistRemoved()
+  if (t?.id) api.deleteTask(t.id).catch(() => {})
+  bump()
 }
 
 // getSnapshot must return a STABLE reference until something actually changes,

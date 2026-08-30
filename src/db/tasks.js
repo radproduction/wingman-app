@@ -122,6 +122,11 @@ function countAll(userId) {
   return db.prepare('SELECT COUNT(*) c FROM tasks WHERE user_id = ?').get(userId).c;
 }
 
+/** Permanently delete a task row. Returns the number of rows removed. */
+function remove(id) {
+  return db.prepare('DELETE FROM tasks WHERE id = ?').run(id).changes;
+}
+
 function complete(id, { completedAt = new Date().toISOString(), syncState } = {}) {
   if (syncState) {
     db.prepare(`
@@ -270,7 +275,7 @@ function removeAllGoogleImported(userId) {
 }
 
 module.exports = {
-  create, getById, getByGoogleRef, listForUser, listPendingSync, complete,
+  create, getById, getByGoogleRef, listForUser, listPendingSync, complete, remove,
   listDueBetween, listOverdue, countCompleted, countAll,
   findByTitle, updateDueDate, updateSyncMeta, markLocalDirty, upsertFromGoogle,
   clearGoogleSyncByAccount, removeGoogleImportedByAccount,

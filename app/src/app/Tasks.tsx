@@ -6,7 +6,7 @@ import { ActionSheet } from './ActionSheet'
 import { ActionRow } from './Widgets'
 import { type TaskItem } from '../data/mock'
 import { useFeedLoad } from '../data/loading'
-import { useTasks, toggleTask } from '../data/tasks'
+import { useTasks, toggleTask, deleteTask } from '../data/tasks'
 import { openActionItems, useActionItems } from '../data/actionItems'
 import { t, tx } from '../i18n'
 import { toast } from '../shell/toast'
@@ -16,6 +16,12 @@ import { PullSpacer } from '../shell/PullSpacer'
 import './app.css'
 import './dashboard.css'
 
+const TrashIcon = ({ size = 16 }: { size?: number }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-12M10 11v6M14 11v6" />
+  </svg>
+)
+
 const TaskRow = ({ t: task, done }: { t: TaskItem; done: boolean }) => {
   const check = useRef<HTMLSpanElement>(null)
   useEffect(() => {
@@ -24,25 +30,31 @@ const TaskRow = ({ t: task, done }: { t: TaskItem; done: boolean }) => {
     })
   }, [])
 
-  const tap = () => {
+  // Completing an open task: mark it done, show an Undo window, then — unless
+  // undone — delete it, so finished tasks clear themselves off the list.
+  const complete = () => {
     tapQuiet()
     toggleTask(task.title)
-    if (!done)
-      toast(t('Done. Off your plate.'), 'checkCircle', 4000, {
-        label: t('Undo'),
-        onAct: () => toggleTask(task.title),
-      })
+    let undone = false
+    toast(t('Done. Off your plate.'), 'checkCircle', 4000, {
+      label: t('Undo'),
+      onAct: () => {
+        undone = true
+        toggleTask(task.title)
+      },
+    })
+    window.setTimeout(() => {
+      if (!undone) deleteTask(task.title)
+    }, 4200)
   }
 
-  return (
-    <button
-      className={`wg-task wg-card-line ${done ? 'done' : ''}`}
-      onClick={tap}
-      aria-pressed={done}
-      aria-label={
-        done ? t('Completed: {title}', { title: t(task.title) }) : t('Complete: {title}', { title: t(task.title) })
-      }
-    >
+  const remove = () => {
+    tapQuiet()
+    deleteTask(task.title)
+  }
+
+  const inner = (
+    <>
       <span className="wg-task__check" ref={check} aria-hidden="true">
         <IconCheck size={14} />
       </span>
@@ -54,6 +66,33 @@ const TaskRow = ({ t: task, done }: { t: TaskItem; done: boolean }) => {
           </span>
         )}
       </div>
+    </>
+  )
+
+  // Done rows aren't a toggle button any more (tapping one used to un-complete
+  // it back to the list). They show a delete button instead.
+  if (done) {
+    return (
+      <div className="wg-task wg-card-line done" aria-label={t('Completed: {title}', { title: t(task.title) })}>
+        {inner}
+        <button
+          className="wg-task__del"
+          onClick={remove}
+          aria-label={t('Delete: {title}', { title: t(task.title) })}
+        >
+          <TrashIcon size={16} />
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <button
+      className="wg-task wg-card-line"
+      onClick={complete}
+      aria-label={t('Complete: {title}', { title: t(task.title) })}
+    >
+      {inner}
       <span className="wg-task__due">{t(task.due)}</span>
     </button>
   )

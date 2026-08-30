@@ -236,6 +236,7 @@ export const api = {
 
   // ── Actions ──
   completeTask: (id: string) => req<{ ok: boolean }>('POST', `/tasks/${id}/complete`),
+  deleteTask: (id: string) => req<{ ok: boolean }>('DELETE', `/tasks/${encodeURIComponent(id)}`),
   payBill: (id: string) => req<{ ok: boolean }>('POST', `/bills/${id}/pay`),
 }
 

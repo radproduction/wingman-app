@@ -308,6 +308,28 @@ async function mirrorTaskCompletion(taskId) {
   };
 }
 
+/**
+ * Best-effort delete of a task on Google, so removing it in Wingman doesn't get
+ * undone by the next sync re-importing it. No-op for local-only tasks (no Google
+ * ref) or when Tasks isn't connected. Never throws.
+ * @param {object} task a tasks table row
+ */
+async function mirrorTaskDeletion(task) {
+  try {
+    if (!task || !task.google_task_id) return false;
+    const user = usersRepo.getById(task.user_id);
+    if (!isConnected(user)) return false;
+    const account = task.google_account_id ? accountsRepo.getById(task.google_account_id) : primaryTasksAccount(user);
+    if (!account) return false;
+    const service = tasksFor(user, account);
+    await service.tasks.delete({ tasklist: task.google_tasklist_id || '@default', task: task.google_task_id });
+    return true;
+  } catch (e) {
+    console.warn('[googleTasks] remote delete failed:', e.message);
+    return false;
+  }
+}
+
 module.exports = {
   TASKS_SCOPE,
   hasTasksScope,
@@ -319,4 +341,5 @@ module.exports = {
   mirrorNewLocalTask,
   mirrorTaskUpdate,
   mirrorTaskCompletion,
+  mirrorTaskDeletion,
 };

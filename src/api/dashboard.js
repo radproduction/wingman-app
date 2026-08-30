@@ -453,6 +453,23 @@ router.post('/tasks/:id/complete', (req, res) => {
   res.json({ ok: true, id: req.params.id, completed: true });
 });
 
+// Permanently delete a task (done-task cleanup). Also removes it on Google so a
+// later sync won't re-import it. Only deletes the caller's own task.
+router.delete('/tasks/:id', async (req, res) => {
+  const u = resolveUser(req);
+  const repo = requireRepo('tasks');
+  try {
+    if (u && repo && repo.getById && repo.remove) {
+      const task = repo.getById(req.params.id);
+      if (task && String(task.user_id) === String(u.id)) {
+        try { await require('../services/googleTasks').mirrorTaskDeletion(task); } catch (_) { /* best-effort */ }
+        repo.remove(task.id);
+      }
+    }
+  } catch (_) { /* ignore for mock */ }
+  res.json({ ok: true, id: req.params.id, deleted: true });
+});
+
 router.post('/bills/:id/pay', (req, res) => {
   const u = resolveUser(req);
   const repo = requireRepo('bills');
