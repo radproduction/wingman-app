@@ -215,6 +215,7 @@ const toEvent = (e: ServerEvent, i: number): CalEvent | null => {
     ...(e.location ? { place: e.location } : {}),
     ...(e.has_conflict ? { flag: t('Conflict') } : {}),
     ...(e.meeting_url ? { meetingUrl: e.meeting_url } : {}),
+    ...(e.meeting_provider ? { meetingProvider: e.meeting_provider } : {}),
     ...(e.gcal_event_id ? { gcalEventId: e.gcal_event_id } : {}),
   }
 }

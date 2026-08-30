@@ -747,9 +747,11 @@ export type CalEvent = {
   prep?: string
   place?: string
   // Set for real Google events that carry a video-call link — drives the
-  // "Bring Wingman now" action on the event. gcalEventId lets the bot join
-  // this exact meeting; meetingUrl is the raw join link.
+  // "Bring Wingman now" action AND the "Join with …" link on the event.
+  // gcalEventId lets the bot join this exact meeting; meetingUrl is the raw
+  // join link; meetingProvider names it (meet / zoom / teams).
   meetingUrl?: string
+  meetingProvider?: string
   gcalEventId?: string
 }
 

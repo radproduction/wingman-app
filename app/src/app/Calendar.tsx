@@ -374,6 +374,16 @@ export const Calendar = () => {
   )
 }
 
+// Label + tidy display for a meeting's video link (mirrors what Google Calendar
+// shows in its event popup: "Join with Google Meet" + the bare address).
+const joinLabel = (provider?: string, url?: string) => {
+  const s = `${provider || ''} ${url || ''}`.toLowerCase()
+  if (s.includes('zoom')) return 'Join with Zoom'
+  if (s.includes('teams')) return 'Join with Teams'
+  return 'Join with Google Meet'
+}
+const shortUrl = (url?: string) => (url || '').replace(/^https?:\/\//, '').replace(/^www\./, '')
+
 const EventSheet = ({ ev, onClose }: { ev: AgendaEvent; onClose: () => void }) => {
   const [sending, setSending] = useState(false)
 
@@ -437,6 +447,25 @@ const EventSheet = ({ ev, onClose }: { ev: AgendaEvent; onClose: () => void }) =
         </div>
       )}
     </div>
+
+    {}
+    {ev.meetingUrl && (
+      <a className="wm-join wg-card-line" href={ev.meetingUrl} target="_blank" rel="noreferrer">
+        <span className="wm-join__ic">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="6" width="12" height="12" rx="2.5" />
+            <path d="m15 10 5-3v10l-5-3" />
+          </svg>
+        </span>
+        <span className="wm-join__tx">
+          <strong>{t(joinLabel(ev.meetingProvider, ev.meetingUrl))}</strong>
+          <span>{shortUrl(ev.meetingUrl)}</span>
+        </span>
+        <svg className="wm-join__ext" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M14 5h5v5M19 5l-7 7M11 5H6a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-5" />
+        </svg>
+      </a>
+    )}
 
     <div className="wm-sheet__acts">
       {}
