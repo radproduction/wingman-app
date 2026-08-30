@@ -162,6 +162,20 @@ async function processTranscript(user, meeting, transcript, opts = {}) {
   }
 
   const summary = await meetingNotes.summarize({ title: meeting.title, attendees: meeting.attendees, notes: transcript });
+
+  // Even with enough characters, the audio may be silence, filler or garbled
+  // (a solo/quiet test, or a bot that only heard the lobby). Trust the model's
+  // noContent flag, and back it up: an all-empty summary, or an "overview" that
+  // just describes the recording being unreadable, is treated as no content —
+  // so we send an honest note instead of emailing invented action items.
+  const nothingReal = !summary.overview && !summary.actions.length && !summary.decisions.length
+    && !summary.discussion.length && !summary.openQuestions.length && !summary.followUps.length;
+  const describesFailure = /\b(corrupt|unreadable|unintelligible|inaudible|could not be (?:captured|documented|transcrib)|no (?:substantive|real|meeting|actual) (?:content|discussion|notes)|no notes were|nothing was (?:said|discussed))\b/i.test(summary.overview || '');
+  if (summary.noContent || nothingReal || describesFailure) {
+    meetingsRepo.update(user.id, meeting.id, { status: 'no-content' });
+    return { meeting: meetingsRepo.getForUser(user.id, meeting.id), summary: null, email: null, tasks: [], empty: true };
+  }
+
   meetingsRepo.update(user.id, meeting.id, { summary, status: 'summary-ready' });
 
   const fresh = meetingsRepo.getForUser(user.id, meeting.id);

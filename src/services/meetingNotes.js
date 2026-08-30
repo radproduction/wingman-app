@@ -12,6 +12,7 @@ const SYSTEM = `You are a meeting scribe. You are given the raw notes from a mee
 
 Return ONLY a JSON object, no markdown and no commentary, with exactly this shape:
 {
+  "noContent": false,
   "overview": "2-3 sentence plain-English summary of what the meeting was about and where it landed",
   "discussion": ["a key point discussed", "..."],
   "decisions": ["a decision that was made", "..."],
@@ -24,7 +25,8 @@ Rules:
 - Base everything ONLY on the notes. Do not invent people, dates, or decisions.
 - Use an empty array [] for any section with nothing in it.
 - Keep each item short and concrete.
-- Owner must be a name that appears in the notes/attendees, otherwise empty string.`;
+- Owner must be a name that appears in the notes/attendees, otherwise empty string.
+- CRITICAL: If the notes are missing, empty, unintelligible, corrupted, just filler/repetition, or contain no real meeting discussion, set "noContent": true, "overview": "" and EVERY array empty. In that case do NOT describe the recording or transcript quality, and do NOT invent any action items, questions or follow-ups. Otherwise set "noContent": false.`;
 
 function extractJson(text) {
   if (!text) return null;
@@ -42,6 +44,7 @@ const strArr = (x) => (Array.isArray(x) ? x.map((v) => String(v || '').trim()).f
 function normalize(p) {
   const o = p || {};
   return {
+    noContent: o.noContent === true,
     overview: typeof o.overview === 'string' ? o.overview.trim() : '',
     discussion: strArr(o.discussion),
     decisions: strArr(o.decisions),
