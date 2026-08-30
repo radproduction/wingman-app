@@ -65,9 +65,10 @@ async function finish(session, bot) {
   try { transcript = await recall.getTranscript(session.recall_bot_id); }
   catch (e) { console.warn('[recallPoll] transcript fetch failed:', e.message); }
 
+  let result = null;
   try {
     if (transcript && transcript.length > 20) {
-      await meetingIngest.processTranscript(user, meeting, transcript, { emailUser: true, createTasks: true });
+      result = await meetingIngest.processTranscript(user, meeting, transcript, { emailUser: true, createTasks: true });
     } else {
       const rec = await recall.fetchRecording(bot);
       if (!rec || !rec.buffer || !rec.buffer.length) {
@@ -75,7 +76,7 @@ async function finish(session, bot) {
         return false;
       }
       const saveToDrive = !!(user.preferences && user.preferences.saveMeetingRecording);
-      await meetingIngest.processAudio(user, meeting, rec.buffer, rec.mime, { emailUser: true, createTasks: true, saveToDrive });
+      result = await meetingIngest.processAudio(user, meeting, rec.buffer, rec.mime, { emailUser: true, createTasks: true, saveToDrive });
     }
   } catch (e) {
     console.warn('[recallPoll] processing failed:', e.message);
@@ -84,11 +85,13 @@ async function finish(session, bot) {
   }
 
   botsRepo.update(session.id, { status: 'done' });
+  // Ping the user on WhatsApp with the actual briefing + action items (not just a
+  // "notes ready" line), so they get the gist without opening the email.
   try {
     const wa = require('../whatsapp/client');
     if (wa.ready()) {
-      const title = meeting.title || 'your meeting';
-      await wa.sendMessage(user.phone, `📝 Notes are ready for "${title}". I've emailed you the summary, added any action items to your tasks, and updated your Wingman app.`);
+      const msg = meetingIngest.formatNotesMessage((result && result.meeting) || meeting, result && result.summary);
+      await wa.sendMessage(user.phone, msg);
     }
   } catch (_) { /* best-effort */ }
   return true;

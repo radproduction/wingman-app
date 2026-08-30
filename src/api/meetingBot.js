@@ -192,7 +192,7 @@ router.post('/bot/sessions/:id/audio', botAuth, express.raw({ type: () => true, 
       emailUser: true, createTasks: true, saveToDrive,
     });
     botsRepo.update(s.id, { status: 'done', recordingUrl: out.recordingUrl || null });
-    try { await notifyReady(user, out.meeting); } catch (_) { /* best-effort */ }
+    try { await notifyReady(user, out.meeting, out.summary); } catch (_) { /* best-effort */ }
     res.json({ ok: true, meetingId: meeting.id });
   } catch (e) {
     console.warn('[bot] audio processing failed:', e.message);
@@ -201,12 +201,11 @@ router.post('/bot/sessions/:id/audio', botAuth, express.raw({ type: () => true, 
   }
 });
 
-async function notifyReady(user, meeting) {
+async function notifyReady(user, meeting, summary) {
   const wa = require('../whatsapp/client');
   if (!wa.ready()) return;
-  const title = meeting.title || 'your meeting';
-  const drive = meeting.recording_url ? `\nRecording: ${meeting.recording_url}` : '';
-  const msg = `📝 Notes are ready for "${title}". I've emailed you the summary, added any action items to your tasks, and updated your Wingman app.${drive}`;
+  // Same briefing + action-item bullets the Recall path sends.
+  const msg = meetingIngest.formatNotesMessage(meeting, summary != null ? summary : (meeting && meeting.summary));
   await wa.sendMessage(user.phone, msg);
 }
 

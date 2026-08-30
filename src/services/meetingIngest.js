@@ -199,12 +199,49 @@ async function processAudio(user, meeting, buffer, mime, opts = {}) {
   return { ...out, transcript, recordingUrl };
 }
 
+/**
+ * Build the WhatsApp "notes ready" message the user gets when a meeting wraps:
+ * a short briefing (the summary overview) followed by the action items as
+ * bullet points — so the gist lands on WhatsApp, not only in the email.
+ * Uses WhatsApp markup (*bold*, _italics_). `summary` may be the structured
+ * object or a JSON string (as stored on the meeting row).
+ */
+function formatNotesMessage(meeting, summary) {
+  let s = summary;
+  if (typeof s === 'string') { try { s = JSON.parse(s); } catch (_) { s = null; } }
+  s = s || {};
+
+  const title = (meeting && meeting.title) || 'your meeting';
+  const lines = [`📝 Notes are ready for *${title}*`];
+
+  const overview = String(s.overview || '').trim();
+  if (overview) lines.push('', `📋 *Briefing*`, overview);
+
+  const actions = Array.isArray(s.actions) ? s.actions.filter((a) => a && a.task) : [];
+  if (actions.length) {
+    lines.push('', '✅ *Action items*');
+    for (const a of actions) {
+      const meta = [a.owner, a.due].map((x) => String(x || '').trim()).filter(Boolean).join(' · ');
+      lines.push(`• ${a.task}${meta ? ` _(${meta})_` : ''}`);
+    }
+  } else {
+    lines.push('', '_No action items came out of this one._');
+  }
+
+  const recUrl = (meeting && (meeting.recording_url || meeting.recordingUrl)) || '';
+  lines.push('', `I've emailed you the full summary${actions.length ? ' and added these to your Tasks' : ''}.`);
+  if (recUrl) lines.push(`🎥 Recording: ${recUrl}`);
+
+  return lines.join('\n');
+}
+
 module.exports = {
   processAudio,
   processTranscript,
   transcribeAudio,
   saveRecordingToDrive,
   createTasksFromSummary,
+  formatNotesMessage,
   parseDueToISO,
   priorityNum,
   extOfType,
