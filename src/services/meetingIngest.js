@@ -149,7 +149,17 @@ function createTasksFromSummary(user, meeting) {
  */
 async function processTranscript(user, meeting, transcript, opts = {}) {
   const { emailUser = false, createTasks = false } = opts;
-  if (transcript) meetingsRepo.update(user.id, meeting.id, { notes: transcript });
+  const clean = String(transcript || '').replace(/\s+/g, ' ').trim();
+  if (clean) meetingsRepo.update(user.id, meeting.id, { notes: transcript });
+
+  // Guard: an empty / near-empty transcript (bot never admitted, a silent or
+  // cancelled meeting, or corrupted audio) must NOT be turned into a made-up
+  // "summary" — that's how a cancelled meeting produced fake action items. Flag
+  // it so the caller tells the user honestly instead of emailing invented notes.
+  if (clean.length < 40) {
+    meetingsRepo.update(user.id, meeting.id, { status: 'no-content' });
+    return { meeting: meetingsRepo.getForUser(user.id, meeting.id), summary: null, email: null, tasks: [], empty: true };
+  }
 
   const summary = await meetingNotes.summarize({ title: meeting.title, attendees: meeting.attendees, notes: transcript });
   meetingsRepo.update(user.id, meeting.id, { summary, status: 'summary-ready' });

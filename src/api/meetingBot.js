@@ -191,8 +191,10 @@ router.post('/bot/sessions/:id/audio', botAuth, express.raw({ type: () => true, 
     const out = await meetingIngest.processAudio(user, meeting, audio, req.headers['content-type'], {
       emailUser: true, createTasks: true, saveToDrive,
     });
-    botsRepo.update(s.id, { status: 'done', recordingUrl: out.recordingUrl || null });
-    try { await notifyReady(user, out.meeting, out.summary); } catch (_) { /* best-effort */ }
+    botsRepo.update(s.id, out.empty
+      ? { status: 'failed', error: 'no usable audio/transcript' }
+      : { status: 'done', recordingUrl: out.recordingUrl || null });
+    try { await notifyReady(user, out.meeting, out.summary, out.empty); } catch (_) { /* best-effort */ }
     res.json({ ok: true, meetingId: meeting.id });
   } catch (e) {
     console.warn('[bot] audio processing failed:', e.message);
@@ -201,11 +203,14 @@ router.post('/bot/sessions/:id/audio', botAuth, express.raw({ type: () => true, 
   }
 });
 
-async function notifyReady(user, meeting, summary) {
+async function notifyReady(user, meeting, summary, empty) {
   const wa = require('../whatsapp/client');
   if (!wa.ready()) return;
-  // Same briefing + action-item bullets the Recall path sends.
-  const msg = meetingIngest.formatNotesMessage(meeting, summary != null ? summary : (meeting && meeting.summary));
+  const title = (meeting && meeting.title) || 'your meeting';
+  // Empty capture → honest note; otherwise the briefing + action-item bullets.
+  const msg = empty
+    ? `⚠️ I joined *${title}* but couldn't capture any usable audio, so there are no notes this time. Please make sure to admit "…Wingman" into the call and try again.`
+    : meetingIngest.formatNotesMessage(meeting, summary != null ? summary : (meeting && meeting.summary));
   await wa.sendMessage(user.phone, msg);
 }
 

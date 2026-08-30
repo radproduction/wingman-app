@@ -48,6 +48,23 @@ async function runOnce() {
   return { checked: active.length, finished };
 }
 
+/**
+ * Tell the user, on WhatsApp, that the bot joined but got nothing usable — so a
+ * silent failure never leaves them wondering where their notes are. Best-effort.
+ */
+async function pingCouldntCapture(user, title) {
+  try {
+    const wa = require('../whatsapp/client');
+    if (!wa.ready()) return;
+    await wa.sendMessage(
+      user.phone,
+      `⚠️ I joined *${title}* but couldn't capture any usable audio, so there are no notes this time.\n\n`
+      + `This usually means the notetaker wasn't admitted into the call (tap *Admit* when "…Wingman" knocks), `
+      + `or there wasn't enough conversation to record. Please try again.`,
+    );
+  } catch (_) { /* best-effort */ }
+}
+
 /** Turn a finished Recall bot into notes + summary + email + tasks. */
 async function finish(session, bot) {
   const user = usersRepo.getById(session.user_id);
@@ -73,6 +90,7 @@ async function finish(session, bot) {
       const rec = await recall.fetchRecording(bot);
       if (!rec || !rec.buffer || !rec.buffer.length) {
         botsRepo.update(session.id, { status: 'failed', error: 'no transcript or recording' });
+        await pingCouldntCapture(user, meeting.title || 'your meeting');
         return false;
       }
       const saveToDrive = !!(user.preferences && user.preferences.saveMeetingRecording);
@@ -82,6 +100,14 @@ async function finish(session, bot) {
     console.warn('[recallPoll] processing failed:', e.message);
     botsRepo.update(session.id, { status: 'failed', error: e.message.slice(0, 400) });
     return false;
+  }
+
+  // The bot joined but captured nothing usable (not admitted / silent / corrupt
+  // audio). Don't email invented notes — tell the user honestly.
+  if (result && result.empty) {
+    botsRepo.update(session.id, { status: 'failed', error: 'no usable audio/transcript' });
+    await pingCouldntCapture(user, meeting.title || 'your meeting');
+    return true;
   }
 
   botsRepo.update(session.id, { status: 'done' });
