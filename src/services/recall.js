@@ -69,17 +69,21 @@ async function createBot({ meetingUrl, botName = BOT_NAME, metadata } = {}) {
   const base = { meeting_url: meetingUrl, bot_name: botName };
   if (metadata) base.metadata = metadata;
 
-  // Live captions as the transcript source (free). Plus the Wingman logo as the
-  // bot's video output when available.
-  const withTranscript = { ...base, recording_config: { transcript: { provider: { meeting_captions: {} } } } };
+  // Record a clean MIXED AUDIO file — small and reliable to transcribe — and ALSO
+  // ask for a caption transcript. audio_mixed is what we actually feed to the
+  // transcriber; the default video-only recording is a big mp4 our transcriber
+  // handles poorly (that's what made real meetings come back empty/garbled).
+  const recFull = { audio_mixed: {}, transcript: { provider: { meeting_captions: {} } } };
+  const withRec = { ...base, recording_config: recFull };
+  const transcriptOnly = { ...base, recording_config: { transcript: { provider: { meeting_captions: {} } } } };
   const avatar = botAvatarB64();
   const full = avatar
-    ? { ...withTranscript, automatic_video_output: { in_call_recording: { kind: 'jpeg', b64_data: avatar } } }
-    : withTranscript;
+    ? { ...withRec, automatic_video_output: { in_call_recording: { kind: 'jpeg', b64_data: avatar } } }
+    : withRec;
 
   // Try the richest config first, then progressively drop optional bits if the
   // account/API version rejects a field (400) — so a bot is always created.
-  const attempts = [full, withTranscript, base];
+  const attempts = [full, withRec, transcriptOnly, base];
   let lastErr;
   for (const body of attempts) {
     try {
@@ -163,19 +167,42 @@ function findMediaUrl(obj, depth = 0) {
   return null;
 }
 
+/**
+ * Pick the best recording download URL from the bot, PREFERRING mixed audio over
+ * mixed video (audio transcribes far more reliably and is much smaller). Reads
+ * Recall's recordings[].media_shortcuts.{audio_mixed|video_mixed}.data.download_url,
+ * then falls back to a generic media scan.
+ * @returns {{url:string, kind:string}|null}
+ */
+function recordingUrl(bot) {
+  const recs = Array.isArray(bot && bot.recordings) ? bot.recordings : [];
+  for (const kind of ['audio_mixed', 'video_mixed']) {
+    for (const r of recs) {
+      const sc = r && r.media_shortcuts && r.media_shortcuts[kind];
+      const url = sc && sc.data && sc.data.download_url;
+      if (typeof url === 'string' && /^https?:\/\//.test(url)) return { url, kind };
+    }
+  }
+  const scan = findMediaUrl(bot);
+  return scan ? { url: scan, kind: 'scan' } : null;
+}
+
 /** Download the recording as a buffer (fallback when there's no transcript). */
 async function fetchRecording(bot) {
-  const url = findMediaUrl(bot);
-  if (!url) return null;
-  const res = await fetch(url);
+  const picked = recordingUrl(bot);
+  if (!picked) return null;
+  const res = await fetch(picked.url);
   if (!res.ok) throw new Error(`recall recording download ${res.status}`);
   const buffer = Buffer.from(await res.arrayBuffer());
   let mime = res.headers.get('content-type') || '';
-  if (!mime) mime = /\.mp4(\?|$)/i.test(url) ? 'video/mp4' : /\.(m4a|mp3)(\?|$)/i.test(url) ? 'audio/mpeg' : 'audio/ogg';
-  return { buffer, mime, url };
+  if (!mime || /octet-stream/i.test(mime)) {
+    if (picked.kind === 'audio_mixed') mime = /\.mp3(\?|$)/i.test(picked.url) ? 'audio/mpeg' : 'audio/mp4';
+    else mime = /\.mp4(\?|$)/i.test(picked.url) ? 'video/mp4' : /\.(m4a|mp3)(\?|$)/i.test(picked.url) ? 'audio/mpeg' : 'audio/ogg';
+  }
+  return { buffer, mime, url: picked.url, kind: picked.kind };
 }
 
 module.exports = {
-  enabled, createBot, getBot, getTranscript, fetchRecording,
+  enabled, createBot, getBot, getTranscript, fetchRecording, recordingUrl,
   botStatus, isDone, isFatal, assembleTranscript, findMediaUrl, BOT_NAME,
 };

@@ -48,6 +48,15 @@ async function runOnce() {
   return { checked: active.length, finished };
 }
 
+/** Minutes since a sqlite timestamp ('YYYY-MM-DD HH:MM:SS', UTC) or ISO string. */
+function ageMinutes(ts) {
+  if (!ts) return 0;
+  let s = String(ts).trim();
+  if (!/[TZ]/.test(s)) s = `${s.replace(' ', 'T')}Z`;
+  const ms = Date.parse(s);
+  return Number.isNaN(ms) ? 0 : (Date.now() - ms) / 60000;
+}
+
 /**
  * Tell the user, on WhatsApp, that the bot joined but got nothing usable — so a
  * silent failure never leaves them wondering where their notes are. Best-effort.
@@ -74,25 +83,41 @@ async function finish(session, bot) {
     return false;
   }
 
-  botsRepo.update(session.id, { status: 'processing', endedAt: new Date().toISOString() });
-
-  // Prefer Recall's transcript (no size limits). Fall back to downloading the
-  // audio and running our own Gemini/Whisper transcription.
+  // Gather whatever Recall has ready. It finishes PROCESSING the recording a bit
+  // AFTER the call ends, so on the first poll(s) these can be empty — that's
+  // expected, not a failure.
   let transcript = '';
   try { transcript = await recall.getTranscript(session.recall_bot_id); }
   catch (e) { console.warn('[recallPoll] transcript fetch failed:', e.message); }
+  const haveTranscript = !!(transcript && transcript.length > 20);
+
+  let rec = null;
+  if (!haveTranscript) {
+    try { rec = await recall.fetchRecording(bot); }
+    catch (e) { console.warn('[recallPoll] recording fetch failed:', e.message); }
+  }
+  const haveRecording = !!(rec && rec.buffer && rec.buffer.length);
+
+  // Nothing ready yet → WAIT and retry next poll instead of giving up early.
+  // (The old code finalised at call_ended before the media existed, so real
+  // meetings came back "couldn't capture".) Give up only after it's been too long.
+  if (!haveTranscript && !haveRecording) {
+    if (ageMinutes(session.created_at) < 25) {
+      botsRepo.update(session.id, { status: 'processing' });
+      return false;
+    }
+    botsRepo.update(session.id, { status: 'failed', error: 'no transcript or recording (timed out)' });
+    await pingCouldntCapture(user, meeting.title || 'your meeting');
+    return false;
+  }
+
+  botsRepo.update(session.id, { status: 'processing', endedAt: new Date().toISOString() });
 
   let result = null;
   try {
-    if (transcript && transcript.length > 20) {
+    if (haveTranscript) {
       result = await meetingIngest.processTranscript(user, meeting, transcript, { emailUser: true, createTasks: true });
     } else {
-      const rec = await recall.fetchRecording(bot);
-      if (!rec || !rec.buffer || !rec.buffer.length) {
-        botsRepo.update(session.id, { status: 'failed', error: 'no transcript or recording' });
-        await pingCouldntCapture(user, meeting.title || 'your meeting');
-        return false;
-      }
       const saveToDrive = !!(user.preferences && user.preferences.saveMeetingRecording);
       result = await meetingIngest.processAudio(user, meeting, rec.buffer, rec.mime, { emailUser: true, createTasks: true, saveToDrive });
     }
