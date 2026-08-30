@@ -16,6 +16,7 @@ import {
   sendMeetingSummary,
   createMeetingTasks,
   notifyAttendees,
+  notifyMe,
   type Meeting,
   type ProposedAction,
 } from '../data/meetings'
@@ -115,11 +116,22 @@ const ProposedCard = ({
       })
       return
     }
-    decideAction(meetingId, action.id, 'approved')
+    // Send the briefing + action items to the user's OWN WhatsApp (same as the
+    // notetaker). Falls back to opening the WhatsApp share sheet if Wingman
+    // can't send it for them (e.g. WhatsApp not connected).
     if (action.kind === 'whatsapp') {
-      const m = meetingById(meetingId)
-      openWhatsApp(m ? summaryToText(m) : t('Here is my meeting summary.'))
+      void notifyMe(meetingId).then((ok) => {
+        decideAction(meetingId, action.id, 'approved')
+        if (ok) {
+          toast(t('Briefing sent to your WhatsApp.'), 'checkCircle')
+        } else {
+          const m = meetingById(meetingId)
+          openWhatsApp(m ? summaryToText(m) : t('Here is my meeting summary.'))
+        }
+      })
+      return
     }
+    decideAction(meetingId, action.id, 'approved')
   }
 
   if (decision === 'approved') {

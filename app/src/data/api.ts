@@ -175,6 +175,9 @@ export const api = {
   // Send the summary to attendees' WhatsApp numbers.
   notifyAttendees: (id: string) =>
     req<AttendeeNotify>('POST', `/meetings/${encodeURIComponent(id)}/notify-attendees`),
+  // WhatsApp the briefing + action items to the user's OWN number.
+  notifyMe: (id: string) =>
+    req<{ ok: boolean; sent: boolean }>('POST', `/meetings/${encodeURIComponent(id)}/notify-me`),
   // Upload a meeting recording → backend transcribes (Whisper) + summarizes (Claude).
   transcribeMeeting: async (id: string, blob: Blob, mime: string) => {
     const res = await fetch(`${BASE}/api/meetings/${encodeURIComponent(id)}/transcribe`, {

@@ -1085,6 +1085,18 @@ export const notifyAttendees = async (id: string): Promise<AttendeeNotify | null
   }
 }
 
+/** WhatsApp the briefing + action items to the user's own number. */
+export const notifyMe = async (id: string): Promise<boolean> => {
+  const m = meetingById(id)
+  if (!m?.serverId) return false
+  try {
+    const res = await api.notifyMe(m.serverId)
+    return !!(res && res.ok)
+  } catch {
+    return false
+  }
+}
+
 // ── Real meetings from the backend (/api/meetings) ──────────────────────────
 const MEETING_TYPES: Meeting['type'][] = ['Product', 'Client', 'Internal', 'Sales', 'Partner']
 const two = (n: number) => String(n).padStart(2, '0')

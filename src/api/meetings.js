@@ -174,6 +174,30 @@ router.post('/meetings/:id/notify-attendees', async (req, res) => {
   res.json({ sent, failed });
 });
 
+// ── notify-me: WhatsApp the briefing + action items to the USER themselves ────
+//   Same format the notetaker bot sends, so approving "WhatsApp" on a recorded
+//   meeting delivers the notes straight to the user's own WhatsApp.
+router.post('/meetings/:id/notify-me', async (req, res) => {
+  const u = requireUser(req, res);
+  if (!u) return;
+  const m = meetingsRepo.getForUser(u.id, req.params.id);
+  if (!m) return res.status(404).json({ error: 'Meeting not found' });
+  if (!m.summary) return res.status(400).json({ error: 'No summary to send yet' });
+  if (!u.phone) return res.status(400).json({ error: 'No WhatsApp number on file' });
+
+  const wa = require('../whatsapp/client');
+  if (!wa.ready()) return res.status(503).json({ error: 'WhatsApp is not connected' });
+
+  try {
+    const msg = meetingIngest.formatNotesMessage(m, m.summary);
+    const r = await wa.sendMessage(u.phone, msg);
+    res.json({ ok: true, sent: !(r && r.duplicate) });
+  } catch (e) {
+    console.warn('[meetings] notify-me failed:', e.message);
+    res.status(502).json({ error: 'Could not send on WhatsApp' });
+  }
+});
+
 // ── send: email the stored summary ──────────────────────────────────
 router.post('/meetings/:id/send', async (req, res) => {
   const u = requireUser(req, res);
