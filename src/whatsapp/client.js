@@ -30,8 +30,11 @@ function reserveSend(phoneNumber, text) {
     const digits = String(phoneNumber || '').replace(/\D/g, '');
     const bucket = Math.floor(Date.now() / 120000); // 2-minute window
     const hash = crypto.createHash('sha1').update(String(text || '')).digest('hex').slice(0, 16);
-    const key = `${digits}:${hash}:${bucket}`;
-    const info = db.prepare('INSERT OR IGNORE INTO wa_send_dedup (key) VALUES (?)').run(key);
+    // Also treat an identical send in the PREVIOUS window as a duplicate, so two
+    // near-simultaneous sends that straddle the 2-minute boundary don't both go.
+    const prev = db.prepare('SELECT 1 FROM wa_send_dedup WHERE key = ?').get(`${digits}:${hash}:${bucket - 1}`);
+    if (prev) return false;
+    const info = db.prepare('INSERT OR IGNORE INTO wa_send_dedup (key) VALUES (?)').run(`${digits}:${hash}:${bucket}`);
     return info.changes === 1; // 1 → reserved (send it); 0 → identical send already went (skip)
   } catch (_) {
     return true; // guard must never swallow a legitimate message
@@ -421,6 +424,15 @@ async function sendProactiveMessage(user, text, {
   // unless the caller asked for nudge-only.
   if (!nudgeOnly && (isWithinCustomerWindow(user, now) || !useTemplate)) {
     return sendMessage(digits, text);
+  }
+
+  // From here it's a TEMPLATE send (out of the 24h window). The template paths
+  // below call cloudApi directly, bypassing sendMessage's dedup guard — so apply
+  // the SAME guard here (keyed identically) or a duplicate briefing/nudge slips
+  // through during a two-instance overlap.
+  if (!reserveSend(digits, text)) {
+    console.log(`[whatsapp:cloud] duplicate ${logLabel} suppressed (${digits})`);
+    return { duplicate: true };
   }
 
   // Outside the window, when a "ready nudge" template (with a quick-reply button)

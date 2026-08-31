@@ -15,6 +15,11 @@ if (!fs.existsSync(dbDir)) {
 const db = new Database(config.database.path);
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
+// Wait (don't error) when another process holds the write lock. Critical for the
+// WhatsApp send-dedup guard: if two instances briefly overlap (e.g. during a
+// redeploy) their INSERT OR IGNORE must SERIALIZE, not hit SQLITE_BUSY — a busy
+// error there would let a duplicate message slip through.
+db.pragma('busy_timeout = 8000');
 
 /**
  * Apply the schema (idempotent — uses CREATE TABLE IF NOT EXISTS).
