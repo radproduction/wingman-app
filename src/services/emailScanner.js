@@ -72,11 +72,20 @@ async function scanUser(userId, { maxResults = 50 } = {}) {
     }
   }
 
+  // The user's own email priorities (set in onboarding) — free-form text telling
+  // Wingman which people/topics/situations matter. When set, the AI decides per
+  // email whether to proactively ping, and writes that ping itself.
+  const emailCtx = (user.preferences && user.preferences.emailContext) || {};
+  const ctxText = String(emailCtx.instructions || '').trim();
+  const notifyOn = !!ctxText && emailCtx.notify !== false;
+
   let newItems = 0;
   let urgent = 0;
   // Collect urgent emails and send ONE digest at the end, so a batch of urgent
   // mail is a single message — not one ping per email (the "double double" spam).
   const urgentItems = [];
+  // Context-driven personalised pings the AI chose to send (see notifyOn).
+  const priorityNotifies = [];
 
   for (const { id, account } of items) {
     if (emailItemsRepo.existsByGmailId(userId, id)) continue; // de-dupe
@@ -93,7 +102,7 @@ async function scanUser(userId, { maxResults = 50 } = {}) {
       subject: msg.subject,
       sender: msg.sender,
       body: msg.body || msg.snippet,
-    });
+    }, { context: ctxText });
 
     // Persist the analyzed email
     const emailItemId = emailItemsRepo.upsert(userId, {
@@ -166,11 +175,30 @@ async function scanUser(userId, { maxResults = 50 } = {}) {
       urgent++;
       urgentItems.push({ sender: msg.sender, summary: analysis.summary });
     }
+    // The AI, reading the user's own priorities, chose to ping about this one.
+    if (notifyOn && analysis.notify && analysis.notifyMessage) {
+      priorityNotifies.push(analysis.notifyMessage.trim());
+    }
   }
 
-  // One urgent digest for the whole scan (deduped by subject+sender so two near
-  // identical notices — e.g. the same Apps Script failure — don't both show).
-  if (urgentItems.length) await sendUrgentDigest(user, urgentItems);
+  if (notifyOn) {
+    // Priority mode: send the AI's own per-email notes (it's already selective),
+    // capped so a big batch can't flood the chat. Replaces the generic urgent
+    // digest so the user isn't told twice.
+    for (const message of priorityNotifies.slice(0, 4)) {
+      try { if (wa().ready()) await wa().sendMessage(user.phone, message); }
+      catch (err) { console.warn('[emailScanner] priority notify failed:', err.message); }
+    }
+    const extra = priorityNotifies.length - 4;
+    if (extra > 0) {
+      try { if (wa().ready()) await wa().sendMessage(user.phone, `…and ${extra} more email${extra === 1 ? '' : 's'} worth a look — open the Email tab to see them.`); }
+      catch (_) { /* best-effort */ }
+    }
+  } else if (urgentItems.length) {
+    // One urgent digest for the whole scan (deduped by subject+sender so two near
+    // identical notices — e.g. the same Apps Script failure — don't both show).
+    await sendUrgentDigest(user, urgentItems);
+  }
 
   // Record last scan time
   usersRepo.updatePreferences(userId, { lastEmailScan: new Date().toISOString() });

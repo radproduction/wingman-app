@@ -53,6 +53,10 @@ async function syncUser(userId, { limit = 15, force = false } = {}) {
   if (!items || !items.length) { touch(userId); return { stored: 0, skipped: 'empty' }; }
 
   const acctEmail = ((webmail.settingsFor(user) || {}).address) || null;
+  const emailCtx = (user.preferences && user.preferences.emailContext) || {};
+  const ctxText = String(emailCtx.instructions || '').trim();
+  const notifyOn = !!ctxText && emailCtx.notify !== false;
+  const priorityNotifies = [];
   const fresh = items.filter((m) => !emailItems.existsByGmailId(userId, idOf(m.uid)));
 
   // Fetch bodies for the newest new ones so they can be classified; older new
@@ -72,10 +76,14 @@ async function syncUser(userId, { limit = 15, force = false } = {}) {
     let actionNeeded = false;
     if (full && full.body) {
       try {
-        const a = await analyzeEmail({ subject: full.subject || m.subject, sender: full.from || m.from, body: full.body });
+        const a = await analyzeEmail(
+          { subject: full.subject || m.subject, sender: full.from || m.from, body: full.body },
+          { context: ctxText },
+        );
         category = a.category || 'fyi';
         summary = a.summary || '';
         actionNeeded = IMPORTANT.has(category);
+        if (notifyOn && a.notify && a.notifyMessage) priorityNotifies.push(a.notifyMessage.trim());
       } catch (_) { /* keep defaults */ }
     }
     try {
@@ -91,6 +99,17 @@ async function syncUser(userId, { limit = 15, force = false } = {}) {
       });
       stored += 1;
     } catch (e) { console.warn('[webmailInbox] upsert failed:', e.message); }
+  }
+
+  // Personalised, context-driven pings the AI chose for business mail (capped).
+  if (notifyOn && priorityNotifies.length) {
+    const wa = require('../whatsapp/client');
+    if (wa.ready()) {
+      for (const message of priorityNotifies.slice(0, 4)) {
+        try { await wa.sendMessage(user.phone, message); }
+        catch (e) { console.warn('[webmailInbox] priority notify failed:', e.message); }
+      }
+    }
   }
 
   touch(userId);

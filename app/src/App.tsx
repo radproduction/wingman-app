@@ -19,6 +19,7 @@ import { SettingsAppearance } from './app/SettingsAppearance'
 import { SettingsLanguage } from './app/SettingsLanguage'
 import { SettingsPrivacy } from './app/SettingsPrivacy'
 import { NotetakerSettings } from './app/NotetakerSettings'
+import { EmailPriorities } from './app/EmailPriorities'
 import { Permissions } from './app/Permissions'
 import { GoogleAccounts } from './app/GoogleAccounts'
 import { SettingsHelp } from './app/SettingsHelp'
@@ -120,6 +121,7 @@ const Screen = ({ route }: { route: string }) => {
   if (route === 'settings/language') return <SettingsLanguage />
   if (route === 'settings/privacy') return <SettingsPrivacy />
   if (route === 'settings/notetaker') return <NotetakerSettings />
+  if (route === 'settings/email-priorities') return <EmailPriorities />
   if (route === 'settings/permissions') return <Permissions />
   if (route === 'settings/google') return <GoogleAccounts />
   if (route === 'settings/memory') return <Memory />

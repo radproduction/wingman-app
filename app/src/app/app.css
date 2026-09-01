@@ -963,6 +963,18 @@
   padding: var(--space-12) 0;
 }
 
+/* Multi-line variant: a tall rounded box instead of the single-line pill. */
+.wg-field--area {
+  align-items: stretch;
+  border-radius: var(--radius-lg);
+  padding: var(--space-12) var(--space-16);
+  min-height: 0;
+}
+.wg-field--area textarea {
+  padding: var(--space-4) 0;
+  min-height: 152px;
+}
+
 .wg-field select {
   border: 0;
   outline: none;

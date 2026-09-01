@@ -136,6 +136,10 @@ export const api = {
   // ── Meeting notetaker (user preference; on = Wingman auto-joins + notes) ──
   setAutoJoin: (enabled: boolean) => req<{ autoJoinMeetings: boolean }>('POST', '/meetings/auto-join', { enabled }),
   setMeetingRecording: (enabled: boolean) => req<{ saveMeetingRecording: boolean }>('POST', '/meetings/recording', { enabled }),
+  // Email priorities (onboarding): free-form context + a notify toggle. The AI
+  // reads this to decide which emails to proactively surface on WhatsApp.
+  setEmailContext: (body: { instructions: string; notify: boolean }) =>
+    req<{ email_context: { instructions: string; notify: boolean } }>('POST', '/email-context', body),
   // Send the Wingman bot into a meeting right now. From the calendar, pass the
   // event's gcalEventId (the bot joins that exact meeting); or pass a raw
   // Meet/Zoom/Teams link. Either way the bot joins within ~30s — reliable and

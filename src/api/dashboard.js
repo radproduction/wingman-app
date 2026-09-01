@@ -102,6 +102,10 @@ router.get('/me', async (req, res) => {
     runs_business: u.runs_business == null ? null : !!u.runs_business,
     auto_join_meetings: !!((u.preferences || {}).autoJoinMeetings),
     save_meeting_recording: !!((u.preferences || {}).saveMeetingRecording),
+    email_context: {
+      instructions: (((u.preferences || {}).emailContext) || {}).instructions || '',
+      notify: (((u.preferences || {}).emailContext) || {}).notify !== false,
+    },
     enabled_skills: u.enabled_skills,
     tone: u.tone,
     communication_style: u.communication_style,
@@ -232,6 +236,18 @@ router.get('/emails/:id', async (req, res) => {
     source: isWebmail ? 'webmail' : 'gmail',
     created_at: row.created_at,
   });
+});
+
+// ── /api/email-context — the user's email priorities (onboarding) ────
+//   Free-form text telling the AI which emails matter, plus a notify toggle.
+//   The email scanner reads this to decide what to proactively surface.
+router.post('/email-context', (req, res) => {
+  if (!req.user) return res.status(401).json({ error: 'Authentication required.' });
+  const b = req.body || {};
+  const instructions = typeof b.instructions === 'string' ? b.instructions.slice(0, 4000) : '';
+  const notify = b.notify === undefined ? true : !!b.notify;
+  usersRepo.updatePreferences(req.user.id, { emailContext: { instructions, notify } });
+  res.json({ email_context: { instructions, notify } });
 });
 
 // ── /api/tasks ──────────────────────────────────────────────────────
