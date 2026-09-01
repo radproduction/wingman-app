@@ -479,6 +479,53 @@ router.post('/bills/:id/pay', (req, res) => {
   res.json({ ok: true, id: req.params.id, status: 'paid' });
 });
 
+// ── Landing-page waitlist (PUBLIC — the marketing site at imyourwingman.ai posts
+//    here). Stores every signup so none is ever lost, and emails the team so a
+//    new lead reaches them straight away. ──
+const WAITLIST_TO = ['hello@wehearyou.studio', 'aamir@wehearyou.studio', 'fayyazkhanfk57@gmail.com'];
+const WAITLIST_FROM = process.env.WAITLIST_FROM || 'hello@wehearyou.studio';
+const WAITLIST_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+router.post('/home/notify', async (req, res) => {
+  const b = req.body || {};
+  const email = String(b.email || '').trim().toLowerCase();
+  const company = String(b.company || '').trim(); // honeypot — humans leave it blank
+
+  // A bot that filled the honeypot gets the same success a human sees, but we do
+  // nothing with it (mirrors the landing form's own comment).
+  if (company) return res.json({ ok: true });
+  if (!WAITLIST_EMAIL_RE.test(email)) {
+    return res.status(400).json({ ok: false, error: 'Please enter a valid email address.' });
+  }
+
+  // 1) Persist first — a signup must never be lost even if email delivery fails.
+  try {
+    const { db } = require('../db');
+    db.prepare("CREATE TABLE IF NOT EXISTS waitlist (email TEXT PRIMARY KEY, created_at TEXT DEFAULT (datetime('now')))").run();
+    db.prepare('INSERT OR IGNORE INTO waitlist (email) VALUES (?)').run(email);
+  } catch (e) { console.warn('[waitlist] store failed:', e.message); }
+
+  // 2) Notify the team by email (best-effort, via Brevo over HTTPS — SMTP is
+  //    blocked in prod). One message per recipient; a failure to one never
+  //    blocks the others or the user's success response.
+  try {
+    const brevo = require('../services/brevo');
+    if (brevo.enabled()) {
+      const subject = `New Wingman waitlist signup: ${email}`;
+      const text = `A new person joined the Wingman waitlist.\n\nEmail: ${email}\nWhen:  ${new Date().toISOString()}\nFrom:  imyourwingman.ai`;
+      for (const to of WAITLIST_TO) {
+        try {
+          await brevo.sendEmail({ from: WAITLIST_FROM, fromName: 'Wingman Waitlist', to, subject, text, replyTo: email });
+        } catch (e) { console.warn(`[waitlist] email to ${to} failed:`, e.message); }
+      }
+    } else {
+      console.warn('[waitlist] BREVO_API_KEY not set — signup stored but not emailed:', email);
+    }
+  } catch (e) { console.warn('[waitlist] notify failed:', e.message); }
+
+  res.json({ ok: true });
+});
+
 // ── PATCH /api/me — update profile / settings (auth required) ─────────
 //   Accepts a whitelisted subset of user fields (name, timezone, work hours,
 //   briefing/debrief times, proactiveness_level, enabled_skills, tone,
