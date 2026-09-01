@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <!--
+      The landing surface, v2. This is NOT the app's entry.
+
+      Deliberately absent, and each for a reason:
+        - no manifest and no apple-touch meta: this page is not installable, and
+          claiming otherwise would offer to install the marketing page
+        - no pre-paint theme/lang boot script: that script exists to stop the
+          installed app flashing the wrong theme, and it reads the app's own
+          storage keys. This page owns its own ground.
+        - no service worker registration: registerSW is called from appMain and
+          must stay there. sw.js also skips /home navigations, so visiting this
+          page can never overwrite the app's cached shell.
+
+      The version's design lives beside this file. See app/home/README.md for
+      the structure and app/home/v2/design.md for the appearance.
+    -->
+
+    <title>Wingman - your AI chief of staff on WhatsApp</title>
+    <meta
+      name="description"
+      content="Wingman watches your calendar, inbox and tasks, then tells you what actually matters most, before you even ask. It talks to you on WhatsApp."
+    />
+
+    <!-- No canonical, and no og:url or og:image, until the production hostname is
+         decided. All three want an ABSOLUTE URL and there is nothing honest to
+         hard-code yet.
+
+         It has to be absolute for a second reason: Vite's build-html plugin reads
+         every link[href] as an asset to resolve, so a root-relative canonical
+         like "/home/v2/" is resolved against the project and fails the build with
+         EISDIR when it lands on this directory. An off-origin URL is skipped as
+         external, so the real domain will just work. Add all three together. -->
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Wingman" />
+    <meta property="og:title" content="Wingman - your AI chief of staff on WhatsApp" />
+    <meta
+      property="og:description"
+      content="Wingman watches your calendar, inbox and tasks, then tells you what actually matters most, before you even ask."
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+
+    <!-- Geist for body only. The display face (Freigeist XWide Black) is
+         self-hosted and declared in tokens.css, so it is not requested here.
+
+         The product's own Google Sans Flex is absent on purpose: the client lifted
+         that constraint, and a UI face does not carry a headline.
+
+         preconnect because the stylesheet and the font files sit on two different
+         origins, and the font cannot start downloading until the CSS has landed. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500&display=swap"
+    />
+
+    <!--
+      The ground, inline, so the first painted frame is already dark.
+
+      Vite injects this version's CSS from JavaScript in development and as a
+      linked sheet in production; either way there are frames before it lands. On
+      a dark page that gap is a white flash, which is worse here than a slow fade
+      would be. Two declarations are enough to cover it.
+
+      This is a stand-in for one paint, not a second home for a colour: the value
+      is written `var(--token, literal)`, so tokens.css is the authority from the
+      moment it arrives and the literal paints only the frames before it does.
+
+      v1 covered this gap with a full boot veil. That veil was light, it was
+      driven by JavaScript, and it stranded the page when the JavaScript did not
+      run. Phase 2 rebuilds the intro properly; this holds the ground until then.
+    -->
+    <style>
+      html {
+        background-color: var(--w2-color-void, #101114);
+        color-scheme: dark;
+      }
+    </style>
+    <script type="module" crossorigin src="/assets/home-v2-UjyXMrNJ.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/jsx-runtime-Uact3P9m.js">
+    <link rel="stylesheet" crossorigin href="/assets/home-v2-BCSNwlYt.css">
+  </head>
+  <body>
+
+    <div id="root"></div>
+
+    <!-- The page is client-rendered, so this is the whole proposition for a
+         reader with no JavaScript, and for anything that does not run it. It is
+         real copy, not a placeholder, and it must stay in step with the hero.
+
+         It keeps the FULL positioning line where the fold now shows the shortened
+         one, and that is not drift: the two do not contradict, one contains the
+         other. This h1 is the only headline a non-JS reader or a crawler that does
+         not execute the bundle ever sees, and dropping "on WhatsApp" from it would
+         cost them the one word that says where the product lives, to buy a display
+         decision they are not looking at. Same reasoning as the <title> above. -->
+    <noscript>
+      <h1>Your AI chief of staff on WhatsApp</h1>
+      <p>
+        Wingman keeps an eye on your calendar, inbox and tasks, then tells you what actually matters
+        most, before you even ask. No new inbox to check: your briefings, alerts and answers arrive
+        in the chat you already open every day.
+      </p>
+      <p>This page needs JavaScript for the rest. Wingman itself does not.</p>
+    </noscript>
+
+  </body>
+</html>

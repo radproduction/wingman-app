@@ -1,0 +1,1 @@
+var e=`/assets/app-home-dark-860-CQnNsy_N.webp`;export{e as default};

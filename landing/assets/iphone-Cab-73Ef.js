@@ -1,0 +1,1 @@
+var e=`/assets/iphone-DaOHt5h9.glb`;export{e as default};
