@@ -1160,6 +1160,10 @@ export type EmailItem = {
   unread?: boolean
   approval?: string
   note?: string
+  // Real backend emails carry these: the row id (to open + read the full body)
+  // and the source ('gmail' | 'webmail') so the row can show where it came from.
+  id?: string
+  source?: 'gmail' | 'webmail'
 }
 
 export const email = {

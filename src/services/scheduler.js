@@ -88,7 +88,8 @@ async function runMeetingPrepTick(now = new Date()) {
     // what synced this tick rather than to yesterday's picture.
     await require('./googleHealth').syncAllUsers({ days: 2 });
     await require('./wearables').syncAllUsers({ days: 2 });
-    await require('./webmailAlerts').runAllUsers({});  // new customer mail
+    await require('./webmailAlerts').runAllUsers({});  // new customer mail (WhatsApp alert)
+    await require('./webmailInbox').syncAllUsers();     // pull business mail into the app's Email section
     await healthAlerts.runAllUsers({ now });     // readings drifting from the user's own normal
     await workAlerts.runAllUsers({ now });       // still clocked in past their usual finish
     await taskDueAlerts.runAllUsers({ now });    // tasks due in ~15 minutes

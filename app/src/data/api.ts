@@ -149,6 +149,11 @@ export const api = {
   dashboard: () => get<Record<string, unknown>>('/dashboard'),
   calendar: () => get<{ events: unknown[]; mock?: boolean }>('/calendar'),
   emails: () => get<{ emails: unknown[]; mock?: boolean }>('/emails'),
+  // Open one email with its full body (fetched live from Gmail / business mailbox).
+  emailBody: (id: string) =>
+    get<{ id: string; sender: string; subject: string; body: string; summary: string; category: string; source: 'gmail' | 'webmail'; created_at: string }>(
+      `/emails/${encodeURIComponent(id)}`,
+    ),
   tasks: () => get<{ tasks: unknown[]; mock?: boolean }>('/tasks'),
   bills: () => get<{ bills: unknown[]; mock?: boolean }>('/bills'),
   deliveries: () => get<{ deliveries: unknown[]; mock?: boolean }>('/deliveries'),

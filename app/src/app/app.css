@@ -3108,6 +3108,49 @@
   padding-inline: var(--space-8) var(--space-12);
 }
 
+/* Row meta line: source tag ("Gmail"/"Business") + any status pills. */
+.wg-mail-row__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  flex-wrap: wrap;
+  margin-top: var(--space-8);
+}
+.wg-mail-row__meta > * { margin-top: 0; }
+
+.wg-src-tag {
+  flex: none;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 2px 9px;
+  border-radius: var(--radius-pill);
+  line-height: var(--pill-line);
+}
+.wg-src-tag.gmail { color: var(--accent-deep); background: var(--accent-tonal); }
+.wg-src-tag.webmail { color: var(--ok); background: var(--ok-tonal); }
+
+/* Reading an email in the sheet. */
+.wg-mail-read {
+  margin: var(--space-12) 0 var(--space-16);
+  max-height: 52vh;
+  overflow-y: auto;
+}
+.wg-mail-read__body {
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--ink);
+  font-size: 14.5px;
+  line-height: 1.6;
+}
+.wg-mail-read__loading {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+  color: var(--muted);
+  font-size: 14px;
+}
+
 .wg-mail-row.handled .wg-chip {
   opacity: 0.62;
 }

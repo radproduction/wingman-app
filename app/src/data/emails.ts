@@ -23,6 +23,7 @@ type ServerEmail = {
   category?: string
   summary?: string
   replied?: boolean | number
+  source?: 'gmail' | 'webmail'
   created_at?: string
 }
 
@@ -46,6 +47,7 @@ const isReplied = (e: ServerEmail) => e.replied === true || e.replied === 1
 const toItem = (e: ServerEmail, i: number): EmailItem => {
   const from = nameOf(e.sender)
   return {
+    id: e.id,
     from,
     initial: from.charAt(0).toUpperCase(),
     person: true,
@@ -54,6 +56,7 @@ const toItem = (e: ServerEmail, i: number): EmailItem => {
     preview: e.summary || '',
     time: timeOf(e.created_at),
     unread: !isReplied(e),
+    source: e.source === 'webmail' ? 'webmail' : 'gmail',
   }
 }
 

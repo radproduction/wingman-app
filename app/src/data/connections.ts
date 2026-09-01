@@ -45,6 +45,7 @@ export type ConnectionView = {
   items: Connector[]
   connected: number
   linkable: number
+  webmail: boolean
 }
 
 const project = (o: Overrides): ConnectionView => {
@@ -53,6 +54,8 @@ const project = (o: Overrides): ConnectionView => {
     items,
     connected: items.filter((c) => c.status === 'connected').length,
     linkable: items.filter((c) => c.status === 'connect').length,
+    // Business mailbox isn't a seed connector, so surface it as a flag.
+    webmail: !!o.webmail,
   }
 }
 
@@ -81,6 +84,7 @@ export const hydrateConnections = async (): Promise<void> => {
       gmail: !!me.gmail_connected,
       gcal: !!me.calendar_connected,
       health: !!me.health_connected,
+      webmail: !!me.webmail_connected,
     })
   } catch {
     /* keep what we have */

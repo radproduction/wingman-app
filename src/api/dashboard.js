@@ -158,12 +158,22 @@ router.get('/calendar', async (req, res) => {
 });
 
 // ── /api/emails ─────────────────────────────────────────────────────
-router.get('/emails', (req, res) => {
+router.get('/emails', async (req, res) => {
   const u = resolveUser(req);
   const repo = requireRepo('emailItems');
+  const gmailConnected = !!(u && require('../auth/googleAuth').isEmailConnected(u));
+  const webmailConnected = !!(u && require('../services/webmail').isConnected(u));
+
+  // Pull recent BUSINESS mail into email_items on demand (throttled inside), so it
+  // shows right after the user connects — not only after the next 15-min sweep.
+  if (webmailConnected) {
+    try { await require('../services/webmailInbox').syncUser(u.id); } catch (_) { /* best-effort */ }
+  }
+
   const { data, mock: isMock } = safe(() => {
     if (!u || !repo || !repo.listForUser) return null;
-    if (!require('../auth/googleAuth').isEmailConnected(u)) return [];
+    // Show the inbox when EITHER Gmail or a business mailbox is connected.
+    if (!gmailConnected && !webmailConnected) return [];
     return repo.listForUser(u.id, 100);
   }, mock.emails, !u);
   const norm = data.map((e) => ({
@@ -176,9 +186,52 @@ router.get('/emails', (req, res) => {
     replied: !!e.replied,
     detected_type: e.detected_type || 'general',
     draft_reply: e.draft_reply || null,
+    // Source tag: business-mailbox rows are keyed webmail:<uid>; everything else
+    // is Gmail. Lets the app label each email so the user can tell them apart.
+    source: String(e.gmail_id || '').startsWith('webmail:') ? 'webmail' : 'gmail',
     created_at: e.created_at,
   }));
   res.json({ emails: norm, mock: isMock });
+});
+
+// ── /api/emails/:id — open one email (full body, fetched live) ───────
+//   Read-only: pulls the real message body from Gmail or the business mailbox so
+//   the user can actually READ it in the app. Stored summary is the fallback.
+router.get('/emails/:id', async (req, res) => {
+  const u = resolveUser(req);
+  if (!u) return res.status(401).json({ error: 'Not signed in' });
+  const repo = requireRepo('emailItems');
+  const row = repo && repo.getById ? repo.getById(u.id, req.params.id) : null;
+  if (!row) return res.status(404).json({ error: 'Email not found' });
+
+  const gid = String(row.gmail_id || '');
+  const isWebmail = gid.startsWith('webmail:');
+  let body = row.summary || '';
+  let sender = row.sender;
+  let subject = row.subject;
+  try {
+    if (isWebmail) {
+      const msg = await require('../services/webmail').readMessage(u, gid.slice('webmail:'.length));
+      if (msg) { body = msg.body || body; sender = msg.from || sender; subject = msg.subject || subject; }
+    } else {
+      const account = row.account_id ? require('../db/googleAccounts').getById(row.account_id) : null;
+      const msg = await require('../services/gmail').getMessage(u, gid, account);
+      if (msg) { body = msg.body || body; sender = msg.sender || sender; subject = msg.subject || subject; }
+    }
+  } catch (e) {
+    console.warn('[emails] body fetch failed:', e.message); // fall back to the stored summary
+  }
+
+  res.json({
+    id: row.id,
+    sender,
+    subject,
+    body,
+    summary: row.summary || '',
+    category: row.category || 'fyi',
+    source: isWebmail ? 'webmail' : 'gmail',
+    created_at: row.created_at,
+  });
 });
 
 // ── /api/tasks ──────────────────────────────────────────────────────

@@ -51,6 +51,11 @@ function upsert(userId, item) {
   return id;
 }
 
+/** One email item by its row id, scoped to the user. */
+function getById(userId, id) {
+  return db.prepare('SELECT * FROM email_items WHERE id = ? AND user_id = ?').get(id, userId);
+}
+
 /** Whether we've already stored a given gmail id for this user. */
 function existsByGmailId(userId, gmailId) {
   return !!db
@@ -144,7 +149,7 @@ function deleteAllForUser(userId) {
 }
 
 module.exports = {
-  upsert, existsByGmailId, listForUser, groupedByCategory,
+  upsert, getById, existsByGmailId, listForUser, groupedByCategory,
   countsSince, countReplied, countPending, searchByKeyword, listByType,
   listIdsByAccount, deleteByAccount, deleteAllForUser,
 };
