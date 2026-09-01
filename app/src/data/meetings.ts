@@ -897,24 +897,9 @@ const INSTANT_ACTIONS: ProposedAction[] = [
     tone: 'mint',
     icon: 'chat',
   },
-  {
-    id: 'ins-attendees',
-    kind: 'attendees',
-    label: "Send to attendees' WhatsApp",
-    detail: "Send the summary to the attendees who have a WhatsApp number saved. (WhatsApp only delivers to people who've messaged Wingman recently.)",
-    tone: 'peach',
-    icon: 'chat',
-    external: true,
-  },
-  {
-    id: 'ins-email',
-    kind: 'email',
-    label: 'Email the notes',
-    detail: 'Email these notes and action items to the attendees who have an address, and to you.',
-    tone: 'blue',
-    icon: 'mail',
-    external: true,
-  },
+  // "Send to attendees' WhatsApp" and "Email the notes" were removed on the
+  // client's request — only Tasks + the user's own WhatsApp summary remain.
+  // Re-add here if those distribution options are wanted again later.
 ]
 
 const retentionLine = (recorded: boolean) =>
