@@ -58,6 +58,12 @@ async function runHourlyTick(now = new Date()) {
  */
 async function runBriefingTick(now = new Date()) {
   try {
+    // Collapse any duplicate account rows for the same phone BEFORE we send, so a
+    // person who somehow ends up with two rows can never receive two briefings or
+    // two wraps. (The proactive senders already dedupe by phone at send time, but
+    // merging here removes the extra row outright within ≤15 min instead of
+    // waiting for the hourly sweep.)
+    try { require('../db/users').mergeDuplicatePhones(); } catch (_) { /* best-effort */ }
     await morningBriefing.runDueUsers({ now, windowMin: 15 });
     await endOfDayWrap.runDueUsers({ now, windowMin: 15 });
     // The cross-domain proactive nudge — gated to a couple of local hours and

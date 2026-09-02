@@ -76,14 +76,22 @@ async function createBot({ meetingUrl, botName = BOT_NAME, metadata } = {}) {
   const recFull = { audio_mixed: {}, transcript: { provider: { meeting_captions: {} } } };
   const withRec = { ...base, recording_config: recFull };
   const transcriptOnly = { ...base, recording_config: { transcript: { provider: { meeting_captions: {} } } } };
+  // Clean mixed AUDIO with no transcript config. Some accounts/API versions
+  // reject the combined recording_config above, and we then fell all the way to
+  // `base` — whose DEFAULT recording is video-only, which our transcriber reads
+  // poorly (a real meeting came back with an empty transcript for exactly this
+  // reason). Trying audio-only before `base` keeps us on clean, transcribable
+  // audio whenever the account allows any recording_config at all.
+  const audioOnly = { ...base, recording_config: { audio_mixed: {} } };
   const avatar = botAvatarB64();
   const full = avatar
     ? { ...withRec, automatic_video_output: { in_call_recording: { kind: 'jpeg', b64_data: avatar } } }
     : withRec;
 
   // Try the richest config first, then progressively drop optional bits if the
-  // account/API version rejects a field (400) — so a bot is always created.
-  const attempts = [full, withRec, transcriptOnly, base];
+  // account/API version rejects a field (400) — so a bot is always created, and
+  // we prefer clean audio (audioOnly) over the video-only default (base).
+  const attempts = [full, withRec, transcriptOnly, audioOnly, base];
   let lastErr;
   for (const body of attempts) {
     try {

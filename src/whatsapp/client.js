@@ -27,14 +27,28 @@ let lastQrAt = null;         // timestamp of the latest QR
  */
 function reserveSend(phoneNumber, text) {
   try {
+    // Key on the LAST 10 DIGITS, not the raw number: the same person can be
+    // stored/sent as 923001234567, 03001234567 or 3001234567 (and duplicate
+    // account rows differ in exactly this way). Normalising here means an
+    // identical message to the same person is caught no matter which format,
+    // which account row, or which code path produced it.
     const digits = String(phoneNumber || '').replace(/\D/g, '');
-    const bucket = Math.floor(Date.now() / 120000); // 2-minute window
+    const key10 = digits.length > 10 ? digits.slice(-10) : digits;
     const hash = crypto.createHash('sha1').update(String(text || '')).digest('hex').slice(0, 16);
-    // Also treat an identical send in the PREVIOUS window as a duplicate, so two
-    // near-simultaneous sends that straddle the 2-minute boundary don't both go.
-    const prev = db.prepare('SELECT 1 FROM wa_send_dedup WHERE key = ?').get(`${digits}:${hash}:${bucket - 1}`);
-    if (prev) return false;
-    const info = db.prepare('INSERT OR IGNORE INTO wa_send_dedup (key) VALUES (?)').run(`${digits}:${hash}:${bucket}`);
+    // 10-minute windows, looking back over the previous TWO as well, so an
+    // identical message is suppressed for ~30 minutes. That covers the real
+    // duplicate sources we've actually seen — two mailbox scans of the same
+    // receipt, or the same alert re-fired on a later cron tick — which are
+    // minutes (not seconds) apart, so the old 2-minute guard missed them.
+    // Engine chat replies go through sendRaw (unguarded), so genuine
+    // back-to-back replies are never affected.
+    const bucket = Math.floor(Date.now() / 600000);
+    for (let b = bucket - 1; b >= bucket - 2; b--) {
+      if (db.prepare('SELECT 1 FROM wa_send_dedup WHERE key = ?').get(`${key10}:${hash}:${b}`)) return false;
+    }
+    // INSERT OR IGNORE on the current window's key is atomic, so two genuinely
+    // simultaneous sends race safely: exactly one gets changes === 1.
+    const info = db.prepare('INSERT OR IGNORE INTO wa_send_dedup (key) VALUES (?)').run(`${key10}:${hash}:${bucket}`);
     return info.changes === 1; // 1 → reserved (send it); 0 → identical send already went (skip)
   } catch (_) {
     return true; // guard must never swallow a legitimate message
