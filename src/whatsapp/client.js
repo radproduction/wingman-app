@@ -56,6 +56,52 @@ function reserveSend(phoneNumber, text) {
 }
 
 /**
+ * A GENERAL near-duplicate guard, so we never have to special-case each new
+ * proactive source. Only sendMessage() (proactive alerts + notes) runs it —
+ * engine chat replies use sendRaw and are untouched. Two messages count as the
+ * "same" when, ignoring numbers and punctuation, they share >= 85% of their
+ * words (Jaccard) — so it catches a duplicate that differs only by a figure
+ * ("3307" vs "3305 min") or a word ("Easypaisa/Telenor" vs "Easypaisa/Telenor
+ * Bank"), no matter which service produced it. The window is short (~20 min) so
+ * genuinely different alerts of the same kind, sent hours apart, still get through.
+ */
+function proactiveTokens(text) {
+  return new Set(String(text || '')
+    .toLowerCase()
+    .replace(/[0-9]+/g, ' ')
+    .replace(/[^\p{L}\s]/gu, ' ')
+    .split(/\s+/)
+    .filter((w) => w.length > 1));
+}
+function jaccard(a, b) {
+  if (!a.size || !b.size) return 0;
+  let inter = 0;
+  for (const w of a) if (b.has(w)) inter += 1;
+  return inter / (a.size + b.size - inter);
+}
+function recentlySentSimilar(phoneNumber, text) {
+  try {
+    const last10 = String(phoneNumber || '').replace(/\D/g, '').slice(-10);
+    const tokens = proactiveTokens(text);
+    if (tokens.size < 3) return false; // too short to compare safely
+    const since = new Date(Date.now() - 20 * 60000).toISOString().replace('T', ' ').slice(0, 19);
+    const rows = db.prepare(
+      'SELECT content, metadata FROM conversations WHERE created_at > ? ORDER BY created_at DESC LIMIT 60',
+    ).all(since);
+    for (const r of rows) {
+      let m = {};
+      try { m = JSON.parse(r.metadata || '{}'); } catch (_) { /* ignore */ }
+      if (m.direction !== 'outbound') continue;
+      if (String(m.phoneNumber || '').replace(/\D/g, '').slice(-10) !== last10) continue;
+      if (jaccard(tokens, proactiveTokens(r.content)) >= 0.85) return true;
+    }
+    return false;
+  } catch (_) {
+    return false; // never block a legitimate message on a guard error
+  }
+}
+
+/**
  * Normalize a phone number / chat id into a WhatsApp chat id (xxxx@c.us).
  * Accepts:
  *   - "971501234567"      -> "971501234567@c.us"
@@ -314,6 +360,13 @@ async function sendMessage(phoneNumber, text) {
   // (double-send / two-instance overlap guard).
   if (!reserveSend(phoneNumber, text)) {
     console.log(`[whatsapp] duplicate suppressed (${String(phoneNumber).replace(/\D/g, '')}): ${String(text || '').slice(0, 60)}…`);
+    return { duplicate: true };
+  }
+  // GENERAL near-duplicate guard — catches a repeat from ANY source (a duplicate
+  // bill, a re-fired alert, a future feature) that differs only by a number or a
+  // word, so no new source ever needs its own special-case fix.
+  if (recentlySentSimilar(phoneNumber, text)) {
+    console.log(`[whatsapp] near-duplicate suppressed (${String(phoneNumber).replace(/\D/g, '')}): ${String(text || '').slice(0, 60)}…`);
     return { duplicate: true };
   }
 
