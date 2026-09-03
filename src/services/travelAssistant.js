@@ -67,6 +67,16 @@ async function alertForUser(userId, { now = new Date(), send = true } = {}) {
   if (!user) return { alerts: [] };
   const trips = travelRepo.listUpcoming(user.id, new Date(now.getTime() - 24 * 3600 * 1000).toISOString());
   const alerts = [];
+  // A single flight can end up as TWO travel rows (two emails, or a calendar
+  // invite for the same booking). Dedupe alerts by (flight number, alert key) so
+  // the user isn't reminded twice about one flight.
+  const seenFlightAlerts = new Set();
+  const addAlert = (flightNo, key, trip, text) => {
+    const dk = `${String(flightNo).trim().toLowerCase()}::${key}`;
+    if (seenFlightAlerts.has(dk)) return;
+    seenFlightAlerts.add(dk);
+    alerts.push({ key, trip, text });
+  };
 
   for (const trip of trips) {
     if (!trip.depart_time) continue;
@@ -80,20 +90,12 @@ async function alertForUser(userId, { now = new Date(), send = true } = {}) {
 
     // 24h reminder (fires in the 21–24h window)
     if (hoursTo <= 24 && hoursTo > 21 && !sent.h24) {
-      alerts.push({
-        key: 'h24',
-        trip,
-        text: `\u2708\ufe0f Your flight ${flightNo} to ${dest} departs tomorrow at ${t.timeLabel(trip.depart_time, tz)}. Check-in opens soon!`,
-      });
+      addAlert(flightNo, 'h24', trip, `\u2708\ufe0f Your flight ${flightNo} to ${dest} departs tomorrow at ${t.timeLabel(trip.depart_time, tz)}. Check-in opens soon!`);
     }
     // 3h reminder (fires in the 2–3h window)
     if (hoursTo <= 3 && hoursTo > 2 && !sent.h3) {
       const gate = (trip.metadata && trip.metadata.gate) || 'TBD';
-      alerts.push({
-        key: 'h3',
-        trip,
-        text: `\u2708\ufe0f ${flightNo} departs in 3 hours. Gate: ${gate}. Status: ${trip.status || 'On Time'}.`,
-      });
+      addAlert(flightNo, 'h3', trip, `\u2708\ufe0f ${flightNo} departs in 3 hours. Gate: ${gate}. Status: ${trip.status || 'On Time'}.`);
     }
     // Day-of arrival (once, when we're within the arrival day)
     if (trip.arrive_time && !sent.arrival) {
@@ -101,11 +103,7 @@ async function alertForUser(userId, { now = new Date(), send = true } = {}) {
       if (!Number.isNaN(arriveMs) && now.getTime() >= arriveMs - 3600000 && now.getTime() <= arriveMs + 12 * 3600000) {
         const w = await destinationWeather(dest);
         const hotel = trip.hotel_name ? `Check-in at ${trip.hotel_name}${trip.hotel_checkin ? ` is at ${trip.hotel_checkin}` : ''}. ` : '';
-        alerts.push({
-          key: 'arrival',
-          trip,
-          text: `\ud83c\udfe8 ${hotel}Weather in ${w.city}: ${w.temp}\u00b0C, ${w.condition}. ${w.packing[0]}.`,
-        });
+        addAlert(flightNo, 'arrival', trip, `\ud83c\udfe8 ${hotel}Weather in ${w.city}: ${w.temp}\u00b0C, ${w.condition}. ${w.packing[0]}.`);
       }
     }
   }
@@ -114,9 +112,18 @@ async function alertForUser(userId, { now = new Date(), send = true } = {}) {
     for (const a of alerts) {
       try {
         await wa().sendMessage(user.phone, a.text);
-        const meta = Object.assign({}, a.trip.metadata);
-        meta.alertsSent = Object.assign({}, meta.alertsSent, { [a.key]: new Date().toISOString() });
-        travelRepo.updateFields(a.trip.id, { metadata: meta });
+        // Mark this key as sent on EVERY travel row for the same flight (not just
+        // the one we alerted from), so a duplicate row can't re-fire the same
+        // reminder on a later run.
+        const flightNo = a.trip.confirmation_code || a.trip.trip_name || '';
+        for (const trip of trips) {
+          const tf = trip.confirmation_code || trip.trip_name || '';
+          if (String(tf).trim().toLowerCase() !== String(flightNo).trim().toLowerCase()) continue;
+          const meta = Object.assign({}, trip.metadata);
+          meta.alertsSent = Object.assign({}, meta.alertsSent, { [a.key]: new Date().toISOString() });
+          travelRepo.updateFields(trip.id, { metadata: meta });
+          trip.metadata = meta;
+        }
       } catch (err) { console.warn('[travelAssistant] send failed:', err.message); }
     }
   } else if (alerts.length) {
