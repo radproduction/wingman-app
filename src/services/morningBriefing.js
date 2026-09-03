@@ -255,8 +255,9 @@ async function sendForUser(userId, { now = new Date(), send = true, full = false
         if (full) {
           // On-demand full version (user tapped "View Briefing") — send the rich
           // text directly. Only ever happens when the user just tapped, so the
-          // window is open and it isn't proactive spam.
-          await require('../whatsapp/client').sendMessage(user.phone, text);
+          // window is open and it isn't proactive spam. skipDedupe so a re-tap is
+          // never swallowed by the once-a-day near-duplicate guard.
+          await require('../whatsapp/client').sendMessage(user.phone, text, { skipDedupe: true });
         } else {
           // SCHEDULED send: only the concise "tap to view" nudge — never the full
           // free-form wall of text. The tap opens the window and the webhook calls

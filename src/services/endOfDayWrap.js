@@ -145,7 +145,8 @@ async function sendForUser(userId, { now = new Date(), send = true, full = false
       if (wa().ready()) {
         if (full) {
           // On-demand full version (user tapped "View") — direct rich text.
-          await require('../whatsapp/client').sendMessage(user.phone, text);
+          // skipDedupe so a re-tap is never swallowed by the once-a-day guard.
+          await require('../whatsapp/client').sendMessage(user.phone, text, { skipDedupe: true });
         } else {
           // SCHEDULED send: concise "tap to view" nudge only, not the full wrap.
           await wa().sendProactiveMessage(user, text, {

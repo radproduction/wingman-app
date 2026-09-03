@@ -62,8 +62,10 @@ function reserveSend(phoneNumber, text) {
  * "same" when, ignoring numbers and punctuation, they share >= 85% of their
  * words (Jaccard) — so it catches a duplicate that differs only by a figure
  * ("3307" vs "3305 min") or a word ("Easypaisa/Telenor" vs "Easypaisa/Telenor
- * Bank"), no matter which service produced it. The window is short (~20 min) so
- * genuinely different alerts of the same kind, sent hours apart, still get through.
+ * Bank"), no matter which service produced it. The window is ~20 HOURS, so the
+ * same notification reaches the user at most once a day — kept under 24h so a
+ * genuinely daily message (a scheduled briefing, an "every morning" automation)
+ * still comes again the next day. User-requested sends bypass this via skipDedupe.
  */
 function proactiveTokens(text) {
   return new Set(String(text || '')
@@ -84,9 +86,9 @@ function recentlySentSimilar(phoneNumber, text) {
     const last10 = String(phoneNumber || '').replace(/\D/g, '').slice(-10);
     const tokens = proactiveTokens(text);
     if (tokens.size < 3) return false; // too short to compare safely
-    const since = new Date(Date.now() - 20 * 60000).toISOString().replace('T', ' ').slice(0, 19);
+    const since = new Date(Date.now() - 20 * 3600000).toISOString().replace('T', ' ').slice(0, 19);
     const rows = db.prepare(
-      'SELECT content, metadata FROM conversations WHERE created_at > ? ORDER BY created_at DESC LIMIT 60',
+      'SELECT content, metadata FROM conversations WHERE created_at > ? ORDER BY created_at DESC LIMIT 150',
     ).all(since);
     for (const r of rows) {
       let m = {};
@@ -355,19 +357,24 @@ function initWhatsApp() {
  * @param {string} text         message body
  * @returns {Promise<Object>} the sent message
  */
-async function sendMessage(phoneNumber, text) {
-  // Suppress an identical message to the same number within the dedup window
-  // (double-send / two-instance overlap guard).
-  if (!reserveSend(phoneNumber, text)) {
-    console.log(`[whatsapp] duplicate suppressed (${String(phoneNumber).replace(/\D/g, '')}): ${String(text || '').slice(0, 60)}…`);
-    return { duplicate: true };
-  }
-  // GENERAL near-duplicate guard — catches a repeat from ANY source (a duplicate
-  // bill, a re-fired alert, a future feature) that differs only by a number or a
-  // word, so no new source ever needs its own special-case fix.
-  if (recentlySentSimilar(phoneNumber, text)) {
-    console.log(`[whatsapp] near-duplicate suppressed (${String(phoneNumber).replace(/\D/g, '')}): ${String(text || '').slice(0, 60)}…`);
-    return { duplicate: true };
+async function sendMessage(phoneNumber, text, { skipDedupe = false } = {}) {
+  // Proactive alerts are de-duplicated; user-requested sends (e.g. a "View
+  // Briefing" tap) pass skipDedupe so they always deliver, even if identical to
+  // something recent.
+  if (!skipDedupe) {
+    // Suppress an identical message to the same number within the dedup window
+    // (double-send / two-instance overlap guard).
+    if (!reserveSend(phoneNumber, text)) {
+      console.log(`[whatsapp] duplicate suppressed (${String(phoneNumber).replace(/\D/g, '')}): ${String(text || '').slice(0, 60)}…`);
+      return { duplicate: true };
+    }
+    // GENERAL near-duplicate guard — catches a repeat from ANY source (a duplicate
+    // bill, a re-fired alert, a future feature) that differs only by a number or a
+    // word, so no new source ever needs its own special-case fix.
+    if (recentlySentSimilar(phoneNumber, text)) {
+      console.log(`[whatsapp] near-duplicate suppressed (${String(phoneNumber).replace(/\D/g, '')}): ${String(text || '').slice(0, 60)}…`);
+      return { duplicate: true };
+    }
   }
 
   // Cloud API path (official Graph API) — used in production.
