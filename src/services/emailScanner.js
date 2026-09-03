@@ -18,6 +18,34 @@ const t = require('../utils/time');
 // wa is required lazily to avoid a circular dependency at module load
 function wa() { return require('../whatsapp/client'); }
 
+const crypto = require('crypto');
+const { db } = require('../db');
+
+/**
+ * A single real payment often arrives as TWO emails (a bank debit + a merchant
+ * receipt), each clearing a similarly-named bill ("Easypaisa/Telenor" vs
+ * "Easypaisa/Telenor Bank") — so the user got "marked it paid" twice. Reserve
+ * ONE paid-confirmation per user per payment within ~an hour. The bill name is
+ * normalised (lower-cased, punctuation + filler words like bank/bill/payment
+ * stripped) so those variants collapse to the same key. Race-safe via
+ * wa_send_dedup; the row is purged within ~an hour so a later, genuinely
+ * different payment is never suppressed.
+ */
+function reservePaidConfirm(phone, billName) {
+  try {
+    const last10 = String(phone || '').replace(/\D/g, '').slice(-10);
+    const core = String(billName || '').toLowerCase()
+      .replace(/[^a-z0-9]+/g, ' ')
+      .replace(/\b(bank|bill|payment|account|acct|ltd|limited|inc|co|the)\b/g, ' ')
+      .replace(/\s+/g, ' ').trim();
+    const hash = crypto.createHash('sha1').update(core || String(billName || '')).digest('hex').slice(0, 16);
+    const info = db.prepare('INSERT OR IGNORE INTO wa_send_dedup (key) VALUES (?)').run(`paidbill:${last10}:${hash}`);
+    return info.changes === 1;
+  } catch (_) {
+    return true;
+  }
+}
+
 /**
  * Scan a single user's inbox: fetch recent messages, analyze new ones,
  * persist, fan-out to bills/deliveries/travel, and alert on urgent items.
@@ -133,7 +161,7 @@ async function scanUser(userId, { maxResults = 50 } = {}) {
       if (fan && fan.paidBill) {
         const amt = `${fan.paidBill.currency || 'PKR'} ${Number(fan.paidBill.amount || 0).toLocaleString('en-US')}`;
         try {
-          if (wa().ready()) {
+          if (wa().ready() && reservePaidConfirm(user.phone, fan.paidBill.name)) {
             await wa().sendMessage(user.phone, `✅ Saw your *${fan.paidBill.name}* payment (${amt}) go through — marked it paid, so I'll stop reminding you.`);
           }
         } catch (err) { console.warn('[emailScanner] paid-confirmation failed:', err.message); }
