@@ -20,15 +20,18 @@ const meetingIngest = require('./meetingIngest');
  * One real meeting can spawn SEVERAL bot sessions: a duplicate calendar invite
  * with its own Meet link, auto-join plus a manual "Join with Wingman", or a
  * re-dispatch after an earlier attempt failed. Each session would otherwise
- * email + WhatsApp the user the SAME notes (and the two AI summaries differ in
- * wording, so the plain send-dedup can't catch them). Reserve a per-user,
- * per-meeting-title slot here so only the FIRST session to reach real content
- * delivers notes; the rest are skipped. Race-safe via the wa_send_dedup PRIMARY
- * KEY. The row is purged within ~an hour (scheduler cleanup), so a genuinely
- * separate later meeting with the same title (e.g. a daily recurring one) is
- * never suppressed. Empty title → key on the meeting id (never cross-merge).
+ * message the user the SAME OUTCOME — real notes (whose two AI summaries differ
+ * in wording, so the plain send-dedup can't catch them) OR a "couldn't capture"
+ * ping (which the failed sessions fire minutes apart, past the send-dedup
+ * window). Reserve ONE per-user, per-meeting-title slot shared by both paths, so
+ * the user gets exactly ONE message per meeting: whichever session finishes
+ * first (a successful one usually beats a 25-min timeout) wins; the rest are
+ * skipped. Race-safe via the wa_send_dedup PRIMARY KEY. The row is purged within
+ * ~an hour (scheduler cleanup), so a genuinely separate later meeting with the
+ * same title (e.g. a daily recurring one) is never suppressed. Empty title → key
+ * on the meeting id (never cross-merge).
  */
-function reserveMeetingNotes(phone, meeting) {
+function reserveMeetingOutcome(phone, meeting) {
   try {
     const last10 = String(phone || '').replace(/\D/g, '').slice(-10);
     const title = String((meeting && meeting.title) || '').trim().toLowerCase().replace(/\s+/g, ' ');
@@ -134,15 +137,23 @@ async function finish(session, bot) {
       return false;
     }
     botsRepo.update(session.id, { status: 'failed', error: 'no transcript or recording (timed out)' });
-    await pingCouldntCapture(user, meeting.title || 'your meeting');
+    // Only ping "couldn't capture" if no other session for this meeting has
+    // already told the user something — otherwise two failed sessions (a
+    // re-dispatch or a duplicate calendar event) send the same ping minutes
+    // apart, past the send-dedup window.
+    if (reserveMeetingOutcome(user.phone, meeting)) {
+      await pingCouldntCapture(user, meeting.title || 'your meeting');
+    } else {
+      console.log(`[recallPoll] outcome for "${meeting.title || 'meeting'}" already sent to ${user.phone} — skipping duplicate ping ${session.id}`);
+    }
     return false;
   }
 
-  // We have real content. If ANOTHER session already delivered notes for this
-  // same meeting (duplicate invite / auto-join + manual / re-dispatch), stop
-  // here so the user isn't emailed + messaged the same notes twice.
-  if (!reserveMeetingNotes(user.phone, meeting)) {
-    console.log(`[recallPoll] notes for "${meeting.title || 'meeting'}" already delivered to ${user.phone} — skipping duplicate session ${session.id}`);
+  // We have real content. If ANOTHER session already reported this same meeting
+  // (notes or a couldn't-capture ping), stop here so the user isn't emailed +
+  // messaged the same meeting twice.
+  if (!reserveMeetingOutcome(user.phone, meeting)) {
+    console.log(`[recallPoll] outcome for "${meeting.title || 'meeting'}" already sent to ${user.phone} — skipping duplicate session ${session.id}`);
     botsRepo.update(session.id, { status: 'done' });
     return true;
   }

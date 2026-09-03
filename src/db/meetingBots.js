@@ -57,14 +57,21 @@ function getForUser(userId, id) {
   return db.prepare('SELECT * FROM meeting_bots WHERE id = ? AND user_id = ?').get(id, userId) || null;
 }
 
-/** An existing (non-cancelled/non-failed) session for a calendar event, so we
- *  never dispatch two bots to the same meeting. */
+/** A session for a calendar event that should BLOCK a new dispatch — so we
+ *  never send two bots to the same meeting. This is any still-active session,
+ *  PLUS one that failed in the last 3 hours: without that cooldown, a meeting
+ *  whose bot failed (not admitted / no audio) was re-dispatched every auto-join
+ *  tick, spamming the user with repeated "couldn't capture" pings and burning
+ *  Recall credits. After 3 hours a genuinely new occurrence can retry. */
 function findActiveForEvent(userId, gcalEventId) {
   if (!gcalEventId) return null;
   return db.prepare(`
     SELECT * FROM meeting_bots
     WHERE user_id = ? AND gcal_event_id = ?
-      AND status NOT IN ('failed', 'cancelled')
+      AND (
+        status NOT IN ('failed', 'cancelled')
+        OR (status = 'failed' AND created_at > datetime('now', '-3 hours'))
+      )
     ORDER BY created_at DESC LIMIT 1
   `).get(userId, gcalEventId) || null;
 }

@@ -21,6 +21,7 @@ async function completeForUser(userId, { now = new Date(), windowMin = 20, send 
 
   const prefs = user.preferences || {};
   const notified = new Set(prefs.completedEvents || []);
+  const seenTitles = new Set();
   const sent = [];
 
   for (const ev of events) {
@@ -28,6 +29,12 @@ async function completeForUser(userId, { now = new Date(), windowMin = 20, send 
     notified.add(ev.id);
     if ((ev.status || '').toLowerCase() === 'cancelled') continue; // don't ping for cancelled
     const title = ev.title || 'your meeting';
+    // One real meeting can appear as TWO calendar events (a duplicate invite,
+    // each with its own Meet link + event id). Keyed on the title, announce each
+    // wrapped-up meeting at most once per run so the user isn't pinged twice.
+    const titleKey = title.trim().toLowerCase();
+    if (seenTitles.has(titleKey)) continue;
+    seenTitles.add(titleKey);
     const msg = `✅ "${title}" just wrapped up. Want me to note any follow-ups, or set a reminder to act on it?`;
     sent.push(msg);
     if (send && wa().ready()) {
