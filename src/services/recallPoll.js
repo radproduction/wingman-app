@@ -8,11 +8,38 @@
  * before the domain/HTTPS is cut over.
  */
 
+const crypto = require('crypto');
+const { db } = require('../db');
 const recall = require('./recall');
 const botsRepo = require('../db/meetingBots');
 const usersRepo = require('../db/users');
 const meetingsRepo = require('../db/meetings');
 const meetingIngest = require('./meetingIngest');
+
+/**
+ * One real meeting can spawn SEVERAL bot sessions: a duplicate calendar invite
+ * with its own Meet link, auto-join plus a manual "Join with Wingman", or a
+ * re-dispatch after an earlier attempt failed. Each session would otherwise
+ * email + WhatsApp the user the SAME notes (and the two AI summaries differ in
+ * wording, so the plain send-dedup can't catch them). Reserve a per-user,
+ * per-meeting-title slot here so only the FIRST session to reach real content
+ * delivers notes; the rest are skipped. Race-safe via the wa_send_dedup PRIMARY
+ * KEY. The row is purged within ~an hour (scheduler cleanup), so a genuinely
+ * separate later meeting with the same title (e.g. a daily recurring one) is
+ * never suppressed. Empty title → key on the meeting id (never cross-merge).
+ */
+function reserveMeetingNotes(phone, meeting) {
+  try {
+    const last10 = String(phone || '').replace(/\D/g, '').slice(-10);
+    const title = String((meeting && meeting.title) || '').trim().toLowerCase().replace(/\s+/g, ' ');
+    const basis = title || `mid:${meeting && meeting.id}`;
+    const hash = crypto.createHash('sha1').update(basis).digest('hex').slice(0, 16);
+    const info = db.prepare('INSERT OR IGNORE INTO wa_send_dedup (key) VALUES (?)').run(`notes:${last10}:${hash}`);
+    return info.changes === 1; // 1 → first session (deliver); 0 → already delivered → skip
+  } catch (_) {
+    return true; // never block a legitimate delivery on a guard error
+  }
+}
 
 // Recall status → our coarse session status.
 const STATUS_MAP = {
@@ -109,6 +136,15 @@ async function finish(session, bot) {
     botsRepo.update(session.id, { status: 'failed', error: 'no transcript or recording (timed out)' });
     await pingCouldntCapture(user, meeting.title || 'your meeting');
     return false;
+  }
+
+  // We have real content. If ANOTHER session already delivered notes for this
+  // same meeting (duplicate invite / auto-join + manual / re-dispatch), stop
+  // here so the user isn't emailed + messaged the same notes twice.
+  if (!reserveMeetingNotes(user.phone, meeting)) {
+    console.log(`[recallPoll] notes for "${meeting.title || 'meeting'}" already delivered to ${user.phone} — skipping duplicate session ${session.id}`);
+    botsRepo.update(session.id, { status: 'done' });
+    return true;
   }
 
   botsRepo.update(session.id, { status: 'processing', endedAt: new Date().toISOString() });
