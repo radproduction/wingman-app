@@ -98,24 +98,55 @@ function listForUser(userId, limit = 500) {
   `).all(userId, limit);
 }
 
-/** Events whose start_time falls within [fromIso, toIso). */
+/**
+ * Collapse rows that represent the SAME real event. A single meeting or stay
+ * often lands in Google Calendar as two-plus invitations (each its own event id,
+ * sometimes its own Meet link or a slightly different title) — and every
+ * proactive alert then fired once PER row (two "wrapped up" notes, four leave-by
+ * warnings, two notetaker bots → duplicate notes). Two rows count as ONE event
+ * when they share a start time AND any of: the same (normalised) title, the same
+ * location, or the same meeting URL. Used by the ALERT read paths only — the
+ * calendar DISPLAY (listForUser) still shows every row. Rows arrive ordered, so
+ * we keep the first and callers are otherwise unchanged.
+ */
+function collapseDuplicateEvents(rows) {
+  const norm = (s) => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  const seen = [];
+  const out = [];
+  for (const r of rows) {
+    const start = r.start_time || '';
+    const title = norm(r.title);
+    const loc = norm(r.location);
+    const url = String(r.meeting_url || '').trim();
+    const isDup = seen.some((s) => s.start === start
+      && ((title && s.title === title) || (loc && s.loc === loc) || (url && s.url === url)));
+    if (isDup) continue;
+    seen.push({ start, title, loc, url });
+    out.push(r);
+  }
+  return out;
+}
+
+/** Events whose start_time falls within [fromIso, toIso). Deduped to one row per
+ *  real event so a duplicate invite doesn't double every alert. */
 function listStartingBetween(userId, fromIso, toIso) {
-  return db.prepare(`
+  return collapseDuplicateEvents(db.prepare(`
     SELECT * FROM calendar_events
     WHERE user_id = ?
       AND start_time IS NOT NULL AND start_time >= ? AND start_time < ?
     ORDER BY start_time ASC
-  `).all(userId, fromIso, toIso);
+  `).all(userId, fromIso, toIso));
 }
 
-/** Events whose end_time falls within [fromIso, toIso] — for "just wrapped up". */
+/** Events whose end_time falls within [fromIso, toIso] — for "just wrapped up".
+ *  Deduped to one row per real event (so a duplicate invite → one wrap note). */
 function listEndingBetween(userId, fromIso, toIso) {
-  return db.prepare(`
+  return collapseDuplicateEvents(db.prepare(`
     SELECT * FROM calendar_events
     WHERE user_id = ?
       AND end_time IS NOT NULL AND end_time >= ? AND end_time <= ?
     ORDER BY end_time ASC
-  `).all(userId, fromIso, toIso);
+  `).all(userId, fromIso, toIso));
 }
 
 /** Upcoming events that carry a video-call link, starting within [fromIso, toIso).
@@ -153,7 +184,9 @@ function listActiveOrUpcoming(userId, nowIso, lookaheadMin) {
       AND (status IS NULL OR status <> 'cancelled')
       AND start_time IS NOT NULL
   `).all(userId);
-  return rows
+  // Collapse duplicate invites so the notetaker sends ONE bot per real meeting
+  // (two invites for one meeting were producing two bots → duplicate notes).
+  return collapseDuplicateEvents(rows
     .filter((e) => {
       const s = Date.parse(e.start_time);
       if (Number.isNaN(s) || s > soon) return false;         // not started / too far ahead
@@ -161,7 +194,7 @@ function listActiveOrUpcoming(userId, nowIso, lookaheadMin) {
       if (!Number.isNaN(end) && end <= now) return false;    // already ended
       return true;
     })
-    .sort((a, b) => Date.parse(a.start_time) - Date.parse(b.start_time));
+    .sort((a, b) => Date.parse(a.start_time) - Date.parse(b.start_time)));
 }
 
 function deleteByAccount(userId, accountId) {

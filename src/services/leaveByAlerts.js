@@ -33,6 +33,10 @@ async function alertForUser(userId, { now = new Date(), send = true } = {}) {
   const prefs = user.preferences || {};
   const alerted = new Set(prefs.leaveByAlerted || []);
   const sent = [];
+  // One real event (e.g. a hotel stay) can arrive as SEVERAL calendar rows with
+  // near-identical titles ("Stay at …" / "Stay: …"). Dedupe on location + start
+  // time so the user gets ONE leave-by warning, not four.
+  const dedupKey = (e) => `${String(e.location || '').trim().toLowerCase()}::${e.start_time || ''}`;
 
   for (const ev of events) {
     if (alerted.has(ev.id)) continue;
@@ -61,7 +65,10 @@ async function alertForUser(userId, { now = new Date(), send = true } = {}) {
     } else if (send) {
       console.log('[leaveByAlerts] (WA not ready) would alert for', ev.title);
     }
-    alerted.add(ev.id);
+    // Mark this event AND every duplicate calendar row for the same real event
+    // (same location + start) as alerted, so a duplicate row can't re-fire it.
+    const dk = dedupKey(ev);
+    for (const e2 of events) { if (dedupKey(e2) === dk) alerted.add(e2.id); }
   }
 
   if (sent.length) {
