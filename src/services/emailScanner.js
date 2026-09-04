@@ -47,6 +47,20 @@ function reservePaidConfirm(phone, billName) {
 }
 
 /**
+ * Collapse a sender to a stable "who" key so escalating notices from one source
+ * (e.g. Vercel's repeated "payment failed" / "failed for the second time" emails
+ * — different emails, same issue) are treated as the SAME sender. Prefers the
+ * email domain ("billing@vercel.com" -> "vercel"), else the first word of a
+ * display name ("Vercel" and "Vercel Inc." -> "vercel").
+ */
+function urgentSenderCore(sender) {
+  const s = String(sender || '').toLowerCase();
+  const at = s.match(/@([a-z0-9.-]+)/);
+  if (at) return at[1].replace(/\.(com|net|org|io|co|inc|pk|ai)$/, '').replace(/[^a-z0-9]/g, '');
+  return (s.replace(/[^a-z0-9]+/g, ' ').trim().split(/\s+/)[0] || s).slice(0, 24);
+}
+
+/**
  * Scan a single user's inbox: fetch recent messages, analyze new ones,
  * persist, fan-out to bills/deliveries/travel, and alert on urgent items.
  *
@@ -223,9 +237,23 @@ async function scanUser(userId, { maxResults = 50 } = {}) {
       catch (_) { /* best-effort */ }
     }
   } else if (urgentItems.length) {
-    // One urgent digest for the whole scan (deduped by subject+sender so two near
-    // identical notices — e.g. the same Apps Script failure — don't both show).
-    await sendUrgentDigest(user, urgentItems);
+    // Don't re-alert about the SAME sender within ~a day. Escalating notices from
+    // one source (Vercel's repeated payment-failure emails, an Apps-Script error
+    // that keeps re-firing) are different emails but the same issue — one alert is
+    // enough, not one per email. Tracked per-user in preferences with a timestamp.
+    const prefsNow = (usersRepo.getById(userId) || user).preferences || {};
+    const alertedSenders = prefsNow.urgentAlertedSenders || {};
+    const cutoff = Date.now() - 20 * 3600000;
+    for (const k of Object.keys(alertedSenders)) {
+      if (!(Number(alertedSenders[k]) > cutoff)) delete alertedSenders[k];
+    }
+    const fresh = urgentItems.filter((it) => !alertedSenders[urgentSenderCore(it.sender)]);
+    if (fresh.length) {
+      // One urgent digest for the whole scan (also deduped by subject+sender inside).
+      await sendUrgentDigest(user, fresh);
+      for (const it of fresh) alertedSenders[urgentSenderCore(it.sender)] = Date.now();
+      usersRepo.updatePreferences(userId, { urgentAlertedSenders: alertedSenders });
+    }
   }
 
   // Record last scan time
