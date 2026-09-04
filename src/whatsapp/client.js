@@ -87,9 +87,13 @@ function recentlySentSimilar(phoneNumber, text) {
     const tokens = proactiveTokens(text);
     if (tokens.size < 3) return false; // too short to compare safely
     const since = new Date(Date.now() - 20 * 3600000).toISOString().replace('T', ' ').slice(0, 19);
+    // Filter to THIS person's messages in SQL (metadata carries the phone), so the
+    // row limit is PER-USER. Previously the limit was global, so over a busy 20h
+    // the earlier copy we needed to match against scrolled past it and a
+    // duplicate (e.g. two "couldn't capture" pings 5h apart) slipped through.
     const rows = db.prepare(
-      'SELECT content, metadata FROM conversations WHERE created_at > ? ORDER BY created_at DESC LIMIT 150',
-    ).all(since);
+      'SELECT content, metadata FROM conversations WHERE created_at > ? AND metadata LIKE ? ORDER BY created_at DESC LIMIT 80',
+    ).all(since, `%${last10}%`);
     for (const r of rows) {
       let m = {};
       try { m = JSON.parse(r.metadata || '{}'); } catch (_) { /* ignore */ }
