@@ -226,7 +226,7 @@ const USER_CHILD_TABLES = [
   'conversations', 'tasks', 'email_items', 'bills', 'deliveries', 'calendar_events',
   'travel', 'health_data', 'contacts', 'briefings', 'reminders', 'followups',
   'work_sessions', 'wearable_accounts', 'automations', 'meetings', 'user_memory',
-  'google_accounts',
+  'google_accounts', 'goals',
 ];
 
 /** Hard-delete a user and everything referencing them (children first). */

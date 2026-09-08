@@ -45,6 +45,9 @@ async function runHourlyTick(now = new Date()) {
     await deliveryAlerts.runDueUsers({ hour: 9, now });
     await followupTracker.runDueUsers({ hour: 9, now });
     await travelAssistant.runDueUsers({ now });
+    // "Always working on your goals" — surface each active goal's next step once
+    // a day (goalCoach gates itself to daytime + once/goal/day).
+    await require('./goalCoach').runAllUsers({ now });
   } catch (err) {
     console.warn('[scheduler] hourly tick error:', err.message);
   }

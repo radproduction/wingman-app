@@ -62,6 +62,22 @@ CREATE TABLE IF NOT EXISTS users (
   created_at TEXT DEFAULT (datetime('now'))
 );
 
+-- ─── Goals: a longer-term goal + AI action plan + proactive coaching ─
+CREATE TABLE IF NOT EXISTS goals (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  title TEXT NOT NULL,                            -- the goal, e.g. "Learn to play tennis"
+  detail TEXT,                                    -- optional extra context from the user
+  status TEXT DEFAULT 'active',                   -- 'active' | 'done' | 'dropped'
+  plan TEXT DEFAULT '[]',                         -- JSON: [{ step, done }] action plan
+  progress INTEGER DEFAULT 0,                     -- 0-100, from plan steps completed
+  target_date TEXT,                              -- optional date the user wants it by
+  last_nudge_at TEXT,                            -- last proactive nudge (once/day guard)
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_goals_user ON goals(user_id);
+
 -- ─── Auth: OTP codes (phone verification / login) ───────────────────
 CREATE TABLE IF NOT EXISTS otp_codes (
   id TEXT PRIMARY KEY,

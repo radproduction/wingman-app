@@ -52,6 +52,12 @@ AUTOMATIONS vs TASKS — get this right, it matters:
 - The test: will YOU do the work, or is it a nudge for THEM to do it? You do it → automation.
 - Never turn a standing "do this for me" request into a plain task and forget it. Set an automation and confirm briefly, e.g. "Done ✅ I'll send you the office traffic every morning at 7."
 
+GOALS — longer-term things the user is working toward (this is a headline feature):
+- When the user states a GOAL — "I want to learn tennis", "help me save 100k in 6 months", "get fitter", "launch my store" — call create_goal. You'll build an action plan and coach them toward it over days/weeks. A goal is NOT a one-off task: it has multiple steps and spans time. (A single "remind me to call Ali" is a task → create_task.)
+- After create_goal, briefly show the plan (the steps it returned) so they see it, and offer one of the ideas.
+- "my goals" / "how am I doing" → list_goals. When they report progress ("signed up", "saved 10k") → update_goal_progress. When a goal is achieved or abandoned → complete_goal.
+- You proactively nudge them about their goals' next steps on your own — so when they reply to one of those nudges, act on it.
+
 Keep responses concise — this is WhatsApp, not email. Max 3-4 short paragraphs. Use line breaks and emojis to structure longer responses.`;
 
   const calendarGuide = `

@@ -8,6 +8,8 @@ const { calendarTools } = require('./calendarTools');
 const { executeCalendarTool } = require('./calendarExecutor');
 const { taskTools, taskToolNames } = require('./taskTools');
 const { executeTaskTool } = require('./taskExecutor');
+const { goalTools, goalToolNames } = require('./goalTools');
+const { executeGoalTool } = require('./goalExecutor');
 const { gmailTools, gmailToolNames } = require('./gmailTools');
 const { executeGmailTool } = require('./gmailExecutor');
 const { driveTools, driveToolNames } = require('./driveTools');
@@ -264,6 +266,7 @@ async function runToolLoop(user, messages, system, maxRounds = 4) {
       tools: [
         ...calendarTools,
         ...taskTools,
+        ...goalTools,
         ...gmailTools,
         ...driveTools,
         ...shopifyTools,
@@ -290,6 +293,8 @@ async function runToolLoop(user, messages, system, maxRounds = 4) {
         let result;
         if (taskToolNames.has(block.name)) {
           result = await executeTaskTool(user, { name: block.name, input: block.input });
+        } else if (goalToolNames.has(block.name)) {
+          result = await executeGoalTool(user, { name: block.name, input: block.input });
         } else if (gmailToolNames.has(block.name)) {
           result = await executeGmailTool(user, { name: block.name, input: block.input });
         } else if (driveToolNames.has(block.name)) {

@@ -37,6 +37,7 @@ const JOB_RULES = {
   brain:        { minLevel: 'high' },
   taskreminder: { minLevel: 'high' },
   taskdue:      { minLevel: 'moderate' },
+  goals:        { minLevel: 'moderate' },
   bills:        { minLevel: 'moderate', skill: 'bill_tracker' },
   deliveries:   { minLevel: 'high', skill: 'delivery_tracker' },
   followups:    { minLevel: 'high', skill: 'followup_tracker' },
