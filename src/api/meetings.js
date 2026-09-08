@@ -89,13 +89,24 @@ router.post('/meetings/:id/finalize', async (req, res) => {
     return res.status(502).json({ error: 'Could not generate the summary right now' });
   }
   meetingsRepo.update(u.id, base.id, { summary, status: 'summary-ready' });
+  const fresh = meetingsRepo.getForUser(u.id, base.id);
 
+  // Auto-deliver the notes to the user (email + WhatsApp + tasks) as soon as the
+  // summary exists, so they're NEVER lost if the app closes before "approve" —
+  // same as the notetaker. Only send when there's real content.
+  const hasContent = summary && (summary.overview || (summary.actions || []).length
+    || (summary.decisions || []).length || (summary.discussion || []).length);
   let email = null;
-  if (b.send) {
-    email = await meetingMailer.sendSummary(u, meetingsRepo.getForUser(u.id, base.id), summary);
-    if (email && email.sent && email.sent.length) {
-      meetingsRepo.update(u.id, base.id, { emailedAt: new Date().toISOString() });
-    }
+  if (hasContent) {
+    try {
+      email = await meetingMailer.sendSummary(u, fresh, summary);
+      if (email && email.sent && email.sent.length) meetingsRepo.update(u.id, base.id, { emailedAt: new Date().toISOString() });
+    } catch (e) { console.warn('[meetings] finalize email failed:', e.message); }
+    try { meetingIngest.createTasksFromSummary(u, fresh); } catch (_) { /* best-effort */ }
+    try {
+      const wa = require('../whatsapp/client');
+      if (wa.ready()) await wa.sendMessage(u.phone, meetingIngest.formatNotesMessage(fresh, summary));
+    } catch (_) { /* best-effort */ }
   }
   res.json({ meeting: meetingsRepo.getForUser(u.id, base.id), email });
 });
@@ -111,7 +122,17 @@ router.post('/meetings/:id/transcribe', express.raw({ type: () => true, limit: '
   if (!Buffer.isBuffer(audio) || !audio.length) return res.status(400).json({ error: 'No audio received' });
 
   try {
-    const out = await meetingIngest.processAudio(u, m, audio, req.headers['content-type'], { saveToDrive: true });
+    // Auto-deliver like the notetaker: email + tasks now, so a recorded meeting is
+    // NEVER lost if the app closes before the user taps "approve".
+    const out = await meetingIngest.processAudio(u, m, audio, req.headers['content-type'], { saveToDrive: true, emailUser: true, createTasks: true });
+    // Also WhatsApp the notes to the user's own number right away. The
+    // near-duplicate guard stops a second copy if they also approve in the app.
+    try {
+      const wa = require('../whatsapp/client');
+      if (wa.ready() && out && out.summary) {
+        await wa.sendMessage(u.phone, meetingIngest.formatNotesMessage(out.meeting || m, out.summary));
+      }
+    } catch (_) { /* best-effort */ }
     res.json({ meeting: out.meeting, transcript: out.transcript });
   } catch (e) {
     if (e.message === 'TRANSCRIPTION_UNAVAILABLE') return res.status(501).json({ error: 'Transcription is not available' });
