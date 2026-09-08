@@ -20,7 +20,8 @@ const agentTools = [
       'it to the user as that specialist speaking (e.g. "Here\'s your Marketing Wingman 📈 …") and carry out ' +
       'whatever they approve. You may consult more than one for a rounded view.\n' +
       'Agents: marketing (growth/campaigns/conversion), sales (revenue/upsell/retention), finance (cash flow/costs/' +
-      'margins), operations (tasks/calendar/inbox execution), travel (trips/routes/logistics).',
+      'margins), operations (tasks/calendar/inbox execution), travel (trips/routes/logistics), goals (progress/' +
+      'action plans/momentum/accountability).',
     input_schema: {
       type: 'object',
       properties: {

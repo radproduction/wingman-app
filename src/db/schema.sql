@@ -89,6 +89,19 @@ CREATE TABLE IF NOT EXISTS agent_actions (
 );
 CREATE INDEX IF NOT EXISTS idx_agent_actions_user ON agent_actions(user_id, created_at);
 
+-- ─── Credential vault: third-party logins the agent can USE but never READ ──
+CREATE TABLE IF NOT EXISTS credentials (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  label TEXT NOT NULL,                           -- e.g. "electricity portal", "Netflix"
+  username TEXT,                                 -- the login/email (NOT secret)
+  secret_enc TEXT NOT NULL,                      -- AES-256-GCM encrypted; never plaintext, never shown to the LLM
+  url TEXT,                                      -- optional site URL for automation
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_credentials_user ON credentials(user_id);
+
 -- ─── Auth: OTP codes (phone verification / login) ───────────────────
 CREATE TABLE IF NOT EXISTS otp_codes (
   id TEXT PRIMARY KEY,

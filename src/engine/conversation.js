@@ -12,6 +12,8 @@ const { goalTools, goalToolNames } = require('./goalTools');
 const { executeGoalTool } = require('./goalExecutor');
 const { auditTools, auditToolNames } = require('./auditTools');
 const { executeAuditTool } = require('./auditExecutor');
+const { vaultTools, vaultToolNames } = require('./vaultTools');
+const { executeVaultTool } = require('./vaultExecutor');
 const { gmailTools, gmailToolNames } = require('./gmailTools');
 const { executeGmailTool } = require('./gmailExecutor');
 const { driveTools, driveToolNames } = require('./driveTools');
@@ -270,6 +272,7 @@ async function runToolLoop(user, messages, system, maxRounds = 4) {
         ...taskTools,
         ...goalTools,
         ...auditTools,
+        ...vaultTools,
         ...gmailTools,
         ...driveTools,
         ...shopifyTools,
@@ -300,6 +303,8 @@ async function runToolLoop(user, messages, system, maxRounds = 4) {
           result = await executeGoalTool(user, { name: block.name, input: block.input });
         } else if (auditToolNames.has(block.name)) {
           result = await executeAuditTool(user, { name: block.name, input: block.input });
+        } else if (vaultToolNames.has(block.name)) {
+          result = await executeVaultTool(user, { name: block.name, input: block.input });
         } else if (gmailToolNames.has(block.name)) {
           result = await executeGmailTool(user, { name: block.name, input: block.input });
         } else if (driveToolNames.has(block.name)) {

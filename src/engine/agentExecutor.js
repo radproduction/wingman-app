@@ -25,6 +25,8 @@ const { gmailTools, gmailToolNames } = require('./gmailTools');
 const { executeGmailTool } = require('./gmailExecutor');
 const { mapsTools, mapsToolNames } = require('./mapsTools');
 const { executeMapsTool } = require('./mapsExecutor');
+const { goalTools, goalToolNames } = require('./goalTools');
+const { executeGoalTool } = require('./goalExecutor');
 
 // domain-key → the tools that domain offers a specialist.
 const TOOLBOX = {
@@ -34,6 +36,7 @@ const TOOLBOX = {
   calendar: calendarTools,
   gmail: gmailTools,
   maps: mapsTools,
+  goals: goalTools,
 };
 
 // Route a specialist's tool call to the right executor (calendar has no
@@ -44,6 +47,7 @@ async function dispatch(user, block) {
   if (taskToolNames.has(block.name)) return executeTaskTool(user, { name: block.name, input: block.input });
   if (gmailToolNames.has(block.name)) return executeGmailTool(user, { name: block.name, input: block.input });
   if (mapsToolNames.has(block.name)) return executeMapsTool(user, { name: block.name, input: block.input });
+  if (goalToolNames.has(block.name)) return executeGoalTool(user, { name: block.name, input: block.input });
   return executeCalendarTool(user, { name: block.name, input: block.input });
 }
 
