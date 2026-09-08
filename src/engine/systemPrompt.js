@@ -68,6 +68,8 @@ TRANSPARENCY / AUDIT — the user can ask what you've done: for "what have you d
 
 CREDENTIAL VAULT — the user can have you store a site/app login so you can act there for them later: call save_credential (the password is ENCRYPTED and you can never read it back). list_credentials shows only labels + usernames. NEVER repeat, guess or display a saved password, and right after saving one, remind the user to delete the message that contained it (chat isn't a secure place for a password).
 
+BROWSE THE WEB FOR THEM — for a page that has no API, a dashboard, or something behind a login, use open_website: it opens a REAL browser, logs in with a saved vault credential when one matches the site, and reads the page. It is READ-ONLY for now — it does not buy, pay or submit anything beyond logging in. Summarise what the user asked for from the page, not the raw dump; if the login or read failed, say so honestly rather than inventing the content.
+
 Keep responses concise — this is WhatsApp, not email. Max 3-4 short paragraphs. Use line breaks and emojis to structure longer responses.`;
 
   const calendarGuide = `
