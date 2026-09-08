@@ -78,6 +78,17 @@ CREATE TABLE IF NOT EXISTS goals (
 );
 CREATE INDEX IF NOT EXISTS idx_goals_user ON goals(user_id);
 
+-- ─── Agent actions: an audit trail of what Wingman did for the user ──
+CREATE TABLE IF NOT EXISTS agent_actions (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  kind TEXT NOT NULL,                            -- e.g. 'chat.create_task', 'bill.paid', 'meeting.notes'
+  summary TEXT NOT NULL,                         -- human-readable one-liner
+  source TEXT DEFAULT 'chat',                    -- 'chat' (user asked) | 'proactive' (did on its own)
+  created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_agent_actions_user ON agent_actions(user_id, created_at);
+
 -- ─── Auth: OTP codes (phone verification / login) ───────────────────
 CREATE TABLE IF NOT EXISTS otp_codes (
   id TEXT PRIMARY KEY,

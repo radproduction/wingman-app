@@ -192,6 +192,7 @@ async function finish(session, bot) {
       await wa.sendMessage(user.phone, msg);
     }
   } catch (_) { /* best-effort */ }
+  try { require('../db/agentActions').log(user.id, { kind: 'meeting.notes', summary: `Sent notes for "${meeting.title || 'a meeting'}"`, source: 'proactive' }); } catch (_) { /* audit best-effort */ }
   return true;
 }
 

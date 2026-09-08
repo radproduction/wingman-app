@@ -10,6 +10,8 @@ const { taskTools, taskToolNames } = require('./taskTools');
 const { executeTaskTool } = require('./taskExecutor');
 const { goalTools, goalToolNames } = require('./goalTools');
 const { executeGoalTool } = require('./goalExecutor');
+const { auditTools, auditToolNames } = require('./auditTools');
+const { executeAuditTool } = require('./auditExecutor');
 const { gmailTools, gmailToolNames } = require('./gmailTools');
 const { executeGmailTool } = require('./gmailExecutor');
 const { driveTools, driveToolNames } = require('./driveTools');
@@ -267,6 +269,7 @@ async function runToolLoop(user, messages, system, maxRounds = 4) {
         ...calendarTools,
         ...taskTools,
         ...goalTools,
+        ...auditTools,
         ...gmailTools,
         ...driveTools,
         ...shopifyTools,
@@ -295,6 +298,8 @@ async function runToolLoop(user, messages, system, maxRounds = 4) {
           result = await executeTaskTool(user, { name: block.name, input: block.input });
         } else if (goalToolNames.has(block.name)) {
           result = await executeGoalTool(user, { name: block.name, input: block.input });
+        } else if (auditToolNames.has(block.name)) {
+          result = await executeAuditTool(user, { name: block.name, input: block.input });
         } else if (gmailToolNames.has(block.name)) {
           result = await executeGmailTool(user, { name: block.name, input: block.input });
         } else if (driveToolNames.has(block.name)) {
@@ -322,6 +327,9 @@ async function runToolLoop(user, messages, system, maxRounds = 4) {
         } else {
           result = await executeCalendarTool(user, { name: block.name, input: block.input });
         }
+
+        // Audit trail: record any action that actually changed something (best-effort).
+        try { require('../db/agentActions').logToolAction(user.id, block.name, result); } catch (_) { /* never break the reply */ }
 
         toolResults.push({
           type: 'tool_result',

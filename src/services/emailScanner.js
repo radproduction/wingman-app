@@ -177,6 +177,7 @@ async function scanUser(userId, { maxResults = 50 } = {}) {
         try {
           if (wa().ready() && reservePaidConfirm(user.phone, fan.paidBill.name)) {
             await wa().sendMessage(user.phone, `✅ Saw your *${fan.paidBill.name}* payment (${amt}) go through — marked it paid, so I'll stop reminding you.`);
+            try { require('../db/agentActions').log(userId, { kind: 'bill.paid', summary: `Marked "${fan.paidBill.name}" paid from a receipt`, source: 'proactive' }); } catch (_) { /* audit best-effort */ }
           }
         } catch (err) { console.warn('[emailScanner] paid-confirmation failed:', err.message); }
       }
