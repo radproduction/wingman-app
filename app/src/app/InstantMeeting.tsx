@@ -71,9 +71,6 @@ export const InstantMeeting = () => {
             <span className="wg-live__dot" />
             {t('Start recording')}
           </button>
-          <button className="wg-btn full outline" disabled={starting} onClick={() => begin(false)}>
-            {t('Take notes without recording')}
-          </button>
         </div>
       }
     >

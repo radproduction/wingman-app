@@ -31,9 +31,6 @@ export const MeetingConsent = ({ id }: { id: string }) => {
           <button className="wg-btn full danger" disabled={!confirmed} onClick={() => begin(true)}>
             {t('Start meeting assistance')}
           </button>
-          <button className="wg-btn full outline" onClick={() => begin(false)}>
-            {t('Take notes without recording')}
-          </button>
         </div>
       }
     >
