@@ -11,8 +11,10 @@ import './mobility.css'
 
 const primaryStep = (m: Meeting, started: boolean) => {
   if (m.status === 'in-progress' || started) return { label: 'Open live assistance', to: 'live', live: true }
-  if (m.status === 'summary-ready' || m.status === 'completed' || m.status === 'follow-up')
-    return { label: 'View meeting summary', to: 'summary' }
+  // Only offer the summary once one ACTUALLY exists. A meeting can be "completed"
+  // (its scheduled time simply passed) without ever being recorded — pointing at
+  // an empty summary is a dead end, so offer to capture it instead.
+  if (m.summary) return { label: 'View meeting summary', to: 'summary' }
   if (m.status === 'processing') return { label: 'Processing notes', to: '', disabled: true }
   if (m.status === 'cancelled') return null
   return { label: 'Start meeting assistance', to: 'consent' }
