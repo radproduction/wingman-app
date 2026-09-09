@@ -77,10 +77,23 @@ export const MeetingLive = ({ id }: { id: string }) => {
   }
 
   const end = async () => {
+    // Notes-only can only summarise what was TYPED (the mic is off by design). If
+    // nothing was typed and no action items were captured, there is genuinely
+    // nothing to write up — guide the user instead of producing an empty summary.
+    if (notesOnly && live.notes.length === 0 && captured.length === 0) {
+      const proceed = await confirmAction({
+        title: 'Nothing to write up yet',
+        body: 'This is notes-only, so I can only summarise what you TYPE here — and nothing has been typed yet. Jot a few key points below for a real summary, or use "Start recording" next time so I capture the audio automatically. End anyway?',
+        confirmLabel: 'End anyway',
+        cancelLabel: 'Keep going',
+        destructive: true,
+      })
+      if (!proceed) return
+    }
     const ok = await confirmAction({
       title: 'End this meeting?',
       body: notesOnly
-        ? 'I will write up your notes and the action items you captured, and the summary appears in a moment.'
+        ? 'I will write up the notes you typed and the action items you captured, and the summary appears in a moment.'
         : 'I will stop recording and write up your notes, decisions and action items. The summary appears in a moment.',
       confirmLabel: 'End meeting',
       cancelLabel: 'Keep going',
@@ -207,10 +220,11 @@ export const MeetingLive = ({ id }: { id: string }) => {
           <div className="wg-msearch">
             <input
               value={draft}
+              autoFocus={notesOnly}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && addNote()}
-              placeholder={t('Write a note')}
-              aria-label={t('Write a note')}
+              placeholder={notesOnly ? t('Type the key points here — these become your summary') : t('Write a note')}
+              aria-label={notesOnly ? t('Type the key points here') : t('Write a note')}
             />
             <button className="wg-link" disabled={!draft.trim()} onClick={() => addNote()}>
               {t('Add')}
