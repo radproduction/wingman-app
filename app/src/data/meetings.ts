@@ -714,7 +714,10 @@ const startRecording = async (id: string): Promise<MicState> => {
     rec.ondataavailable = (e) => {
       if (e.data && e.data.size > 0) chunks.push(e.data)
     }
-    rec.start()
+    // Timeslice (1s) so ondataavailable fires periodically. WITHOUT it, iOS/Safari
+    // frequently ends the recording with NO data at all (empty blob → "couldn't
+    // record audio"), even though Android/Chrome work fine with a plain start().
+    rec.start(1000)
     recorders[id] = { rec, chunks, stream, mime: rec.mimeType || mime || 'audio/webm' }
     return 'granted'
   } catch {
@@ -740,8 +743,12 @@ const stopRecording = (id: string): Promise<{ blob: Blob; mime: string } | null>
     }
     r.rec.onstop = finish
     try {
-      if (r.rec.state !== 'inactive') r.rec.stop()
-      else finish()
+      if (r.rec.state !== 'inactive') {
+        // Flush any buffered audio before stopping — important on iOS/Safari,
+        // where the final chunk can otherwise be lost.
+        try { r.rec.requestData() } catch { /* not supported everywhere */ }
+        r.rec.stop()
+      } else finish()
     } catch {
       finish()
     }
