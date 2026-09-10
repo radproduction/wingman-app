@@ -381,11 +381,25 @@ async function sendMessage(phoneNumber, text, { skipDedupe = false } = {}) {
     }
   }
 
+  // Attribute this outbound to the RECIPIENT so proactive alerts (briefings,
+  // email/bill/flight alerts, meeting notes — anything sent inside the 24h window
+  // via this path) land in THAT user's conversation history. Without a userId,
+  // logOutbound stores user_id = NULL, and historyForUser (WHERE user_id = ?)
+  // silently drops it — so the engine never sees the alert it just sent and can't
+  // answer a follow-up like "reply to him" / "mark that paid". One place, every
+  // source. (OTP to a brand-new number simply resolves to null — harmless.)
+  let recipientId = null;
+  try {
+    const recipient = users.getByPhone(digitsOnly(phoneNumber));
+    recipientId = recipient ? recipient.id : null;
+  } catch (_) { /* never block a send on attribution */ }
+
   // Cloud API path (official Graph API) — used in production.
   if (cloudApi.ready()) {
     const digits = digitsOnly(phoneNumber);
     const sent = await cloudApi.sendText(digits, text);
     conversations.logOutbound({
+      userId: recipientId,
       waMessageId: sent && sent.messages && sent.messages[0] ? sent.messages[0].id : null,
       chatId: `${digits}@c.us`,
       phoneNumber: digits,
@@ -403,6 +417,7 @@ async function sendMessage(phoneNumber, text, { skipDedupe = false } = {}) {
   const sent = await client.sendMessage(chatId, text);
 
   conversations.logOutbound({
+    userId: recipientId,
     waMessageId: sent && sent.id ? sent.id._serialized : null,
     chatId,
     phoneNumber: chatId.split('@')[0],
