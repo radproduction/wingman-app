@@ -46,7 +46,17 @@ async function startSteel(puppeteer) {
   const browser = await puppeteer.connect({
     browserWSEndpoint: `${session.websocketUrl}&apiKey=${process.env.STEEL_API_KEY}`,
   });
-  const liveViewUrl = session.sessionViewerUrl || session.debugUrl || `https://app.steel.dev/sessions/${session.id}`;
+  // IMPORTANT: use debugUrl (the embeddable, no-login live view), NOT
+  // sessionViewerUrl — the latter is the Steel dashboard page and shows a
+  // "Sign in to Steel" screen when embedded in our app. `interactive=true` lets
+  // the user take control; `showControls=true` shows the toolbar.
+  let liveViewUrl;
+  if (session.debugUrl) {
+    const sep = session.debugUrl.includes('?') ? '&' : '?';
+    liveViewUrl = `${session.debugUrl}${sep}interactive=true&showControls=true`;
+  } else {
+    liveViewUrl = session.sessionViewerUrl || `https://app.steel.dev/sessions/${session.id}`;
+  }
   return { session, browser, liveViewUrl };
 }
 async function releaseSteel(sessionId) {
