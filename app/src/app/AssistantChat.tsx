@@ -241,9 +241,7 @@ export const AssistantChat = () => {
         {active && agent!.result && <div className="wg-agent__result">{agent!.result}</div>}
 
         <div className="wg-agent__acts">
-          {active ? (
-            <button className="wg-agent__btn primary" onClick={() => setFull(true)}>{t('Full screen')}</button>
-          ) : (
+          {!active && (
             <button className="wg-agent__btn primary" onClick={() => watchAgent(card)}>{t('Watch it work')}</button>
           )}
           <a className="wg-agent__btn" href={card.url} target="_blank" rel="noreferrer">{t('Open in browser')}</a>

@@ -33,6 +33,8 @@ Rules:
 - AUTOCOMPLETE fields (city/airport pickers like From/To): after you type, a dropdown of suggestions usually appears as NEW elements next turn — CLICK the matching suggestion before moving to the next field, otherwise the value won't register.
 - DATE fields: if typing doesn't work, click the field to open its calendar, then click the day/month element. If the date is already acceptable (e.g. a default month), don't fight it — move on.
 - Don't repeat an action that didn't change the page; try a different element or approach instead.
+- FINISH EARLY: the moment the visible text already contains enough to answer the goal (e.g. search results with names and prices are showing), choose "done" and put the answer in "text". Do NOT keep scrolling or clicking to gather more than you need.
+- Scroll at most twice in a whole run. If you have already seen relevant results, answer with "done" instead of scrolling again.
 - Use the numbered elements for click/type. Use "navigate" only to jump to a specific URL.
 - "done": the goal is achieved — put the exact ANSWER the user wanted (e.g. the flight status/time) in "text", read from the page. Never invent it.
 - "ask": you are genuinely blocked — a CAPTCHA, a login you don't have, or a real payment/purchase step — put a short question in "text" so the user can take over in the live view.
@@ -172,9 +174,28 @@ async function runLoop(sessionId) {
 
       await execAction(page, act);
     }
+
+    // Ran out of steps without a clean "done"? Salvage a real answer from
+    // whatever is on the page NOW, instead of giving up — the results are usually
+    // already on screen (this is what caused "I reached the step limit").
     if (run.status === 'running') {
-      run.status = run.result ? 'done' : 'stopped';
-      if (!run.result) run.result = 'I reached the step limit. You can take control in the live view to finish.';
+      try {
+        const pages = await browser.pages().catch(() => []);
+        const page = pages[pages.length - 1] || pages[0];
+        const state = page ? await readState(page).catch(() => null) : null;
+        if (state) {
+          const ans = await claude.complete(
+            `GOAL: ${run.goal}\n\nCurrent page after several steps:\n${state.title} — ${state.url}\n\n${state.text}\n\n` +
+            `Answer the user's goal using ONLY what is on this page. If there are results/products, list the top few with the key details (name + price). If the page genuinely doesn't have it, say what you found and suggest taking control. Keep it short and useful.`,
+            { system: 'You turn the current web page into a direct, helpful answer for the user. Never invent data.', maxTokens: 450 },
+          );
+          if (ans && ans.trim()) { run.result = ans.trim(); run.status = 'done'; }
+        }
+      } catch (_) { /* fall through to the generic message */ }
+    }
+    if (run.status === 'running') {
+      run.status = 'stopped';
+      if (!run.result) run.result = 'I could not finish this one on my own — tap Full screen to take control.';
     }
   } catch (e) {
     run.status = 'error';
