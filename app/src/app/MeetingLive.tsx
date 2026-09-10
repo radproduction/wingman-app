@@ -165,6 +165,13 @@ export const MeetingLive = ({ id }: { id: string }) => {
       )}
 
       {}
+      {live.phase === 'recording' && !notesOnly && (
+        <p className="wg-footnote">
+          {t('📱 Keep your screen on and this tab open while recording — iPhone stops capturing audio if the screen locks.')}
+        </p>
+      )}
+
+      {}
       {failed && (
         <div className="wg-live__fail wg-card-line">
           <span className="wg-chip sand md">

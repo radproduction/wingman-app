@@ -681,8 +681,42 @@ export const requestMic = async (): Promise<MicState> => {
 }
 
 // ── Real audio capture (MediaRecorder) ──────────────────────────────────────
-type Rec = { rec: MediaRecorder; chunks: BlobPart[]; stream: MediaStream; mime: string }
+type Rec = {
+  rec: MediaRecorder
+  chunks: BlobPart[]
+  stream: MediaStream
+  mime: string
+  wakeLock?: unknown // WakeLockSentinel — kept so we can release it on stop
+  onVis?: () => void // visibilitychange handler, removed on stop
+}
 const recorders: Record<string, Rec> = {}
+
+/**
+ * Ask iOS/Android to keep the SCREEN ON while recording. On iPhone Safari the
+ * page's JS + mic capture are suspended the moment the screen locks, which
+ * silently kills the recording (and an interrupted audio/mp4 file is often
+ * unusable). A screen wake lock stops the phone from AUTO-locking during a
+ * meeting where the user isn't touching it — the most common way recordings were
+ * lost. It does NOT survive a manual power-button lock or switching apps; only a
+ * native app can record with the screen fully off.
+ */
+const acquireWakeLock = async (): Promise<unknown> => {
+  try {
+    const nav = navigator as unknown as { wakeLock?: { request?: (t: string) => Promise<unknown> } }
+    if (nav.wakeLock?.request) return await nav.wakeLock.request('screen')
+  } catch {
+    /* not supported (iOS < 16.4) or denied — we fall back to warning the user */
+  }
+  return null
+}
+
+const releaseWakeLock = (wl: unknown) => {
+  try {
+    ;(wl as { release?: () => void })?.release?.()
+  } catch {
+    /* ignore */
+  }
+}
 
 const pickAudioMime = (): string => {
   if (typeof MediaRecorder === 'undefined') return ''
@@ -718,7 +752,31 @@ const startRecording = async (id: string): Promise<MicState> => {
     // frequently ends the recording with NO data at all (empty blob → "couldn't
     // record audio"), even though Android/Chrome work fine with a plain start().
     rec.start(1000)
-    recorders[id] = { rec, chunks, stream, mime: rec.mimeType || mime || 'audio/webm' }
+
+    // Keep the screen awake so the phone doesn't auto-lock mid-meeting (which
+    // suspends recording on iOS). The wake lock is auto-released when the tab is
+    // hidden, so we re-acquire it whenever we come back to the foreground; and
+    // when we're being sent to the background we flush whatever audio we have so
+    // the last seconds aren't lost.
+    const wakeLock = await acquireWakeLock()
+    const onVis = () => {
+      const cur = recorders[id]
+      if (!cur) return
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        acquireWakeLock().then((wl) => {
+          if (recorders[id]) recorders[id].wakeLock = wl
+        })
+      } else {
+        try {
+          if (cur.rec.state === 'recording') cur.rec.requestData()
+        } catch {
+          /* not supported everywhere */
+        }
+      }
+    }
+    if (typeof document !== 'undefined') document.addEventListener('visibilitychange', onVis)
+
+    recorders[id] = { rec, chunks, stream, mime: rec.mimeType || mime || 'audio/webm', wakeLock, onVis }
     return 'granted'
   } catch {
     stream.getTracks().forEach((tr) => tr.stop())
@@ -734,10 +792,18 @@ const stopRecording = (id: string): Promise<{ blob: Blob; mime: string } | null>
   return new Promise((resolve) => {
     const finish = () => {
       try {
+        if (typeof document !== 'undefined' && r.onVis) document.removeEventListener('visibilitychange', r.onVis)
+      } catch {
+        /* ignore */
+      }
+      releaseWakeLock(r.wakeLock)
+      try {
         r.stream.getTracks().forEach((tr) => tr.stop())
       } catch {
         /* ignore */
       }
+      // Build from whatever chunks we captured — even if the recording was
+      // interrupted (screen lock), the audio up to that point is still usable.
       const blob = new Blob(r.chunks, { type: r.mime })
       resolve(blob.size > 0 ? { blob, mime: r.mime } : null)
     }
