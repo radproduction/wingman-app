@@ -77,6 +77,7 @@ export type BotSession = {
 export type AssistantCard = { type: 'browser'; url: string; title?: string; shot?: string | null; loggedIn?: boolean }
 export type AssistantMessage = { role: 'user' | 'assistant'; text: string; at?: string }
 export type AssistantReply = { reply: string; ignored?: boolean; cards?: AssistantCard[] }
+export type LiveSession = { sessionId: string; liveViewUrl: string; url: string }
 
 export class ApiError extends Error {
   status: number
@@ -254,6 +255,9 @@ export const api = {
   // ── Assistant chat (in-app WhatsApp-style conversation) ──
   assistantHistory: () => get<{ messages: AssistantMessage[] }>('/assistant/history'),
   assistantChat: (text: string) => req<AssistantReply>('POST', '/assistant/chat', { text }),
+  // Level 3: open a LIVE cloud browser (watch + take control) and close it.
+  browseLive: (url: string) => req<LiveSession>('POST', '/assistant/browse/live', { url }),
+  browseStop: (sessionId: string) => req<{ ok: boolean }>('POST', '/assistant/browse/stop', { sessionId }),
 
   // ── Actions ──
   completeTask: (id: string) => req<{ ok: boolean }>('POST', `/tasks/${id}/complete`),

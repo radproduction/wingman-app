@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { SubScreen } from './SubScreen'
 import { Icon } from './icons'
-import { api, type AssistantCard, type AssistantMessage } from '../data/api'
+import { api, ApiError, type AssistantCard, type AssistantMessage, type LiveSession } from '../data/api'
 import { t } from '../i18n'
 import './AssistantChat.css'
 
@@ -15,7 +15,7 @@ const domainOf = (url: string) => {
   }
 }
 
-const BrowserCard = ({ card }: { card: AssistantCard }) => (
+const BrowserCard = ({ card, onWatchLive }: { card: AssistantCard; onWatchLive: (url: string) => void }) => (
   <div className="wg-chat__card">
     <div className="wg-chat__card-head">
       <span className="wg-chat__card-globe">
@@ -34,9 +34,14 @@ const BrowserCard = ({ card }: { card: AssistantCard }) => (
         <img src={card.shot} alt={card.title || domainOf(card.url)} loading="lazy" />
       </a>
     ) : null}
-    <a href={card.url} target="_blank" rel="noreferrer" className="wg-chat__card-open">
-      {t('Open in browser')}
-    </a>
+    <div className="wg-chat__card-acts">
+      <button className="wg-chat__card-live" onClick={() => onWatchLive(card.url)}>
+        {t('Watch live')}
+      </button>
+      <a href={card.url} target="_blank" rel="noreferrer" className="wg-chat__card-open">
+        {t('Open in browser')}
+      </a>
+    </div>
   </div>
 )
 
@@ -45,7 +50,36 @@ export const AssistantChat = () => {
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const [loaded, setLoaded] = useState(false)
+  const [live, setLive] = useState<LiveSession | null>(null)
+  const [liveBusy, setLiveBusy] = useState(false)
+  const [liveErr, setLiveErr] = useState<string | null>(null)
   const endRef = useRef<HTMLDivElement>(null)
+
+  const watchLive = async (url: string) => {
+    if (liveBusy) return
+    setLiveErr(null)
+    setLiveBusy(true)
+    try {
+      const s = await api.browseLive(url)
+      setLive(s)
+    } catch (e) {
+      const notConfigured = e instanceof ApiError && /NOT_CONFIGURED/.test(e.message)
+      setLiveErr(
+        notConfigured
+          ? t('The live browser isn\'t switched on for this server yet.')
+          : t('Could not start the live browser. Please try again.'),
+      )
+    } finally {
+      setLiveBusy(false)
+    }
+  }
+
+  const stopLive = () => {
+    const s = live
+    setLive(null)
+    setLiveErr(null)
+    if (s) void api.browseStop(s.sessionId).catch(() => {})
+  }
 
   useEffect(() => {
     let alive = true
@@ -142,7 +176,7 @@ export const AssistantChat = () => {
               ))}
             </div>
             {m.cards?.map((c, k) => (
-              <BrowserCard card={c} key={k} />
+              <BrowserCard card={c} key={k} onWatchLive={watchLive} />
             ))}
           </div>
         ))}
@@ -159,6 +193,38 @@ export const AssistantChat = () => {
 
         <div ref={endRef} />
       </div>
+
+      {(live || liveBusy || liveErr) && (
+        <div className="wg-lvb" role="dialog" aria-modal="true">
+          <div className="wg-lvb__bar">
+            <div className="wg-lvb__tx">
+              <span className="wg-lvb__dot" />
+              {live ? t('Live — you can take control') : liveErr ? t('Live browser') : t('Starting live browser…')}
+            </div>
+            <button className="wg-lvb__close" onClick={stopLive}>
+              {t('Stop')}
+            </button>
+          </div>
+          <div className="wg-lvb__body">
+            {live ? (
+              <iframe
+                title="Live browser"
+                src={live.liveViewUrl}
+                sandbox="allow-same-origin allow-scripts allow-forms allow-popups"
+                allow="clipboard-read; clipboard-write"
+              />
+            ) : liveErr ? (
+              <div className="wg-lvb__msg">{liveErr}</div>
+            ) : (
+              <div className="wg-lvb__msg wg-chat__typing">
+                <span />
+                <span />
+                <span />
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </SubScreen>
   )
 }

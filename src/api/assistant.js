@@ -14,6 +14,7 @@ const { requireAuth } = require('./middleware/auth');
 const engine = require('../engine/conversation');
 const conversationsRepo = require('../db/conversations');
 const { takeRecentBrowse } = require('../engine/browserExecutor');
+const liveBrowser = require('../services/liveBrowser');
 
 /** Recent conversation, oldest-first, to populate the chat on open. */
 router.get('/assistant/history', requireAuth, (req, res) => {
@@ -48,6 +49,44 @@ router.post('/assistant/chat', requireAuth, async (req, res) => {
   } catch (e) {
     console.error('[assistant/chat]', e);
     res.status(500).json({ error: 'chat_failed' });
+  }
+});
+
+// ── Level 3: LIVE browser (Browserbase) — watch it work + take control ──
+
+/** Open a live cloud-browser session and return an embeddable live-view URL. */
+router.post('/assistant/browse/live', requireAuth, async (req, res) => {
+  const url = String((req.body && req.body.url) || '').trim();
+  if (!url) return res.status(400).json({ error: 'url required' });
+  try {
+    const r = await liveBrowser.startLive(url, { userId: req.user.id });
+    if (!r.ok) {
+      const code = r.error === 'LIVE_BROWSER_NOT_CONFIGURED' ? 503 : 502;
+      return res.status(code).json({ error: r.error });
+    }
+    try {
+      require('../db/agentActions').log(req.user.id, {
+        kind: 'browse.live',
+        summary: `Opened a live browser at ${r.url}`,
+        source: 'chat',
+      });
+    } catch (_) { /* audit best-effort */ }
+    res.json({ sessionId: r.sessionId, liveViewUrl: r.liveViewUrl, url: r.url });
+  } catch (e) {
+    console.error('[assistant/browse/live]', e.message);
+    res.status(500).json({ error: 'live_failed' });
+  }
+});
+
+/** Close a live session (stops the cloud browser + billing). */
+router.post('/assistant/browse/stop', requireAuth, async (req, res) => {
+  const sessionId = String((req.body && req.body.sessionId) || '').trim();
+  if (!sessionId) return res.status(400).json({ error: 'sessionId required' });
+  try {
+    await liveBrowser.stopLive(sessionId);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: 'stop_failed' });
   }
 });
 
