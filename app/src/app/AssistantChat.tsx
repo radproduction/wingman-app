@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { SubScreen } from './SubScreen'
 import { Icon } from './icons'
 import {
@@ -273,7 +274,8 @@ export const AssistantChat = () => {
         <div ref={endRef} />
       </div>
 
-      {(live || liveBusy || liveErr) && (
+      {(live || liveBusy || liveErr) &&
+        createPortal(
         <div className="wg-lvb" role="dialog" aria-modal="true">
           <div className="wg-lvb__bar">
             <div className="wg-lvb__tx">
@@ -302,10 +304,12 @@ export const AssistantChat = () => {
               </div>
             )}
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
-      {agent && (
+      {agent &&
+        createPortal(
         <div className="wg-lvb" role="dialog" aria-modal="true">
           <div className="wg-lvb__bar">
             <div className="wg-lvb__tx">
@@ -334,7 +338,8 @@ export const AssistantChat = () => {
             ))}
             {!agent.done && agent.steps.length === 0 && <div className="wg-lvb__step">{t('Starting…')}</div>}
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </SubScreen>
   )

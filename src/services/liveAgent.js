@@ -19,7 +19,7 @@ const claude = require('../llm/claude');
 const liveBrowser = require('./liveBrowser');
 
 const runs = new Map(); // sessionId -> { status, goal, steps, result, error, done, userId, at }
-const MAX_STEPS = 12;
+const MAX_STEPS = 16;
 const RUN_TTL_MS = 30 * 60 * 1000;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -30,6 +30,9 @@ Reply with ONLY a JSON object, nothing else:
 
 Rules:
 - Work step by step. To fill a form: "type" into a field, then in a LATER turn "type" the next field, then "click" the search/submit button.
+- AUTOCOMPLETE fields (city/airport pickers like From/To): after you type, a dropdown of suggestions usually appears as NEW elements next turn — CLICK the matching suggestion before moving to the next field, otherwise the value won't register.
+- DATE fields: if typing doesn't work, click the field to open its calendar, then click the day/month element. If the date is already acceptable (e.g. a default month), don't fight it — move on.
+- Don't repeat an action that didn't change the page; try a different element or approach instead.
 - Use the numbered elements for click/type. Use "navigate" only to jump to a specific URL.
 - "done": the goal is achieved — put the exact ANSWER the user wanted (e.g. the flight status/time) in "text", read from the page. Never invent it.
 - "ask": you are genuinely blocked — a CAPTCHA, a login you don't have, or a real payment/purchase step — put a short question in "text" so the user can take over in the live view.
