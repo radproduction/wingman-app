@@ -1,0 +1,195 @@
+/* In-app assistant chat — WhatsApp-style bubbles + a Muse-style browser card.
+   Colours use translucent overlays + currentColor so it reads correctly in both
+   the light and dark app themes without depending on internal tokens. */
+
+.wg-chat {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 2px 8px;
+  min-height: 100%;
+}
+
+.wg-chat__empty {
+  margin: auto;
+  text-align: center;
+  opacity: 0.7;
+  padding: 24px 16px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.wg-chat__empty-hint {
+  margin-top: 8px;
+  font-size: 13px;
+  opacity: 0.8;
+}
+
+.wg-chat__row {
+  display: flex;
+  flex-direction: column;
+  max-width: 100%;
+}
+.wg-chat__row.user {
+  align-items: flex-end;
+}
+.wg-chat__row.assistant {
+  align-items: flex-start;
+}
+
+.wg-chat__bubble {
+  max-width: 82%;
+  padding: 9px 13px;
+  border-radius: 18px;
+  font-size: 15px;
+  line-height: 1.45;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+.wg-chat__bubble.assistant {
+  background: rgba(128, 128, 128, 0.16);
+  border-bottom-left-radius: 5px;
+}
+.wg-chat__bubble.user {
+  background: #2563eb;
+  color: #fff;
+  border-bottom-right-radius: 5px;
+}
+.wg-chat__bubble.failed {
+  background: rgba(220, 60, 60, 0.16);
+}
+
+/* typing indicator */
+.wg-chat__typing {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+.wg-chat__typing span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.4;
+  animation: wg-chat-blink 1.2s infinite ease-in-out;
+}
+.wg-chat__typing span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.wg-chat__typing span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+@keyframes wg-chat-blink {
+  0%,
+  60%,
+  100% {
+    opacity: 0.25;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 0.9;
+    transform: translateY(-3px);
+  }
+}
+
+/* Muse-style browser card */
+.wg-chat__card {
+  margin-top: 6px;
+  max-width: 88%;
+  border: 1px solid rgba(128, 128, 128, 0.28);
+  border-radius: 16px;
+  overflow: hidden;
+  background: rgba(128, 128, 128, 0.08);
+}
+.wg-chat__card-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 12px;
+}
+.wg-chat__card-globe {
+  display: inline-flex;
+  width: 26px;
+  height: 26px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(37, 99, 235, 0.16);
+  color: #2563eb;
+  flex: none;
+}
+.wg-chat__card-tx {
+  min-width: 0;
+}
+.wg-chat__card-title {
+  font-size: 14px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wg-chat__card-url {
+  font-size: 12px;
+  opacity: 0.65;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wg-chat__card-shot {
+  display: block;
+  border-top: 1px solid rgba(128, 128, 128, 0.2);
+  border-bottom: 1px solid rgba(128, 128, 128, 0.2);
+  max-height: 320px;
+  overflow: hidden;
+}
+.wg-chat__card-shot img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.wg-chat__card-open {
+  display: block;
+  text-align: center;
+  padding: 11px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #2563eb;
+  text-decoration: none;
+}
+
+/* input bar (lives in SubScreen's footer) */
+.wg-chat__bar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+}
+.wg-chat__input {
+  flex: 1;
+  min-width: 0;
+  padding: 11px 15px;
+  border-radius: 22px;
+  border: 1px solid rgba(128, 128, 128, 0.35);
+  background: rgba(128, 128, 128, 0.08);
+  color: inherit;
+  font-size: 15px;
+  outline: none;
+}
+.wg-chat__input:focus {
+  border-color: #2563eb;
+}
+.wg-chat__send {
+  flex: none;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: none;
+  background: #2563eb;
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.wg-chat__send:disabled {
+  opacity: 0.4;
+}

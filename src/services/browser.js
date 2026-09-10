@@ -27,7 +27,7 @@ function domainOf(url) {
   catch (_) { return ''; }
 }
 
-async function readPage(url, { userId = null, maxChars = 6000, timeoutMs = 30000 } = {}) {
+async function readPage(url, { userId = null, maxChars = 6000, timeoutMs = 30000, screenshot = false } = {}) {
   const puppeteer = loadPuppeteer();
   if (!puppeteer) return { ok: false, error: 'BROWSER_UNAVAILABLE' };
   if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
@@ -40,6 +40,9 @@ async function readPage(url, { userId = null, maxChars = 6000, timeoutMs = 30000
       args: LAUNCH_ARGS,
     });
     const page = await browser.newPage();
+    // A real, phone-friendly viewport so the screenshot we hand the in-app chat
+    // looks like a page a person would see (also makes text extraction stable).
+    try { await page.setViewport({ width: 1024, height: 720, deviceScaleFactor: 1 }); } catch (_) { /* ignore */ }
     page.setDefaultTimeout(timeoutMs);
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: timeoutMs });
 
@@ -53,12 +56,25 @@ async function readPage(url, { userId = null, maxChars = 6000, timeoutMs = 30000
     await sleep(1200); // let JS settle
     const title = await page.title().catch(() => '');
     const text = await page.evaluate(() => (document.body ? document.body.innerText : '')).catch(() => '');
+
+    // Optional screenshot — a compact JPEG data URL for the in-app chat card.
+    // Kept out of the tool result returned to the LLM (it only needs the text);
+    // the caller reads it separately so we don't bloat the model's context.
+    let shot = null;
+    if (screenshot) {
+      try {
+        const buf = await page.screenshot({ type: 'jpeg', quality: 55 });
+        shot = `data:image/jpeg;base64,${Buffer.from(buf).toString('base64')}`;
+      } catch (_) { /* screenshot is best-effort */ }
+    }
+
     return {
       ok: true,
       title,
       url: page.url(),
       loggedIn,
       text: String(text || '').replace(/\n{3,}/g, '\n\n').trim().slice(0, maxChars),
+      shot,
     };
   } catch (e) {
     return { ok: false, error: (e && e.message) || 'BROWSE_FAILED' };

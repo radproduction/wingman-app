@@ -73,6 +73,11 @@ export type BotSession = {
   created_at?: string
 }
 
+// ── In-app assistant chat (same brain as WhatsApp) ──
+export type AssistantCard = { type: 'browser'; url: string; title?: string; shot?: string | null; loggedIn?: boolean }
+export type AssistantMessage = { role: 'user' | 'assistant'; text: string; at?: string }
+export type AssistantReply = { reply: string; ignored?: boolean; cards?: AssistantCard[] }
+
 export class ApiError extends Error {
   status: number
   constructor(status: number, message: string) {
@@ -245,6 +250,10 @@ export const api = {
     req<{ ok: boolean; label: string | null }>('POST', '/location', { lat, lng }),
   reverseGeocode: (lat: number, lng: number) =>
     req<{ address: string }>('POST', '/location/reverse', { lat, lng }),
+
+  // ── Assistant chat (in-app WhatsApp-style conversation) ──
+  assistantHistory: () => get<{ messages: AssistantMessage[] }>('/assistant/history'),
+  assistantChat: (text: string) => req<AssistantReply>('POST', '/assistant/chat', { text }),
 
   // ── Actions ──
   completeTask: (id: string) => req<{ ok: boolean }>('POST', `/tasks/${id}/complete`),

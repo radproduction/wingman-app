@@ -26,6 +26,7 @@ import { SettingsHelp } from './app/SettingsHelp'
 import { HelpArticle } from './app/HelpArticle'
 import { Memory, BusinessBrain } from './app/Memory'
 import { Approvals } from './app/Approvals'
+import { AssistantChat } from './app/AssistantChat'
 import { Business } from './app/Business'
 import { BusinessPerformance } from './app/BusinessPerformance'
 import { BusinessIntegrations } from './app/BusinessIntegrations'
@@ -144,6 +145,7 @@ const Screen = ({ route }: { route: string }) => {
   if (route === 'news/settings') return <NewsSettings />
   if (route.startsWith('news/')) return <NewsStory id={route.slice('news/'.length)} />
   if (route === 'approvals') return <Approvals />
+  if (route === 'assistant') return <AssistantChat />
   if (route === 'business') return <Business />
   if (route === 'business/performance') return <BusinessPerformance />
   if (route === 'business/integrations') return <BusinessIntegrations />

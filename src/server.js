@@ -14,6 +14,7 @@ const { attachUserOptional } = require('./api/middleware/auth');
 const dashboardApi = require('./api/dashboard');
 const meetingsApi = require('./api/meetings');
 const meetingBotApi = require('./api/meetingBot');
+const assistantApi = require('./api/assistant');
 const adminQr = require('./admin/qr');
 const fs = require('fs');
 const path = require('path');
@@ -38,6 +39,7 @@ app.use('/api', attachUserOptional);
 app.use('/api', dashboardApi);
 app.use('/api', meetingsApi);
 app.use('/api', meetingBotApi);
+app.use('/api', assistantApi);
 
 // Browser-based WhatsApp pairing (/admin/qr, /admin/qr.json)
 app.use('/admin', adminQr);
