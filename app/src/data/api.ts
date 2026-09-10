@@ -74,10 +74,22 @@ export type BotSession = {
 }
 
 // ── In-app assistant chat (same brain as WhatsApp) ──
-export type AssistantCard = { type: 'browser'; url: string; title?: string; shot?: string | null; loggedIn?: boolean }
+export type BrowserCard = { type: 'browser'; url: string; title?: string; shot?: string | null; loggedIn?: boolean }
+export type LiveAgentCard = { type: 'live_agent'; url: string; sessionId: string; liveViewUrl: string; goal: string }
+export type AssistantCard = BrowserCard | LiveAgentCard
 export type AssistantMessage = { role: 'user' | 'assistant'; text: string; at?: string }
 export type AssistantReply = { reply: string; ignored?: boolean; cards?: AssistantCard[] }
 export type LiveSession = { sessionId: string; liveViewUrl: string; url: string }
+export type AgentStep = { n: number; action: string; index?: number | null; detail?: string }
+export type AgentStatus = {
+  found: boolean
+  status?: string
+  steps?: AgentStep[]
+  result?: string | null
+  error?: string | null
+  done?: boolean
+  goal?: string
+}
 
 export class ApiError extends Error {
   status: number
@@ -258,6 +270,9 @@ export const api = {
   // Level 3: open a LIVE cloud browser (watch + take control) and close it.
   browseLive: (url: string) => req<LiveSession>('POST', '/assistant/browse/live', { url }),
   browseStop: (sessionId: string) => req<{ ok: boolean }>('POST', '/assistant/browse/stop', { sessionId }),
+  // Level 3b: poll a live AGENT run's progress (steps + result).
+  browseAgentStatus: (sessionId: string) =>
+    get<AgentStatus>(`/assistant/browse/agent/${encodeURIComponent(sessionId)}`),
 
   // ── Actions ──
   completeTask: (id: string) => req<{ ok: boolean }>('POST', `/tasks/${id}/complete`),

@@ -1,6 +1,7 @@
 'use strict';
 
 const browser = require('../services/browser');
+const liveAgent = require('../services/liveAgent');
 
 // A short-lived buffer of the pages we opened per user, so the in-app chat can
 // show a "browser card" (screenshot + title + link) for a browse that happened
@@ -24,11 +25,33 @@ function takeRecentBrowse(userId) {
   const now = Date.now();
   return list
     .filter((e) => now - e.at < BROWSE_TTL_MS)
-    .map((e) => ({ type: 'browser', url: e.url, title: e.title, shot: e.shot, loggedIn: e.loggedIn }));
+    .map((e) => (e.kind === 'live_agent'
+      ? { type: 'live_agent', url: e.url, sessionId: e.sessionId, liveViewUrl: e.liveViewUrl, goal: e.goal }
+      : { type: 'browser', url: e.url, title: e.title, shot: e.shot, loggedIn: e.loggedIn }));
 }
 
 async function executeBrowserTool(user, toolUse) {
   const { name, input } = toolUse;
+
+  // Level 3b — the agent DOES a task on a live browser while the user watches.
+  if (name === 'browse_and_act') {
+    if (!input || !input.goal) return { error: 'GOAL_REQUIRED' };
+    const r = await liveAgent.startTask(user.id, String(input.goal), input.url ? String(input.url) : '');
+    if (!r.ok) {
+      if (r.error === 'LIVE_BROWSER_NOT_CONFIGURED') {
+        return { error: 'LIVE_BROWSER_NOT_CONFIGURED', detail: 'The live browser is not switched on for this server yet.' };
+      }
+      return { error: r.error || 'LIVE_AGENT_FAILED' };
+    }
+    // Card the app renders as a watchable live-agent panel (iframe + step log).
+    rememberBrowse(user.id, { kind: 'live_agent', url: r.url, sessionId: r.sessionId, liveViewUrl: r.liveViewUrl, goal: String(input.goal) });
+    try {
+      require('../db/agentActions').log(user.id, { kind: 'browse.agent', summary: `Live agent working on: ${String(input.goal).slice(0, 120)}`, source: 'chat' });
+    } catch (_) { /* audit best-effort */ }
+    // Text-only for the model: tell it the live agent is running so it replies naturally.
+    return { ok: true, started: true, message: 'Live browser agent started; the user can watch it work and take control in the app.' };
+  }
+
   if (name !== 'open_website') return { error: `Unknown tool: ${name}` };
   if (!input || !input.url) return { error: 'URL_REQUIRED' };
 

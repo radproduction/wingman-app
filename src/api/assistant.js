@@ -15,6 +15,7 @@ const engine = require('../engine/conversation');
 const conversationsRepo = require('../db/conversations');
 const { takeRecentBrowse } = require('../engine/browserExecutor');
 const liveBrowser = require('../services/liveBrowser');
+const liveAgent = require('../services/liveAgent');
 
 /** Recent conversation, oldest-first, to populate the chat on open. */
 router.get('/assistant/history', requireAuth, (req, res) => {
@@ -75,6 +76,15 @@ router.post('/assistant/browse/live', requireAuth, async (req, res) => {
   } catch (e) {
     console.error('[assistant/browse/live]', e.message);
     res.status(500).json({ error: 'live_failed' });
+  }
+});
+
+/** Poll a live AGENT run's progress (steps + result) so the app can show it. */
+router.get('/assistant/browse/agent/:sessionId', requireAuth, (req, res) => {
+  try {
+    res.json(liveAgent.getStatus(String(req.params.sessionId)));
+  } catch (e) {
+    res.status(500).json({ error: 'status_failed' });
   }
 });
 

@@ -237,6 +237,42 @@
   font-size: 15px;
 }
 
+/* live agent step log under the iframe */
+.wg-lvb__log {
+  background: #17181b;
+  color: #e7e7ea;
+  padding: 10px 14px;
+  padding-bottom: max(10px, env(safe-area-inset-bottom));
+  max-height: 34vh;
+  overflow-y: auto;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.wg-lvb__result {
+  background: rgba(37, 99, 235, 0.18);
+  border: 1px solid rgba(37, 99, 235, 0.5);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  color: #fff;
+  font-size: 14px;
+  white-space: pre-wrap;
+}
+.wg-lvb__step {
+  opacity: 0.85;
+  padding: 2px 0;
+}
+.wg-lvb__step b {
+  color: #7fb0ff;
+  font-weight: 600;
+}
+
+.wg-chat__card-globe.live {
+  background: rgba(255, 77, 79, 0.18);
+  color: #ff4d4f;
+  animation: wg-chat-blink 1.4s infinite ease-in-out;
+}
+
 /* input bar (lives in SubScreen's footer) */
 .wg-chat__bar {
   display: flex;

@@ -25,6 +25,12 @@ function puppet() {
 const sessions = new Map(); // sessionId -> { browser, provider, at, userId }
 const MAX_SESSION_MS = 10 * 60 * 1000; // safety auto-close so a forgotten tab doesn't bill forever
 
+/** The connected Puppeteer browser for a live session (for the agent loop). */
+function getBrowser(sessionId) {
+  const s = sessions.get(sessionId);
+  return s ? s.browser : null;
+}
+
 /** Which provider is configured (null if none). Steel wins if both are set. */
 function provider() {
   if (process.env.STEEL_API_KEY) return 'steel';
@@ -126,4 +132,4 @@ async function stopLive(sessionId) {
   return { ok: true };
 }
 
-module.exports = { available, provider, startLive, stopLive };
+module.exports = { available, provider, startLive, stopLive, getBrowser };
