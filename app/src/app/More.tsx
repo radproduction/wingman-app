@@ -87,16 +87,6 @@ export const More = () => {
               <h2>{t('Your work')}</h2>
             </div>
             <div className="wg-row-list">
-              <button className="wg-conn wg-card-line" data-feedback="header" onClick={() => navigate('assistant')}>
-                <span className="wg-chip lavender sm">
-                  <Icon name="chat" size={18} variant="duotone" />
-                </span>
-                <div className="wg-conn__tx">
-                  <div className="wg-conn__name">{t('Chat with Wingman')}</div>
-                  <div className="wg-conn__desc">{t('Ask anything, or "open a website" — right here in the app')}</div>
-                </div>
-                <IconChevronR size={18} className="chev" />
-              </button>
               <button className="wg-conn wg-card-line" data-feedback="header" onClick={() => navigate('approvals')}>
                 <span className="wg-chip blue sm">
                   <Icon name="checkCircle" size={18} variant="duotone" />
