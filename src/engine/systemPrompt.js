@@ -422,6 +422,14 @@ How to use this:
     }
   } catch (_) { /* memory is optional */ }
 
+  // ── Observed behaviour ──────────────────────────────────────────────
+  //   Patterns watched from real activity (active hours, responsiveness, how
+  //   they handle tasks/bills) — the depth layer on top of chat-learned facts.
+  let behaviorBlock = '';
+  try {
+    behaviorBlock = require('../services/behaviorPatterns').promptBlock(user.id, firstName);
+  } catch (_) { /* behaviour layer is optional */ }
+
   const staffGuide = `
 
 --- YOUR STAFF (specialist agents) ---
@@ -433,7 +441,7 @@ You are a chief of staff — and a chief of staff has staff. You can bring in fi
 - They ADVISE and recommend actions. When the user says go ahead, YOU carry it out with your own tools.
 - "who's on my team?" / "what agents do you have?" → list_agents.`;
 
-  return base + calendarGuide + emailGuide + taskGuide + webmailGuide + healthGuide + workGuide + voiceGuide + driveGuide + mapsGuide + newsGuide + multiAccountGuide + shopifyGuide + travelCrmGuide + staffGuide + personality + ctx + memoryBlock;
+  return base + calendarGuide + emailGuide + taskGuide + webmailGuide + healthGuide + workGuide + voiceGuide + driveGuide + mapsGuide + newsGuide + multiAccountGuide + shopifyGuide + travelCrmGuide + staffGuide + personality + ctx + memoryBlock + behaviorBlock;
 }
 
 module.exports = { buildSystemPrompt };

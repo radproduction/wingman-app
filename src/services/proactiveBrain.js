@@ -186,8 +186,15 @@ async function think(userId, { now = new Date() } = {}) {
   if (!snap.hasSignals) return { insights: [], skipped: 'quiet' };
 
   const memories = memoryBlock(userId);
+  let behaviour = '';
+  try {
+    const b = require('./behaviorPatterns').computeForUser(userId, { now });
+    if (b.lines.length) behaviour = b.lines.join('\n');
+  } catch (_) { /* behaviour layer optional */ }
+
   const prompt = `USER POLICY:\n${policyFor(user)}\n\n` +
     (memories ? `WHAT YOU ALREADY KNOW ABOUT THEM:\n${memories}\n\n` : '') +
+    (behaviour ? `HOW THEY ACTUALLY BEHAVE (observed — use it to time and pitch the nudge):\n${behaviour}\n\n` : '') +
     `Here is everything about ${user.name || 'the user'} right now.\n\n` +
     `NEEDS ATTENTION:\n${snap.signals.map((s) => `- ${s}`).join('\n')}\n\n` +
     (snap.context.length ? `CONTEXT (use only if it helps connect dots):\n${snap.context.map((c) => `- ${c}`).join('\n')}\n\n` : '') +

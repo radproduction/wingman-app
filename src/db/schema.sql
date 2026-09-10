@@ -185,6 +185,7 @@ CREATE TABLE IF NOT EXISTS bills (
   source_email_id TEXT REFERENCES email_items(id),
   last_alerted_at TEXT,
   reminder_count INTEGER DEFAULT 0,   -- how many times we've nudged; capped so we don't nag forever
+  paid_at TEXT,                       -- when it was actually marked paid (for the behaviour layer's timing patterns)
   created_at TEXT DEFAULT (datetime('now'))
 );
 

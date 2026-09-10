@@ -70,7 +70,9 @@ function findByName(userId, phrase) {
 }
 
 function markPaid(id) {
-  db.prepare("UPDATE bills SET status = 'paid' WHERE id = ?").run(id);
+  // Stamp paid_at (only the first time it flips to paid) so the behaviour layer
+  // can learn this user's real payment timing vs the due date.
+  db.prepare("UPDATE bills SET status = 'paid', paid_at = COALESCE(paid_at, datetime('now')) WHERE id = ?").run(id);
   return db.prepare('SELECT * FROM bills WHERE id = ?').get(id);
 }
 

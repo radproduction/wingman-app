@@ -154,6 +154,11 @@ function applyMigrations() {
       // How many times we've nudged about it — capped so a still-unpaid bill
       // isn't chased forever (the "old bills keep pinging" complaint).
       ['reminder_count', 'INTEGER DEFAULT 0'],
+      // When the bill was actually marked paid — lets the behaviour layer learn
+      // whether this user pays early / on time / late, so reminders fire at the
+      // lead time that actually works for them. No backfill (old paid bills have
+      // no timestamp); it accumulates from here.
+      ['paid_at', 'TEXT'],
     ],
     automations: [
       // Anchor a fire time to a learned behaviour (e.g. the user's usual finish),
