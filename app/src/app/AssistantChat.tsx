@@ -35,24 +35,7 @@ const domainOf = (url: string) => {
   }
 }
 
-const LiveAgentCardView = ({ card, onWatch }: { card: LiveAgentCard; onWatch: (c: LiveAgentCard) => void }) => (
-  <div className="wg-chat__card">
-    <div className="wg-chat__card-head">
-      <span className="wg-chat__card-globe live">
-        <Icon name="globe" size={14} variant="duotone" />
-      </span>
-      <div className="wg-chat__card-tx">
-        <div className="wg-chat__card-title">{t('Wingman is working on it…')}</div>
-        <div className="wg-chat__card-url">{card.goal}</div>
-      </div>
-    </div>
-    <div className="wg-chat__card-acts">
-      <button className="wg-chat__card-live" onClick={() => onWatch(card)}>
-        {t('Watch it work')}
-      </button>
-    </div>
-  </div>
-)
+const stepLabel = (s: AgentStep) => `${ACTION_LABEL[s.action] || s.action}${s.detail ? ` — ${s.detail}` : ''}`
 
 const BrowserCardView = ({ card, onWatchLive }: { card: Exclude<AssistantCard, LiveAgentCard>; onWatchLive: (url: string) => void }) => (
   <div className="wg-chat__card">
@@ -93,6 +76,7 @@ export const AssistantChat = () => {
   const [liveBusy, setLiveBusy] = useState(false)
   const [liveErr, setLiveErr] = useState<string | null>(null)
   const [agent, setAgent] = useState<AgentRun | null>(null)
+  const [full, setFull] = useState(false)
   const endRef = useRef<HTMLDivElement>(null)
 
   const watchAgent = (c: LiveAgentCard) =>
@@ -100,9 +84,25 @@ export const AssistantChat = () => {
 
   const stopAgent = () => {
     const a = agent
+    setFull(false)
     setAgent(null)
     if (a) void api.browseStop(a.sessionId).catch(() => {})
   }
+
+  // Phone back button: while a full-screen view is open, back should just close
+  // it (return to chat) instead of leaving the screen entirely.
+  useEffect(() => {
+    const anyFull = full || !!live || liveBusy || !!liveErr
+    if (!anyFull) return
+    window.history.pushState({ wgFull: true }, '')
+    const onPop = () => {
+      if (full) setFull(false)
+      else stopLive()
+    }
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [full, live, liveBusy, liveErr])
 
   const watchLive = async (url: string) => {
     if (liveBusy) return
@@ -205,6 +205,53 @@ export const AssistantChat = () => {
     }
   }
 
+  // The Muse-style inline live card: a small live preview inside the chat, that
+  // the user can tap to go full screen. Rendered as plain JSX (not a nested
+  // component) so the <iframe> keeps its identity across status polls and doesn't
+  // reload every 1.5s.
+  const renderAgentInline = (card: LiveAgentCard) => {
+    const active = !!agent && agent.sessionId === card.sessionId
+    const working = active && !agent!.done
+    const last = active && agent!.steps.length ? agent!.steps[agent!.steps.length - 1] : null
+    return (
+      <div className="wg-agent">
+        <div className="wg-agent__head">
+          <span className={`wg-agent__ic ${working ? 'live' : ''}`}>
+            <Icon name={working ? 'spark' : 'globe'} size={14} variant="duotone" />
+          </span>
+          <div className="wg-agent__tx">
+            <div className="wg-agent__title">
+              {working ? t('Wingman is working…') : active && agent!.done ? t('Wingman finished') : t('Live browser task')}
+            </div>
+            <div className="wg-agent__url">{domainOf(card.url)}</div>
+          </div>
+          {working && <span className="wg-agent__spin" aria-hidden />}
+        </div>
+
+        {active && (
+          <button className="wg-agent__frame" onClick={() => setFull(true)} aria-label={t('Full screen')}>
+            <iframe key={`ag-${card.sessionId}`} title="Live preview" src={agent!.liveViewUrl} tabIndex={-1} scrolling="no" />
+            <span className="wg-agent__expand">
+              <Icon name="grid" size={13} variant="duotone" /> {t('Full screen')}
+            </span>
+          </button>
+        )}
+
+        {active && working && last && <div className="wg-agent__now">{stepLabel(last)}</div>}
+        {active && agent!.result && <div className="wg-agent__result">{agent!.result}</div>}
+
+        <div className="wg-agent__acts">
+          {active ? (
+            <button className="wg-agent__btn primary" onClick={() => setFull(true)}>{t('Full screen')}</button>
+          ) : (
+            <button className="wg-agent__btn primary" onClick={() => watchAgent(card)}>{t('Watch it work')}</button>
+          )}
+          <a className="wg-agent__btn" href={card.url} target="_blank" rel="noreferrer">{t('Open in browser')}</a>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <SubScreen
       title="Wingman"
@@ -253,7 +300,7 @@ export const AssistantChat = () => {
             </div>
             {m.cards?.map((c, k) =>
               c.type === 'live_agent' ? (
-                <LiveAgentCardView card={c} key={k} onWatch={watchAgent} />
+                <div key={k}>{renderAgentInline(c)}</div>
               ) : (
                 <BrowserCardView card={c} key={k} onWatchLive={watchLive} />
               ),
@@ -308,10 +355,13 @@ export const AssistantChat = () => {
         document.body,
       )}
 
-      {agent &&
+      {agent && full &&
         createPortal(
         <div className="wg-lvb" role="dialog" aria-modal="true">
           <div className="wg-lvb__bar">
+            <button className="wg-lvb__back" onClick={() => setFull(false)} aria-label={t('Back to chat')}>
+              <Icon name="chevronLeft" size={20} variant="solid" />
+            </button>
             <div className="wg-lvb__tx">
               <span className="wg-lvb__dot" />
               {agent.done ? t('Finished — you can take control') : t('Wingman is working — take over anytime')}
