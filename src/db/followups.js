@@ -34,6 +34,17 @@ function listOpen(userId) {
   ).all(userId);
 }
 
+/**
+ * All follow-ups for a user (open first, then by due date). The /api/followups
+ * endpoint expects this; without it, authenticated users always got an empty
+ * list and "People waiting on you" / Business follow-up counts read zero.
+ */
+function listForUser(userId) {
+  return db.prepare(
+    "SELECT * FROM followups WHERE user_id = ? ORDER BY (status = 'open') DESC, COALESCE(due_date,'9999') ASC"
+  ).all(userId);
+}
+
 /** Open follow-ups whose due_date is before nowISO. */
 function listOverdue(userId, nowISO) {
   return db.prepare(`
@@ -48,4 +59,4 @@ function markStatus(id, status) {
   db.prepare('UPDATE followups SET status = ? WHERE id = ?').run(status, id);
 }
 
-module.exports = { create, listOpen, listOverdue, markStatus };
+module.exports = { create, listOpen, listForUser, listOverdue, markStatus };
