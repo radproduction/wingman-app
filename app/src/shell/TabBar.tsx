@@ -1,10 +1,11 @@
 import type { CSSProperties } from 'react'
 import { Icon, type IconName } from '../app/icons'
+import { WingGlyph } from '../onboarding/WingGlyph'
 import { t } from '../i18n'
 
 export const TAB_ROUTES = ['home', 'calendar', 'email', 'tasks', 'more'] as const
 
-// Center tab is Chat (opens the Wingman chat). Tasks was removed from the bar.
+// Center slot is the raised Wingman logo → opens the chat. Tasks removed.
 const TABS: { label: string; route: string; icon: IconName }[] = [
   { label: 'Home', route: 'home', icon: 'home' },
   { label: 'Calendar', route: 'calendar', icon: 'calendar' },
@@ -23,15 +24,23 @@ export const TabBar = ({ route }: { route: string }) => {
       <span className="wg-nav__ind" aria-hidden="true" />
       {TABS.map((tab) => {
         const active = route === tab.route
+        const go = () => {
+          window.location.hash = `#/${tab.route}`
+        }
+
+        // The Wingman logo, raised, as the centre action.
+        if (tab.route === 'assistant') {
+          return (
+            <button key={tab.route} className="wg-nav__logobtn" aria-label={t('Chat with Wingman')} onClick={go}>
+              <span className="wg-nav__logo">
+                <WingGlyph className="wg-nav__logo-mark" />
+              </span>
+            </button>
+          )
+        }
+
         return (
-          <button
-            key={tab.route}
-            className={active ? 'on' : ''}
-            aria-current={active ? 'page' : undefined}
-            onClick={() => {
-              window.location.hash = `#/${tab.route}`
-            }}
-          >
+          <button key={tab.route} className={active ? 'on' : ''} aria-current={active ? 'page' : undefined} onClick={go}>
             <span className="pill">
               <Icon name={tab.icon} size={20} variant={active ? 'duotone' : 'stroke'} />
             </span>

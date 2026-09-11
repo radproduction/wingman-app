@@ -4192,6 +4192,41 @@
   color: var(--accent-deep);
 }
 
+/* Centre action: the raised Wingman logo that opens the chat. */
+.wg-nav__logobtn {
+  position: relative;
+  z-index: 2;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+.wg-nav__logo {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: var(--card);
+  display: grid;
+  place-items: center;
+  transform: translateY(-14px);
+  box-shadow:
+    0 6px 16px rgba(0, 0, 0, 0.18),
+    inset 0 1px 1px var(--glass-hi),
+    inset 0 0 0 1px var(--glass-line);
+  transition: transform 0.15s ease;
+}
+.wg-nav__logobtn:active .wg-nav__logo {
+  transform: translateY(-14px) scale(0.93);
+}
+.wg-nav__logo-mark {
+  width: 26px;
+  height: auto;
+}
+
 @supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
   .wg-nav {
     background: var(--card);
