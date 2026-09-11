@@ -1,11 +1,11 @@
 import { HeaderBrand } from './HeaderBrand'
 import { Icon, IconWhatsapp } from './icons'
+import { Avatar } from './Avatar'
 import { useUnreadCount } from '../data/notices'
 import { useProfile } from '../data/store'
 import { t } from '../i18n'
 import { navigate } from '../shell/nav'
 import { openWhatsApp } from '../shell/whatsapp'
-import fallbackAvatar from '../assets/avatar.jpg'
 
 export const AppHeader = () => {
   const unread = useUnreadCount()
@@ -27,7 +27,7 @@ export const AppHeader = () => {
           {unread > 0 && <i className="wg-bell__dot" aria-hidden="true" />}
         </button>
         <button className="wg-avatar" aria-label={t('Your account')} onClick={() => navigate('profile')}>
-          <img src={profile.avatarUrl || fallbackAvatar} alt="" referrerPolicy="no-referrer" />
+          <Avatar id={profile.name} src={profile.avatarUrl} />
         </button>
       </div>
     </header>

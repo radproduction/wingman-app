@@ -1,10 +1,10 @@
 import { SetRow, SubScreen } from './SubScreen'
 import { Icon, IconCheckCircle, IconSpark } from './icons'
+import { Avatar } from './Avatar'
 import { useAgent } from '../data/agentSettings'
 import { useProfile } from '../data/store'
 import { t } from '../i18n'
 import { confirmSignOut } from './SignIn'
-import avatarUrl from '../assets/avatar.jpg'
 import './app.css'
 
 export const Profile = () => {
@@ -14,7 +14,7 @@ export const Profile = () => {
   <SubScreen title="Account settings" back="more" className="wg-profile">
     <div className="wg-prof">
       <span className="wg-prof__ava">
-        <img src={profile.avatarUrl || avatarUrl} alt="" referrerPolicy="no-referrer" />
+        <Avatar id={profile.name} src={profile.avatarUrl} />
       </span>
       <div className="wg-prof__name">{profile.name}</div>
       <div className="wg-prof__sub">{t(profile.workspace)}</div>

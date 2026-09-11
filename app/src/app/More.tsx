@@ -11,7 +11,7 @@ import { openConnect } from './ConnectSheet'
 import { confirmAction } from '../shell/confirm'
 import { toast } from '../shell/toast'
 import { confirmSignOut } from './SignIn'
-import avatarUrl from '../assets/avatar.jpg'
+import { Avatar } from './Avatar'
 import './app.css'
 
 const settings: { name: string; tone: string; icon: IconName; route: string }[] = [
@@ -59,7 +59,7 @@ export const More = () => {
           <div className="wg-panel__scroll">
             <button className="wg-account wg-card-line" data-feedback="header" onClick={() => navigate('profile')}>
               <span className="wg-account__ava">
-                <img src={profile.avatarUrl || avatarUrl} alt="" referrerPolicy="no-referrer" />
+                <Avatar id={profile.name} src={profile.avatarUrl} />
               </span>
               <div className="wg-account__tx">
                 <div className="wg-account__name">{profile.name}</div>

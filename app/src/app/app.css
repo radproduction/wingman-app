@@ -3666,6 +3666,25 @@
   border-radius: 50%;
 }
 
+/* Initials fallback — inherits the surrounding chip's colour + size, so it
+   matches a plain letter exactly (no fake photo, no cartoon). */
+.wg-face--initials {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  font-weight: 600;
+  line-height: 1;
+  text-transform: uppercase;
+  color: currentColor;
+}
+/* The user's own avatar chips carry no text colour of their own, so give the
+   initials the lavender pairing and a size that fits each container. */
+.wg-avatar .wg-face--initials { font-size: 15px; color: var(--tone-lavender); }
+.wg-account__ava .wg-face--initials { font-size: 18px; color: var(--tone-lavender); }
+.wg-prof__ava .wg-face--initials { font-size: 32px; color: var(--tone-lavender); }
+
 .wg-chip--letter {
   font-size: 15px;
   font-weight: 500;
