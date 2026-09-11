@@ -94,16 +94,19 @@ export const notifications = {
 }
 
 
+// Neutral defaults only — NO fake identity. The real name/email/phone/avatar
+// come from /api/me on sign-in; until then these stay blank rather than showing
+// a fictional person (previously "John Doe" with a mismatched email).
 export const profile = {
-  name: 'John Doe',
-  workspace: 'Personal & business workspace',
-  phone: '+92 300 8412 210',
-  email: 'aamir@callusrad.com',
+  name: '',
+  workspace: 'Personal workspace',
+  phone: '',
+  email: '',
   timezone: 'Asia/Karachi',
   workday: '09:00 to 18:00',
   briefing: '7:00 AM',
   wrap: '8:00 PM',
-  since: 'With you since July 2026',
+  since: '',
   avatarUrl: '',
 }
 

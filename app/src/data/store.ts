@@ -76,6 +76,9 @@ const sinceLabel = (iso?: unknown): string | undefined => {
 export const hydrateProfile = async (): Promise<void> => {
   try {
     const me = (await api.me()) as Record<string, unknown>
+    // An expired/invalid token makes the backend return the demo persona with
+    // mock:true — never cache that as the user (it caused "Aamir" to stick).
+    if (me.mock) return
     const patch: Partial<Profile> = {}
     if (me.name) patch.name = String(me.name)
     if (me.phone) patch.phone = String(me.phone).startsWith('+') ? String(me.phone) : `+${me.phone}`

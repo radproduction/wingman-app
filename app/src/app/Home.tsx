@@ -3,10 +3,9 @@ import { AppHeader } from './AppHeader'
 import { Icon, IconCheck } from './icons'
 import { Dashboard } from './Dashboard'
 import { DashboardSkeleton } from './Skeleton'
-import { home as homeSeed } from '../data/mock'
 import { useProfile } from '../data/store'
 import { revealHold } from '../data/loading'
-import { localize, t } from '../i18n'
+import { t } from '../i18n'
 import { usePullToRefresh } from '../shell/usePullToRefresh'
 import { PullSpacer } from '../shell/PullSpacer'
 import './app.css'
@@ -33,8 +32,8 @@ export const Home = () => {
   }, [])
   usePullToRefresh({ scrollerRef: scrollRef, hostRef: screenRef, onRefresh: refresh })
 
-  const DAY = localize(homeSeed)
-  const first = useProfile().name.split(' ')[0]
+  const today = new Date().toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })
+  const first = useProfile().name.split(' ')[0] || 'there'
 
   useEffect(() => {
     if (!editing) return
@@ -70,7 +69,7 @@ export const Home = () => {
             <div className={`wg-skel ${loading ? '' : 'is-revealed'}`} aria-busy={loading}>
               {loading && <DashboardSkeleton />}
               <div className="wg-skel__content" aria-hidden={loading}>
-                <p className="wg-dash__date">{DAY.date}</p>
+                <p className="wg-dash__date">{today}</p>
                 <Dashboard editing={editing} onDone={() => setEditing(false)} />
               </div>
             </div>
