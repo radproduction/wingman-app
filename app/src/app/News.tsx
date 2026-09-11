@@ -75,21 +75,35 @@ export const News = () => {
       <div className="wg-brief-line">
         <IconSpark size={16} />
         <span>
-          {t(
-            'I read the morning across your topics and kept the few that matter. Your brief lands on WhatsApp at {time}.',
-            { time: formatTime(prefs.deliver) },
-          )}
+          {brief.length > 0
+            ? t(
+                'I read the morning across your topics and kept the few that matter. Your brief lands on WhatsApp at {time}.',
+                { time: formatTime(prefs.deliver) },
+              )
+            : t('No news yet. When your brief is ready, it lands here and on WhatsApp at {time}.', {
+                time: formatTime(prefs.deliver),
+              })}
         </span>
       </div>
 
       <div className="wg-panel-head">
         <h2>{t('Your morning brief')}</h2>
       </div>
-      <div className="wg-nlist">
-        {brief.map((s) => (
-          <NewsRow key={s.id} story={s} />
-        ))}
-      </div>
+      {brief.length === 0 ? (
+        <div className="wg-empty wg-card-line">
+          <span className="wg-chip blue md">
+            <Icon name="news" size={22} variant="duotone" />
+          </span>
+          <strong>{t('No news yet')}</strong>
+          <p>{t('When your morning brief is ready, the stories that matter will show up here.')}</p>
+        </div>
+      ) : (
+        <div className="wg-nlist">
+          {brief.map((s) => (
+            <NewsRow key={s.id} story={s} />
+          ))}
+        </div>
+      )}
 
       <div className="wg-panel-head">
         <h2>{t('Following')}</h2>

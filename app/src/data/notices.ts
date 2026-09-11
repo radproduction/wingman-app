@@ -1,7 +1,17 @@
 import { useSyncExternalStore } from 'react'
-import { notifications } from './mock'
+import type { Notice } from './mock'
 
 const KEY = 'wingman.notices'
+
+// Phase 1: there is no real notification feed yet, so we do NOT read the mock
+// seed. The list is empty and the unread badge is 0 until a real source exists.
+// Shape (today/earlier/unread/handledQuietly) is kept so consumers don't change.
+export const notifications = {
+  unread: 0,
+  handledQuietly: 0,
+  today: [] as Notice[],
+  earlier: [] as Notice[],
+}
 
 const ALL = [...notifications.today, ...notifications.earlier]
 

@@ -46,13 +46,8 @@ export const Approvals = () => {
         <IconSpark size={16} />
         <span>
           {waiting.length > 0
-            ? tx('{waiting} waiting on you. I made {calls} calls on my own this month and brought you these.', {
-                waiting: <b>{waiting.length}</b>,
-                calls: <b>214</b>,
-              })
-            : tx('Nothing waiting on you. I made {calls} calls on my own this month and brought you these.', {
-                calls: <b>214</b>,
-              })}
+            ? tx('{waiting} waiting on you.', { waiting: <b>{waiting.length}</b> })
+            : t('Nothing is waiting for your approval.')}
         </span>
       </div>
 
@@ -73,7 +68,7 @@ export const Approvals = () => {
           <strong>{tab === 'waiting' ? t('Nothing waiting') : t('Nothing decided yet')}</strong>
           <p>
             {tab === 'waiting'
-              ? t("You're through every decision I've raised. I'll bring you the next one when it matters.")
+              ? t("When something needs your say-so before it happens, it'll appear here first.")
               : t('Once you approve or dismiss something, it stays here with what came of it.')}
           </p>
         </div>

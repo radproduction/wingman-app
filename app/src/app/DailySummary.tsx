@@ -69,6 +69,8 @@ export const DailySummary = () => {
   const { reviewed } = useIntel()
   const [tab, setTab] = useState<'morning' | 'evening'>('morning')
   const s = dailySummary
+  const morningEmpty = !s.intro && s.actNow.length + s.prepare.length + s.beAware.length + s.handled.length === 0
+  const eveningEmpty = !s.evening.intro && s.evening.lines.length === 0
 
   return (
     <SubScreen
@@ -103,16 +105,28 @@ export const DailySummary = () => {
       </div>
 
       {tab === 'morning' ? (
-        <>
+        morningEmpty ? (
           <div className="wg-bc__summary wg-card-line">
             <IconSpark size={18} />
-            <p>{s.intro}</p>
+            <p>{t('Your daily summary will appear here once Wingman has something to report.')}</p>
           </div>
-          <Group kind="act" title="Act now" lines={s.actNow} />
-          <Group kind="prepare" title="Prepare" lines={s.prepare} />
-          <Group kind="aware" title="Be aware" lines={s.beAware} />
-          <Group kind="handled" title="Handled by Wingman" note={`${s.handled.length} done`} lines={s.handled} />
-        </>
+        ) : (
+          <>
+            <div className="wg-bc__summary wg-card-line">
+              <IconSpark size={18} />
+              <p>{s.intro}</p>
+            </div>
+            <Group kind="act" title="Act now" lines={s.actNow} />
+            <Group kind="prepare" title="Prepare" lines={s.prepare} />
+            <Group kind="aware" title="Be aware" lines={s.beAware} />
+            <Group kind="handled" title="Handled by Wingman" note={`${s.handled.length} done`} lines={s.handled} />
+          </>
+        )
+      ) : eveningEmpty ? (
+        <div className="wg-bc__summary wg-card-line">
+          <IconSpark size={18} />
+          <p>{t('Your evening wrap-up will appear here once Wingman has something to report.')}</p>
+        </div>
       ) : (
         <>
           <div className="wg-bc__summary wg-card-line">
@@ -127,9 +141,11 @@ export const DailySummary = () => {
         </>
       )}
 
-      <p className="wg-footnote">
-        {t('Built from')} {s.sources.map((x) => t(x)).join(' · ')} · {t('updated {time}', { time: s.updated })}
-      </p>
+      {s.sources.length > 0 && (
+        <p className="wg-footnote">
+          {t('Built from')} {s.sources.map((x) => t(x)).join(' · ')} · {t('updated {time}', { time: s.updated })}
+        </p>
+      )}
     </SubScreen>
   )
 }

@@ -124,11 +124,12 @@ const useFillRamp = () => {
 const HANDLED_TICKS = 16
 
 const SnapshotWidget = () => {
-  const DAY = localize(homeSeed)
   const ready = useFillRamp()
-  const pct = Math.round((DAY.handled / DAY.total) * 100)
-  const needYou = DAY.total - DAY.handled
-  const lit = Math.round((DAY.handled / DAY.total) * HANDLED_TICKS)
+  const attention = useAttention()
+  const { progress } = useTasks()
+  const needYou = attention.length
+  const pct = Math.round(progress * 100)
+  const lit = Math.round(progress * HANDLED_TICKS)
   const litPct = (lit / HANDLED_TICKS) * 100
 
   return (
@@ -136,10 +137,7 @@ const SnapshotWidget = () => {
       className="wg-daycard"
       data-feedback="header"
       onClick={() => navigate('daily-summary')}
-      aria-label={`${t("Today's Snapshot")}. ${t('{n} need you', { n: needYou })}. ${t('Handled')} ${pct}%, ${t(
-        '{done} of {total}',
-        { done: DAY.handled, total: DAY.total },
-      )}`}
+      aria-label={`${t("Today's Snapshot")}. ${t('{n} need you', { n: needYou })}. ${t('Handled')} ${pct}%.`}
     >
       <span className="wg-daycard__top">
         {}
@@ -156,7 +154,7 @@ const SnapshotWidget = () => {
       <span className="wg-daycard__foot">
         <span className="wg-daycard__legend">
           <small>{t('Handled')}</small>
-          <em>{t('{done} of {total}', { done: DAY.handled, total: DAY.total })}</em>
+          <em>{pct}%</em>
         </span>
         {}
         <span className="wg-daycard__bar">
@@ -496,16 +494,18 @@ const CountsWidget = ({ size }: { size: WidgetSize }) => {
           const on = !key || conn.items.find((c) => c.key === key)?.status === 'connected'
           // Tasks is live from useTasks; Email/Calendar from the real dashboard
           // aggregate once loaded; otherwise the seed value.
+          // Real values from live hooks; a neutral "—" (not a seed number like
+          // 8/6) until the dashboard stats land.
           const value =
             m.key === 'tasks' ? String(openCount)
             : m.key === 'email' && stats ? String(stats.emailToReply)
             : m.key === 'cal' && stats ? String(stats.calToday)
-            : m.value
+            : '—'
           const fill =
             m.key === 'tasks' ? progress
             : m.key === 'email' && stats ? Math.min(1, stats.emailToReply / 12)
             : m.key === 'cal' && stats ? Math.min(1, stats.calToday / 10)
-            : m.fill
+            : 0
           return (
             <button
               className={`wg-metric ${m.tone}${on ? '' : ' off'}`}
@@ -554,7 +554,7 @@ const BusinessWidget = ({ size }: { size: WidgetSize }) => {
         tone="peach"
         title="Business"
         value={waiting > 0 ? t('{n} waiting', { n: waiting }) : t('All clear')}
-        sub={t('Your store, traffic up 18%')}
+        sub={t('Your store at a glance')}
         onOpen={() => navigate('business')}
       />
     )
@@ -563,7 +563,7 @@ const BusinessWidget = ({ size }: { size: WidgetSize }) => {
     <>
       <Head icon="briefcase" tone="peach" title="Business" end={t('Open')} onEnd={() => navigate('business')} />
       <span className="wg-wgt__val">{waiting > 0 ? t('{n} waiting', { n: waiting }) : t('All clear')}</span>
-      <span className="wg-wgt__sub">{t('Traffic up 18% · 3 meetings today')}</span>
+      <span className="wg-wgt__sub">{t('Meetings, follow-ups and your store — in one place')}</span>
       <div className="wg-wgt__fill" />
       <div className="wg-wgt__foot">
         <button className="wg-btn sm soft" onClick={() => navigate('meetings/instant')}>
@@ -576,24 +576,31 @@ const BusinessWidget = ({ size }: { size: WidgetSize }) => {
 
 
 const FocusWidget = ({ size }: { size: WidgetSize }) => {
-  const DAY = localize(homeSeed)
+  // Real focus = the single most pressing item that needs the user right now,
+  // taken from the live "needs attention" signal — never a scripted sample.
+  const attention = useAttention()
+  const top = attention[0]
+  const title = top ? top.title : "You're all caught up"
+  const body = top
+    ? top.sub
+    : "Nothing needs you right now — I'll flag anything the moment it comes up."
   return (
     <div className="wg-insight wg-card-line">
       <div className="wg-insight__top">
         <span className="wg-tag">
-          <IconSpark size={14} /> {DAY.focus.tag}
+          <IconSpark size={14} /> {top ? t(REASONS[top.reason].label) : t('Focus')}
         </span>
       </div>
-      <h2>{DAY.focus.title}</h2>
-      <p>{DAY.focus.body}</p>
-      {size === 'lg' && (
+      <h2>{t(title)}</h2>
+      <p>{t(body)}</p>
+      {size === 'lg' && top && (
         <div className="wg-insight__item">
-          <span className={`wg-chip ${DAY.focus.item.tone} sm`}>
-            <Icon name={DAY.focus.item.icon} size={20} variant="duotone" />
+          <span className={`wg-chip ${top.tone} sm`}>
+            <Icon name={top.icon} size={20} variant="duotone" />
           </span>
           <span className="tx">
-            <strong>{DAY.focus.item.title}</strong>
-            <small>{DAY.focus.item.sub}</small>
+            <strong>{t(top.title)}</strong>
+            <small>{t(top.sub)}</small>
           </span>
         </div>
       )}
@@ -601,9 +608,9 @@ const FocusWidget = ({ size }: { size: WidgetSize }) => {
       <button
         className="wg-insight__cta wg-btn full wa"
         data-feedback="quiet"
-        onClick={() => openWhatsApp(t('Tell me more about: {title}', { title: DAY.focus.title }))}
+        onClick={() => openWhatsApp(top ? t('Help me with: {title}', { title: top.title }) : t('What should I focus on today?'))}
       >
-        <IconWhatsapp size={18} /> {DAY.focus.cta}
+        <IconWhatsapp size={18} /> {top ? t('Ask Wingman about this') : t('Ask Wingman')}
       </button>
     </div>
   )
@@ -616,7 +623,7 @@ const WdayWidget = ({ size }: { size: WidgetSize }) => {
       <span className="wg-tag">
         <IconSpark size={14} /> {t("Wingman's Day")}
       </span>
-      <p className="wg-wday__sum">{t(wingmanDay.summary)}</p>
+      <p className="wg-wday__sum">{wingmanDay.summary ? t(wingmanDay.summary) : t('Nothing to report yet today.')}</p>
       <div className="wg-wday__counts">
         <div className="wg-wday__count">
           <b>{wingmanDay.counts.actions}</b>

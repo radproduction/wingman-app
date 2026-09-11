@@ -138,7 +138,11 @@ export const DailyIntelligence = () => {
     <SubScreen title="Daily Intelligence" back="home" className="wg-mod" feedback="header">
       {}
       <div className="wg-di-overview wg-card-line">
-        <p>{t(o.text)}</p>
+        <p>
+          {o.text
+            ? t(o.text)
+            : t("Wingman hasn't logged any activity yet. When it acts on your behalf, you'll see exactly what it did, and why, right here.")}
+        </p>
         <div className="wg-di-stats">
           <div className="wg-di-stat">
             <b>{o.completed}</b>
@@ -158,27 +162,35 @@ export const DailyIntelligence = () => {
           </div>
         </div>
       </div>
-      <p className="wg-footnote" style={{ textAlign: 'start', margin: '0 var(--space-8)' }}>
-        {t('{date} · updated {time} · {status}', { date: o.date, time: o.updated, status: o.status })}
-      </p>
+      {(o.date || o.updated || o.status) && (
+        <p className="wg-footnote" style={{ textAlign: 'start', margin: '0 var(--space-8)' }}>
+          {t('{date} · updated {time} · {status}', { date: o.date, time: o.updated, status: o.status })}
+        </p>
+      )}
 
       {}
-      <div className="wg-panel-head">
-        <h2>{t('Decisions I made')}</h2>
-      </div>
-      <div className="wg-msteps">
-        {dailyIntel.decisions.map((d) => (
-          <DecisionCard key={d.id} d={d} />
-        ))}
-      </div>
+      {dailyIntel.decisions.length > 0 && (
+        <>
+          <div className="wg-panel-head">
+            <h2>{t('Decisions I made')}</h2>
+          </div>
+          <div className="wg-msteps">
+            {dailyIntel.decisions.map((d) => (
+              <DecisionCard key={d.id} d={d} />
+            ))}
+          </div>
+        </>
+      )}
 
       {}
-      <div className="wg-panel-head">
-        <h2>{t('Actions I completed')}</h2>
-      </div>
-      <div className="wg-msteps">
-        {dailyIntel.actions.map((a) => (
-          <div className="wg-di-act wg-card-line" key={a.id}>
+      {dailyIntel.actions.length > 0 && (
+        <>
+          <div className="wg-panel-head">
+            <h2>{t('Actions I completed')}</h2>
+          </div>
+          <div className="wg-msteps">
+            {dailyIntel.actions.map((a) => (
+              <div className="wg-di-act wg-card-line" key={a.id}>
             <span className={`wg-chip ${a.tone} xs`}>
               <Icon name={a.icon} size={18} variant="duotone" />
             </span>
@@ -202,18 +214,24 @@ export const DailyIntelligence = () => {
               </div>
             </div>
           </div>
-        ))}
-      </div>
+            ))}
+          </div>
+        </>
+      )}
 
       {}
-      <div className="wg-panel-head">
-        <h2>{t('Recommendations')}</h2>
-      </div>
-      <div className="wg-msteps">
-        {dailyIntel.recommendations.map((r) => (
-          <RecCard key={r.id} r={r} />
-        ))}
-      </div>
+      {dailyIntel.recommendations.length > 0 && (
+        <>
+          <div className="wg-panel-head">
+            <h2>{t('Recommendations')}</h2>
+          </div>
+          <div className="wg-msteps">
+            {dailyIntel.recommendations.map((r) => (
+              <RecCard key={r.id} r={r} />
+            ))}
+          </div>
+        </>
+      )}
 
       {}
       <div className="wg-panel-head">
@@ -246,86 +264,102 @@ export const DailyIntelligence = () => {
       )}
 
       {}
-      <div className="wg-panel-head">
-        <h2>{t('What I noticed')}</h2>
-      </div>
-      <div className="wg-msteps">
-        {dailyIntel.insights.map((i) => (
-          <div className="wg-di-card wg-card-line" key={i.id}>
-            <div className="wg-di-card__top">
-              <span className={`wg-chip ${i.tone} xs`}>
-                <Icon name={i.icon} size={17} variant="duotone" />
-              </span>
-              <span className="wg-di-card__title">{t(i.title)}</span>
-              <span className="wg-state insight">{t('Insight')}</span>
-            </div>
-            <p className="wg-di-card__body">{t(i.body)}</p>
-            {i.action && (
-              <div className="wg-di-acts">
-                <button className="wg-btn sm quiet" onClick={() => toast(t('Done.'), 'check')}>
-                  {t(i.action)}
-                </button>
+      {dailyIntel.insights.length > 0 && (
+        <>
+          <div className="wg-panel-head">
+            <h2>{t('What I noticed')}</h2>
+          </div>
+          <div className="wg-msteps">
+            {dailyIntel.insights.map((i) => (
+              <div className="wg-di-card wg-card-line" key={i.id}>
+                <div className="wg-di-card__top">
+                  <span className={`wg-chip ${i.tone} xs`}>
+                    <Icon name={i.icon} size={17} variant="duotone" />
+                  </span>
+                  <span className="wg-di-card__title">{t(i.title)}</span>
+                  <span className="wg-state insight">{t('Insight')}</span>
+                </div>
+                <p className="wg-di-card__body">{t(i.body)}</p>
+                {i.action && (
+                  <div className="wg-di-acts">
+                    <button className="wg-btn sm quiet" onClick={() => toast(t('Done.'), 'check')}>
+                      {t(i.action)}
+                    </button>
+                  </div>
+                )}
               </div>
-            )}
+            ))}
           </div>
-        ))}
-      </div>
+        </>
+      )}
 
       {}
-      <div className="wg-panel-head">
-        <h2>{t('What I read')}</h2>
-      </div>
-      <div className="wg-msteps">
-        {dailyIntel.sources.map((s) => (
-          <div className="wg-di-act wg-card-line" key={s.name}>
-            <span className={`wg-chip ${s.tone} xs`}>
-              <Icon name={s.icon} size={18} variant="duotone" />
-            </span>
-            <div className="wg-di-act__tx">
-              <div className="wg-di-act__title">{t(s.name)}</div>
-              <div className="wg-di-act__body">{t(s.note)}</div>
-            </div>
+      {dailyIntel.sources.length > 0 && (
+        <>
+          <div className="wg-panel-head">
+            <h2>{t('What I read')}</h2>
           </div>
-        ))}
-      </div>
+          <div className="wg-msteps">
+            {dailyIntel.sources.map((s) => (
+              <div className="wg-di-act wg-card-line" key={s.name}>
+                <span className={`wg-chip ${s.tone} xs`}>
+                  <Icon name={s.icon} size={18} variant="duotone" />
+                </span>
+                <div className="wg-di-act__tx">
+                  <div className="wg-di-act__title">{t(s.name)}</div>
+                  <div className="wg-di-act__body">{t(s.note)}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
 
       {}
-      <div className="wg-panel-head">
-        <h2>{t("What I didn't do")}</h2>
-      </div>
-      <ul className="wg-mcontext wg-card-line wg-notdone">
-        {dailyIntel.notDone.map((n) => (
-          <li key={n}>
-            <Icon name="shield" size={16} variant="duotone" />
-            {t(n)}
-          </li>
-        ))}
-      </ul>
+      {dailyIntel.notDone.length > 0 && (
+        <>
+          <div className="wg-panel-head">
+            <h2>{t("What I didn't do")}</h2>
+          </div>
+          <ul className="wg-mcontext wg-card-line wg-notdone">
+            {dailyIntel.notDone.map((n) => (
+              <li key={n}>
+                <Icon name="shield" size={16} variant="duotone" />
+                {t(n)}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
 
       {}
-      <div className="wg-panel-head">
-        <h2>{t('Timeline')}</h2>
-      </div>
-      <div className="wg-mfilter" data-feedback="quiet">
-        {TIMELINE_FILTERS.map((f) => (
-          <button key={f.key} className={filter === f.key ? 'on' : ''} onClick={() => setFilter(f.key)}>
-            {t(f.label)}
-          </button>
-        ))}
-      </div>
-      <ul className="wg-tl">
-        {timeline.map((i, idx) => (
-          <li key={idx}>
-            <span className="wg-tl__mark">
-              <span className={`wg-tl__dot ${i.kind}`} />
-            </span>
-            <div className="wg-tl__tx">
-              <div className="wg-tl__at">{i.at}</div>
-              <div className="wg-tl__text">{t(i.text)}</div>
-            </div>
-          </li>
-        ))}
-      </ul>
+      {dailyIntel.timeline.length > 0 && (
+        <>
+          <div className="wg-panel-head">
+            <h2>{t('Timeline')}</h2>
+          </div>
+          <div className="wg-mfilter" data-feedback="quiet">
+            {TIMELINE_FILTERS.map((f) => (
+              <button key={f.key} className={filter === f.key ? 'on' : ''} onClick={() => setFilter(f.key)}>
+                {t(f.label)}
+              </button>
+            ))}
+          </div>
+          <ul className="wg-tl">
+            {timeline.map((i, idx) => (
+              <li key={idx}>
+                <span className="wg-tl__mark">
+                  <span className={`wg-tl__dot ${i.kind}`} />
+                </span>
+                <div className="wg-tl__tx">
+                  <div className="wg-tl__at">{i.at}</div>
+                  <div className="wg-tl__text">{t(i.text)}</div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
 
       <button className="wg-mod__ask wg-btn full wa" onClick={() => openWhatsApp(t('Tell me about my day'))}>
         <IconWhatsapp size={18} /> {t('Ask Wingman about today')}

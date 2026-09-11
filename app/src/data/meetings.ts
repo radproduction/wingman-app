@@ -466,7 +466,9 @@ let serverMeetings: Meeting[] | null = null
 
 export const allMeetings = (): Meeting[] => {
   const instants = instantMeetings()
-  if (serverMeetings === null) return [...instants, ...meetings] // seed until loaded
+  // Before the backend responds show only the user's real (local instant)
+  // meetings — never the fake sample meetings/transcripts (Sarah/Meridian etc.).
+  if (serverMeetings === null) return [...instants]
   const syncedIds = new Set(instants.map((m) => m.serverId).filter(Boolean))
   const server = serverMeetings.filter((m) => !syncedIds.has(m.serverId))
   return [...instants, ...server]

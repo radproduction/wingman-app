@@ -1,8 +1,8 @@
 import { SubScreen } from './SubScreen'
 import { ApprovalAction } from './ApprovalCard'
 import { Icon, IconSpark } from './icons'
-import { notifications as noticesSeed, type Notice } from '../data/mock'
-import { useRead, markRead, markAllRead as clearAll } from '../data/notices'
+import { type Notice } from '../data/mock'
+import { notifications as noticesSeed, useRead, markRead, markAllRead as clearAll } from '../data/notices'
 import { localize, t, tx } from '../i18n'
 import { tapQuiet } from '../shell/feedback'
 import './app.css'
@@ -41,6 +41,7 @@ export const Notifications = () => {
 
   const isRead = (n: Notice) => read.includes(n.id)
   const unreadCount = notifications.today.filter((n) => !isRead(n)).length
+  const hasAny = notifications.today.length + notifications.earlier.length > 0
 
   return (
     <SubScreen
@@ -60,29 +61,45 @@ export const Notifications = () => {
         <span>
           {unreadCount > 0
             ? tx('{n} want you.', { n: <b>{unreadCount}</b> })
-            : t("You're all caught up.")}{' '}
-          {tx('I handled {n} quietly since yesterday.', { n: <b>{notifications.handledQuietly}</b> })}
+            : t("You're all caught up.")}
         </span>
       </div>
 
-      <div className="wg-panel-head">
-        <h2>{t('Today')}</h2>
-        {unreadCount > 0 && <span>{t('{n} new', { n: unreadCount })}</span>}
-      </div>
-      <div className="wg-row-list">
-        {notifications.today.map((n) => (
-          <NoticeRow key={n.id} n={n} read={isRead(n)} onRead={() => markRead(n.id)} />
-        ))}
-      </div>
+      {!hasAny ? (
+        <div className="wg-bc__summary wg-card-line">
+          <IconSpark size={18} />
+          <p>{t('No notifications yet. When Wingman has something for you, it will show up here.')}</p>
+        </div>
+      ) : (
+        <>
+          {notifications.today.length > 0 && (
+            <>
+              <div className="wg-panel-head">
+                <h2>{t('Today')}</h2>
+                {unreadCount > 0 && <span>{t('{n} new', { n: unreadCount })}</span>}
+              </div>
+              <div className="wg-row-list">
+                {notifications.today.map((n) => (
+                  <NoticeRow key={n.id} n={n} read={isRead(n)} onRead={() => markRead(n.id)} />
+                ))}
+              </div>
+            </>
+          )}
 
-      <div className="wg-panel-head">
-        <h2>{t('Earlier')}</h2>
-      </div>
-      <div className="wg-row-list">
-        {notifications.earlier.map((n) => (
-          <NoticeRow key={n.id} n={n} read={isRead(n)} onRead={() => markRead(n.id)} />
-        ))}
-      </div>
+          {notifications.earlier.length > 0 && (
+            <>
+              <div className="wg-panel-head">
+                <h2>{t('Earlier')}</h2>
+              </div>
+              <div className="wg-row-list">
+                {notifications.earlier.map((n) => (
+                  <NoticeRow key={n.id} n={n} read={isRead(n)} onRead={() => markRead(n.id)} />
+                ))}
+              </div>
+            </>
+          )}
+        </>
+      )}
     </SubScreen>
   )
 }

@@ -1,7 +1,9 @@
+import { useEffect } from 'react'
 import { ModuleScreen, ModHead, ModRow } from './ModuleScreen'
 import { Icon } from './icons'
-import { deliveries as deliveriesSeed, DELIVERY_STEPS, type Delivery } from '../data/mock'
-import { localize, t } from '../i18n'
+import { DELIVERY_STEPS, type Delivery } from '../data/mock'
+import { useDeliveries, hydrateDeliveries } from '../data/deliveries'
+import { t } from '../i18n'
 import './app.css'
 
 const Parcel = ({ d }: { d: Delivery }) => (
@@ -29,33 +31,63 @@ const Parcel = ({ d }: { d: Delivery }) => (
   </div>
 )
 
+// Hydrate once across mounts (App.tsx is owned elsewhere, so we trigger it here).
+let hydrated = false
+
 export const Deliveries = () => {
-  const deliveries = localize(deliveriesSeed)
+  const data = useDeliveries()
+
+  useEffect(() => {
+    if (hydrated) return
+    hydrated = true
+    void hydrateDeliveries()
+  }, [])
+
+  const transit = data?.transit ?? []
+  const landed = data?.landed ?? []
+
+  const heroValue =
+    !data ? t('Loading…')
+    : transit.length > 0 ? t('{n} on the way', { n: transit.length })
+    : t('Nothing on the way')
+  const heroSub =
+    !data ? t('Checking your deliveries…')
+    : transit[0] ? transit[0].when
+    : t('I watch your mail for shipping updates')
 
   return (
-    <ModuleScreen k="deliveries">
-      {}
+    <ModuleScreen k="deliveries" heroValue={heroValue} heroSub={heroSub}>
       <ModHead title="On the way" />
-      <div className="wg-row-list">
-        {deliveries.transit.map((d) => (
-          <Parcel key={d.item} d={d} />
-        ))}
-      </div>
+      {transit.length === 0 ? (
+        <p className="wg-note">
+          {t('Nothing on the way right now. I watch your mail for shipping updates and track parcels here.')}
+        </p>
+      ) : (
+        <div className="wg-row-list">
+          {transit.map((d, i) => (
+            <Parcel key={`${d.item}-${i}`} d={d} />
+          ))}
+        </div>
+      )}
 
-      <ModHead title="Arrived" />
-      <div className="wg-row-list">
-        {deliveries.landed.map((d) => (
-          <ModRow
-            key={d.item}
-            tone={d.tone}
-            icon={d.icon}
-            name={d.item}
-            meta={d.when}
-            note={d.window}
-            done={d.closed}
-          />
-        ))}
-      </div>
+      {landed.length > 0 && (
+        <>
+          <ModHead title="Arrived" />
+          <div className="wg-row-list">
+            {landed.map((d, i) => (
+              <ModRow
+                key={`${d.item}-${i}`}
+                tone={d.tone}
+                icon={d.icon}
+                name={d.item}
+                meta={d.when}
+                note={d.window}
+                done={d.closed}
+              />
+            ))}
+          </div>
+        </>
+      )}
     </ModuleScreen>
   )
 }
