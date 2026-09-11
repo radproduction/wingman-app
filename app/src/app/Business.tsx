@@ -110,13 +110,6 @@ export const Business = () => {
       </div>
       <div className="wg-set-list wg-card-line">
         <SetRow icon="calendar" tone="lavender" name="Today's meetings" value={t('{n} need prep', { n: toPrep })} to="meetings" />
-        <SetRow
-          icon="checkCircle"
-          tone="blue"
-          name={bc.completed.title}
-          value={t('Summary ready')}
-          to={`meetings/${bc.completed.meeting}/summary`}
-        />
       </div>
 
       {}
