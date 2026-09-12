@@ -109,7 +109,17 @@ router.get('/me', async (req, res) => {
     enabled_skills: u.enabled_skills,
     tone: u.tone,
     communication_style: u.communication_style,
-    health_connected: !!u.health_connected,
+    // Saved home/office (set via /api/places) — the app needs these for the
+    // commute widget and leave-by times; they were missing before, so commute
+    // never loaded.
+    home_address: u.home_address || null,
+    office_address: u.office_address || null,
+    // Derive "health connected" from real readings, not the dead health_connected
+    // column that nothing ever writes (which made a connected user read as not).
+    health_connected: (() => {
+      try { return require('../db/healthData').hasAnyData(u.id); }
+      catch (_) { return !!u.health_connected; }
+    })(),
     gmail_connected: require('../auth/googleAuth').isEmailConnected(u),
     calendar_connected: require('../auth/googleAuth').isConnected(u),
     webmail_connected: !!u.webmail_address,
