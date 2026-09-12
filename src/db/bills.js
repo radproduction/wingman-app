@@ -69,6 +69,11 @@ function findByName(userId, phrase) {
   return matches[0] || null;
 }
 
+/** One bill by id (used to check ownership before a mutation). */
+function getById(id) {
+  return db.prepare('SELECT * FROM bills WHERE id = ?').get(id);
+}
+
 function markPaid(id) {
   // Stamp paid_at (only the first time it flips to paid) so the behaviour layer
   // can learn this user's real payment timing vs the due date.
@@ -101,4 +106,4 @@ function markAlerted(ids, whenISO) {
   tx(ids);
 }
 
-module.exports = { upsert, listForUser, findByName, markPaid, markPaidByName, markAlerted };
+module.exports = { upsert, listForUser, findByName, getById, markPaid, markPaidByName, markAlerted };

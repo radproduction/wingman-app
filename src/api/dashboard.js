@@ -19,18 +19,11 @@ const config = require('../config');
 
 // ── helpers ──────────────────────────────────────────────────────────
 function resolveUser(req) {
-  // 1) Authenticated user (attached by the auth middleware) always wins.
-  if (req.user) return req.user;
-  // 2) Explicit ?userId= (used by internal/debug tooling).
-  const { userId } = req.query;
-  if (userId) {
-    const u = usersRepo.getById(userId);
-    if (u) return u;
-  }
-  // 3) No authenticated user → null. We intentionally do NOT fall back to the
-  //    first user (that would leak one user's data to anonymous requests).
-  //    Unauthenticated requests get the mock dataset instead.
-  return null;
+  // Only the authenticated user (attached by the auth middleware). We used to
+  // also honour ?userId= for "debug tooling", but that let anyone read another
+  // user's real emails/calendar/bills/contacts with no token — removed. No auth
+  // → null (unauthenticated requests get the mock dataset, never real data).
+  return req.user || null;
 }
 
 /**
@@ -524,9 +517,13 @@ router.post('/tasks/:id/complete', (req, res) => {
   const u = resolveUser(req);
   const repo = requireRepo('tasks');
   try {
-    if (u && repo && repo.complete) {
-      repo.complete(req.params.id);
-      require('../services/googleTasks').mirrorTaskCompletion(req.params.id).catch(() => {});
+    // Only the task's owner may complete it (was unscoped — cross-user write).
+    if (u && repo && repo.complete && repo.getById) {
+      const task = repo.getById(req.params.id);
+      if (task && String(task.user_id) === String(u.id)) {
+        repo.complete(req.params.id);
+        require('../services/googleTasks').mirrorTaskCompletion(req.params.id).catch(() => {});
+      }
     }
   } catch (_) { /* ignore for mock */ }
   res.json({ ok: true, id: req.params.id, completed: true });
@@ -553,7 +550,11 @@ router.post('/bills/:id/pay', (req, res) => {
   const u = resolveUser(req);
   const repo = requireRepo('bills');
   try {
-    if (u && repo && repo.markPaid) repo.markPaid(req.params.id);
+    // Only the bill's owner may mark it paid (was unscoped — cross-user write).
+    if (u && repo && repo.markPaid && repo.getById) {
+      const bill = repo.getById(req.params.id);
+      if (bill && String(bill.user_id) === String(u.id)) repo.markPaid(req.params.id);
+    }
   } catch (_) { /* ignore for mock */ }
   res.json({ ok: true, id: req.params.id, status: 'paid' });
 });
