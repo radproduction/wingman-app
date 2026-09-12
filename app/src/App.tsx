@@ -48,8 +48,6 @@ import { NewsStory } from './app/NewsStory'
 import { NewsTopics } from './app/NewsTopics'
 import { NewsSettings } from './app/NewsSettings'
 import { Commerce } from './app/Commerce'
-import { Pipeline } from './app/Pipeline'
-import { Traffic } from './app/Traffic'
 import { Bills } from './app/Bills'
 import { Deliveries } from './app/Deliveries'
 import { Travel } from './app/Travel'
@@ -167,8 +165,6 @@ const Screen = ({ route }: { route: string }) => {
     }
   }
   if (route === 'commerce') return <Commerce />
-  if (route === 'pipeline') return <Pipeline />
-  if (route === 'traffic') return <Traffic />
   if (isTabRoute(route)) return <ComingSoon route={route} />
   if (route === 'morning-paper') return <MorningPaper />
   if (route === 'first-light') return <FirstLight />
