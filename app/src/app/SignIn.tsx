@@ -5,7 +5,7 @@ import { COUNTRY_CODES, CC_FLAGS, useCodeBoxes, useResendTimer } from '../onboar
 import { useProfile, firstName } from '../data/store'
 import { signIn, signOut, startFresh } from '../data/session'
 import { resetProfile } from '../data/store'
-import { setToken } from '../data/api'
+import { api, ApiError, setToken } from '../data/api'
 import { clearOnboardingState } from '../onboarding/shared'
 import { confirmAction } from '../shell/confirm'
 import { t } from '../i18n'
@@ -77,6 +77,7 @@ const Step = ({
 
 export const Welcome = () => {
   const profile = useProfile()
+  const hasName = !!profile.name.trim()
   const first = firstName(profile.name)
 
   const fresh = async () => {
@@ -102,11 +103,11 @@ export const Welcome = () => {
       <div className="wg-screen wg-screen--flow">
         <div className="wg-main wg-main--center">
           <WingGlyph className="wg-welcome__mark" />
-          <h1 className="wg-h1">{t('Welcome back, {name}', { name: first })}</h1>
+          <h1 className="wg-h1">{hasName ? t('Welcome back, {name}', { name: first }) : t('Welcome to Wingman')}</h1>
           <p className="wg-body">
-            {t(
-              "Everything is where you left it — what I remember, what's waiting on you, all of it. I just need to know it's you.",
-            )}
+            {hasName
+              ? t("Everything is where you left it — what I remember, what's waiting on you, all of it. I just need to know it's you.")
+              : t('Sign in to your account, or create a new one to get started. Both take a WhatsApp code — no passwords.')}
           </p>
         </div>
         <div className="wg-actions wg-actions--stack">
@@ -114,7 +115,7 @@ export const Welcome = () => {
             {t('Sign in')}
           </button>
           <button className="wg-btn-text" onClick={fresh}>
-            {t('Not {name}? Start fresh', { name: first })}
+            {hasName ? t('Not {name}? Start fresh', { name: first }) : t('Create an account')}
           </button>
         </div>
       </div>
@@ -134,6 +135,7 @@ export const SignIn = () => {
   const [cc, setCc] = useState(() => ccOf(profile.phone))
   const [phone, setPhone] = useState('')
   const [code, setCode] = useState(['', '', '', '', '', ''])
+  const [busy, setBusy] = useState(false)
   const boxes = useCodeBoxes(code, setCode)
   const resend = useResendTimer(step === 'verify')
 
@@ -141,9 +143,41 @@ export const SignIn = () => {
   const phoneValid = phone.replace(/\D/g, '').length >= 7
   const codeComplete = code.every((d) => d !== '')
 
-  const done = () => {
-    signIn()
-    navigate('home')
+  // E.164 digits (cc + number, leading zeros stripped) — the format the OTP
+  // endpoints expect. Mirrors the onboarding flow.
+  const phoneE164 = () => {
+    const c = cc.replace(/\D/g, '')
+    let num = phone.replace(/\D/g, '').replace(/^0+/, '')
+    if (c && num.startsWith(c) && num.length > c.length + 6) num = num.slice(c.length)
+    return c + num
+  }
+
+  // Ask the backend to send the real WhatsApp OTP. Returns true on success.
+  const send = async (): Promise<boolean> => {
+    setBusy(true)
+    try {
+      await api.requestOtp(phoneE164())
+      return true
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : t('Could not send the code. Check the number.'))
+      return false
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // Verify the code — this actually authenticates and stores the session token.
+  const verify = async () => {
+    setBusy(true)
+    try {
+      await api.verifyOtp(phoneE164(), code.join('')) // stores the bearer token on success
+      signIn()
+      navigate('home')
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : t('That code didn\'t work. Check it and try again.'))
+    } finally {
+      setBusy(false)
+    }
   }
 
   if (step === 'verify')
@@ -153,9 +187,9 @@ export const SignIn = () => {
         title="Enter your code"
         body={t('Sent on WhatsApp to {phone}.', { phone: fullPhone })}
         back={() => setStep('phone')}
-        next={done}
+        next={() => void verify()}
         nextLabel="Sign in"
-        nextDisabled={!codeComplete}
+        nextDisabled={!codeComplete || busy}
       >
         <div className="wg-code" onPaste={boxes.onPaste}>
           {code.map((d, i) => (
@@ -172,9 +206,9 @@ export const SignIn = () => {
         </div>
         <p className="wg-note">
           {resend.canResend ? (
-            <button className="wg-btn-text" onClick={() => {
+            <button className="wg-btn-text" onClick={async () => {
               resend.restart()
-              toast('Code re-sent on WhatsApp')
+              if (await send()) toast('Code re-sent on WhatsApp')
             }}>
               {t('Resend code')}
             </button>
@@ -191,9 +225,9 @@ export const SignIn = () => {
       title="What's your WhatsApp number?"
       body="The same one you set me up with. I'll text a 6-digit code to check it's you."
       back={() => navigate('welcome')}
-      next={() => setStep('verify')}
+      next={async () => { if (await send()) setStep('verify') }}
       nextLabel="Send my code"
-      nextDisabled={!phoneValid}
+      nextDisabled={!phoneValid || busy}
     >
       <div className="wg-field">
         <select aria-label={t('Country code')} value={cc} onChange={(e) => setCc(e.target.value)}>
