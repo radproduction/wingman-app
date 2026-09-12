@@ -197,6 +197,7 @@ export const SignIn = () => {
               key={i}
               ref={(el) => (boxes.refs.current[i] = el)}
               inputMode="numeric"
+              autoComplete={i === 0 ? 'one-time-code' : 'off'}
               aria-label={t('Digit {n}', { n: i + 1 })}
               value={d}
               onChange={(e) => boxes.onChange(i, e.target.value)}

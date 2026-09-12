@@ -87,13 +87,19 @@ export const hydrateDeliveries = async (): Promise<void> => {
     const landed: Delivery[] = []
 
     rows.forEach((r, i) => {
-      const isDelivered = String(r.status || '').toLowerCase() === 'delivered' || !!r.delivered_at
+      const status = String(r.status || '').toLowerCase()
       const item = r.item_name || 'Package'
       const from = r.merchant || r.carrier || 'Order'
       const tone = toneAt(i)
+      const etaDays = r.estimated_delivery ? daysUntil(r.estimated_delivery) : NaN
+      const delivered = status === 'delivered' || status === 'completed' || !!r.delivered_at
+      // A non-delivered order whose ETA is well in the past isn't "on the way" —
+      // it's an old order (this caused stale parcels to show as in transit).
+      const stale = !delivered && !Number.isNaN(etaDays) && etaDays < -2
 
-      if (isDelivered) {
-        const when = shortDate(r.delivered_at || r.estimated_delivery || '')
+      if (delivered || stale) {
+        const whenIso = r.delivered_at || r.estimated_delivery || ''
+        const when = shortDate(whenIso)
         let window: string | undefined
         let closed: boolean | undefined
         if (r.return_window_ends) {
@@ -112,7 +118,7 @@ export const hydrateDeliveries = async (): Promise<void> => {
           tone,
           icon: 'box' as IconName,
           step: 3,
-          when: when ? `Delivered ${when}` : 'Delivered',
+          when: delivered ? (when ? `Delivered ${when}` : 'Delivered') : when ? `Expected ${when}` : 'Arrived',
           window,
           closed,
         })

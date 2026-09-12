@@ -29,6 +29,14 @@ type ServerEmail = {
 
 const TONES = ['blue', 'lavender', 'mint', 'peach', 'sand', 'rose'] as const
 
+// Stable colour per sender (like Gmail): the same person always gets the same
+// tone, instead of cycling by row position.
+const toneFor = (name: string): (typeof TONES)[number] => {
+  let h = 0
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0
+  return TONES[h % TONES.length]
+}
+
 const nameOf = (sender?: string): string => {
   if (!sender) return 'Unknown'
   const m = sender.match(/^\s*"?([^"<]+?)"?\s*(?:<|$)/)
@@ -44,14 +52,14 @@ const timeOf = (iso?: string): string => {
 
 const isReplied = (e: ServerEmail) => e.replied === true || e.replied === 1
 
-const toItem = (e: ServerEmail, i: number): EmailItem => {
+const toItem = (e: ServerEmail): EmailItem => {
   const from = nameOf(e.sender)
   return {
     id: e.id,
     from,
     initial: from.charAt(0).toUpperCase(),
     person: true,
-    tone: TONES[i % TONES.length],
+    tone: toneFor(from),
     subject: e.subject || '(no subject)',
     preview: e.summary || '',
     time: timeOf(e.created_at),

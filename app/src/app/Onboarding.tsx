@@ -274,6 +274,7 @@ export const Onboarding = ({ onDone }: { onDone: () => void }) => {
                 key={i}
                 ref={(el) => (code.refs.current[i] = el)}
                 inputMode="numeric"
+                autoComplete={i === 0 ? 'one-time-code' : 'off'}
                 aria-label={t('Digit {n}', { n: i + 1 })}
                 value={d}
                 onChange={(e) => code.onChange(i, e.target.value)}

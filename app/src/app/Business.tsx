@@ -117,6 +117,7 @@ export const Business = () => {
         <h2>{t('The store')}</h2>
       </div>
       <div className="wg-set-list wg-card-line">
+        <SetRow icon="mail" tone="sand" name="Business email" to="business/webmail" />
         <SetRow icon="globe" tone="blue" name="Performance this week" value={t('Not connected')} to="business/performance" />
         <SetRow icon="grid" tone="mint" name="Connected services" value={t('{n} connected', { n: connected })} to="business/integrations" />
       </div>
