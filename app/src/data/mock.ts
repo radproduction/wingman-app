@@ -1167,6 +1167,8 @@ export type EmailItem = {
   // and the source ('gmail' | 'webmail') so the row can show where it came from.
   id?: string
   source?: 'gmail' | 'webmail'
+  // Sender photo URL (best-effort — the row falls back to initials if it 404s).
+  avatar?: string | null
 }
 
 export const email = {

@@ -46,6 +46,17 @@ function requireRepo(name) {
   try { return require(`../db/${name}`); } catch (_) { return null; }
 }
 
+// Best-effort real sender photo. Gmail's own photos come from Google's private
+// profile service (not in the public API); the public, no-quota way is Gravatar,
+// keyed by the sender's email. `d=404` makes it return 404 when there's no photo,
+// so the app cleanly falls back to the sender's initials.
+function senderAvatar(sender) {
+  const m = String(sender || '').match(/[\w.+-]+@[\w-]+\.[\w.-]+/);
+  if (!m) return null;
+  const hash = require('crypto').createHash('md5').update(m[0].trim().toLowerCase()).digest('hex');
+  return `https://www.gravatar.com/avatar/${hash}?d=404&s=96`;
+}
+
 // ── /api/me ──────────────────────────────────────────────────────────
 router.get('/me', async (req, res) => {
   const u = resolveUser(req);
@@ -196,6 +207,7 @@ router.get('/emails', async (req, res) => {
     // Source tag: business-mailbox rows are keyed webmail:<uid>; everything else
     // is Gmail. Lets the app label each email so the user can tell them apart.
     source: String(e.gmail_id || '').startsWith('webmail:') ? 'webmail' : 'gmail',
+    avatar: senderAvatar(e.sender),
     created_at: e.created_at,
   }));
   res.json({ emails: norm, mock: isMock });

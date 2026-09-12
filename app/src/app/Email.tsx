@@ -36,7 +36,7 @@ const MailRow = ({ m, onOpen }: { m: EmailItem; onOpen: (m: EmailItem) => void }
     }}
   >
     <span className={`wg-chip ${m.tone} sm`}>
-      {m.person ? <Avatar id={m.initial} /> : m.initial}
+      {m.person ? <Avatar id={m.from} src={m.avatar} /> : m.initial}
       {m.unread && <i className="wg-mail-row__unread" aria-hidden="true" />}
     </span>
     <div className="wg-mail-row__tx">
@@ -84,7 +84,7 @@ const EmailSheet = ({ m, onClose }: { m: EmailItem; onClose: () => void }) => {
   return (
     <>
       <div className="wm-ap__head">
-        <span className={`wg-chip ${m.tone} sm`}>{m.person ? <Avatar id={m.initial} /> : m.initial}</span>
+        <span className={`wg-chip ${m.tone} sm`}>{m.person ? <Avatar id={m.from} src={m.avatar} /> : m.initial}</span>
         <SourceTag source={m.source} />
       </div>
       <h2 className="wm-sheet__title" id="wm-mail-title">

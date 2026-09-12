@@ -24,6 +24,7 @@ type ServerEmail = {
   summary?: string
   replied?: boolean | number
   source?: 'gmail' | 'webmail'
+  avatar?: string | null
   created_at?: string
 }
 
@@ -65,6 +66,7 @@ const toItem = (e: ServerEmail): EmailItem => {
     time: timeOf(e.created_at),
     unread: !isReplied(e),
     source: e.source === 'webmail' ? 'webmail' : 'gmail',
+    avatar: e.avatar || null,
   }
 }
 
