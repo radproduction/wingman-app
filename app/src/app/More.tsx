@@ -143,6 +143,21 @@ export const More = () => {
                 </div>
                 <IconChevronR size={18} className="chev" />
               </button>
+              <button
+                className="wg-conn wg-card-line"
+                data-feedback="header"
+                style={{ width: '100%', textAlign: 'left' }}
+                onClick={() => navigate('business/webmail')}
+              >
+                <span className="wg-chip sand sm">
+                  <Icon name="mail" size={18} variant="duotone" />
+                </span>
+                <div className="wg-conn__tx">
+                  <div className="wg-conn__name">{t('Business email')}</div>
+                  <div className="wg-conn__desc">{t('Connect your own inbox (IMAP/SMTP) for customer mail')}</div>
+                </div>
+                <IconChevronR size={18} className="chev" />
+              </button>
             </div>
 
             <div className="wg-panel-head">

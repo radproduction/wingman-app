@@ -86,6 +86,8 @@ import { hydratePlaces } from './data/mobility'
 import { hydrateBills } from './data/bills'
 import { hydrateVitals } from './data/vitals'
 import { hydratePeople } from './data/people'
+import { hydrateDeliveries } from './data/deliveries'
+import { hydrateTravel } from './data/travel'
 import { useDragScroll } from './shell/useDragScroll'
 import { installTapFeedback } from './shell/feedback'
 import './picker.css'
@@ -268,6 +270,8 @@ const App = () => {
       void hydrateBills()
       void hydrateVitals()
       void hydratePeople()
+      void hydrateDeliveries()
+      void hydrateTravel()
     }
   }, [signedIn])
 

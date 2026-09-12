@@ -75,7 +75,7 @@ export const GoogleAccounts = () => {
   }
 
   return (
-    <SubScreen title="Google accounts" back="settings/privacy" className="wg-mod" feedback="header">
+    <SubScreen title="Google accounts" back="more" className="wg-mod" feedback="header">
       <div className="wg-bc__summary wg-card-line">
         <Icon name="mail" size={18} variant="duotone" />
         <p>

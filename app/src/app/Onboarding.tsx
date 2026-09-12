@@ -637,7 +637,7 @@ export const Onboarding = ({ onDone }: { onDone: () => void }) => {
                 </span>
                 <button
                   className="st"
-                  onClick={() => toast(t('You can connect your business email from Settings once you finish setup.'))}
+                  onClick={() => toast(t('No problem — connect it anytime from More → Connectors → Business email.'))}
                 >
                   {t('Set up later')}
                 </button>

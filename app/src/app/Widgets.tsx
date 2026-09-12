@@ -19,6 +19,8 @@ import { useAttention, attentionSummary, REASONS, type AttentionItem } from '../
 import { useBills } from '../data/bills'
 import { useVitals, fmtSleep } from '../data/vitals'
 import { useFollowups } from '../data/followups'
+import { useDeliveries } from '../data/deliveries'
+import { useTravel } from '../data/travel'
 import { allMeetings, MEETING_STATUS, useMeetingState, type Meeting } from '../data/meetings'
 import type { WidgetSize, WidgetType } from '../data/dashboard'
 import { localize, t } from '../i18n'
@@ -684,9 +686,9 @@ const CommuteWidgetCell = () => {
   )
 }
 
-// Travel and Deliveries are parked for now — shown as "Coming soon" and not
-// tappable, per the current product scope.
-const SOON_TILES = new Set(['travel', 'deliveries'])
+// Travel and Deliveries are live now (wired to /api/travel and /api/deliveries),
+// so no tiles are parked as "Coming soon".
+const SOON_TILES = new Set<string>()
 
 type WatchTile = {
   key: string
@@ -704,6 +706,8 @@ const WatchingWidget = ({ size }: { size: WidgetSize }) => {
   const bills = useBills()
   const vitals = useVitals()
   const followups = useFollowups()
+  const deliveries = useDeliveries()
+  const travel = useTravel()
   const bizWaiting = waiting.filter((a) => a.source === 'commerce').length
 
   const dyn = (w: WatchTile): WatchTile => {
@@ -750,6 +754,21 @@ const WatchingWidget = ({ size }: { size: WidgetSize }) => {
 
     if (w.key === 'business') {
       return { ...w, value: bizWaiting > 0 ? t('{n} waiting', { n: bizWaiting }) : t('All clear') }
+    }
+
+    if (w.key === 'deliveries') {
+      if (!deliveries) return { ...w, value: t('Nothing tracked'), sub: t('I watch your mail for parcels') }
+      const n = deliveries.transit.length
+      const value = n > 0 ? t('{n} on the way', { n }) : deliveries.landed.length ? t('All delivered') : t('Nothing tracked')
+      const sub = n > 0 ? deliveries.transit[0].when : t('I watch your mail for parcels')
+      return { ...w, value, sub }
+    }
+
+    if (w.key === 'travel') {
+      if (!travel) return { ...w, value: t('No trips'), sub: t('I watch your mail for flights') }
+      const value = travel.next ? travel.next.away : t('No trips')
+      const sub = travel.next ? `${travel.next.from} → ${travel.next.to} · ${travel.next.dates}` : t('I watch your mail for flights')
+      return { ...w, value, sub }
     }
 
     return w
