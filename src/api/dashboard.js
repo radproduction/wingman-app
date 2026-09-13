@@ -50,10 +50,15 @@ function requireRepo(name) {
 // profile service (not in the public API); the public, no-quota way is Gravatar,
 // keyed by the sender's email. `d=404` makes it return 404 when there's no photo,
 // so the app cleanly falls back to the sender's initials.
-function senderAvatar(sender) {
+function senderAvatar(sender, photoMap) {
   const m = String(sender || '').match(/[\w.+-]+@[\w-]+\.[\w.-]+/);
   if (!m) return null;
-  const hash = require('crypto').createHash('md5').update(m[0].trim().toLowerCase()).digest('hex');
+  const email = m[0].trim().toLowerCase();
+  // Real Google contact photo first (this is what Gmail shows); Gravatar is the
+  // public fallback for non-contacts; if neither exists the image 404s and the
+  // app renders initials.
+  if (photoMap && photoMap[email]) return photoMap[email];
+  const hash = require('crypto').createHash('md5').update(email).digest('hex');
   return `https://www.gravatar.com/avatar/${hash}?d=404&s=96`;
 }
 
@@ -194,6 +199,12 @@ router.get('/emails', async (req, res) => {
     if (!gmailConnected && !webmailConnected) return [];
     return repo.listForUser(u.id, 100);
   }, mock.emails, !u);
+  // Real sender faces from the user's Google contacts (cached). Gmail-parity.
+  let photoMap = {};
+  if (gmailConnected) {
+    try { photoMap = await require('../services/googleContacts').contactPhotoMap(u); }
+    catch (_) { /* fall back to Gravatar/initials */ }
+  }
   const norm = data.map((e) => ({
     id: e.id,
     sender: e.sender,
@@ -207,7 +218,7 @@ router.get('/emails', async (req, res) => {
     // Source tag: business-mailbox rows are keyed webmail:<uid>; everything else
     // is Gmail. Lets the app label each email so the user can tell them apart.
     source: String(e.gmail_id || '').startsWith('webmail:') ? 'webmail' : 'gmail',
-    avatar: senderAvatar(e.sender),
+    avatar: senderAvatar(e.sender, photoMap),
     created_at: e.created_at,
   }));
   res.json({ emails: norm, mock: isMock });
@@ -415,6 +426,7 @@ router.get('/contacts', async (req, res) => {
         return res.json({
           contacts: list.map((c, i) => ({
             id: `g-${i}`, name: c.name, email: c.email, company: c.company || null,
+            photo: c.photo || null,
             relationship: null, interaction_count: 0, strength: 'saved',
             last_contacted_at: null, notes: null,
           })),

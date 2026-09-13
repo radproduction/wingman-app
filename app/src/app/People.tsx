@@ -40,7 +40,7 @@ export const People = () => {
           <ModHead title="In touch" />
           <div className="wg-row-list">
             {recent.map((p, i) => (
-              <ModRow key={`${p.name}-${i}`} tone={p.tone} initial={p.initial} name={p.name} value={p.when} meta={p.context} />
+              <ModRow key={`${p.name}-${i}`} tone={p.tone} initial={p.initial} photo={p.photo} name={p.name} value={p.when} meta={p.context} />
             ))}
           </div>
         </>

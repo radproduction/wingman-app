@@ -69,6 +69,7 @@ export const ModRow = ({
   icon,
   initial,
   face,
+  photo,
   name,
   meta,
   value,
@@ -78,6 +79,7 @@ export const ModRow = ({
 }: {
   tone: ChipTone
   face?: boolean
+  photo?: string | null
   icon?: IconName
   initial?: string
   name: string
@@ -89,8 +91,10 @@ export const ModRow = ({
 }) => {
   return (
     <div className={`wg-mrow wg-card-line ${done ? 'done' : ''}`}>
-      <span className={`wg-chip ${tone} ${initial && !face ? 'wg-chip--letter' : ''} sm`}>
-        {face && initial ? <Avatar id={initial} /> : (initial ?? (icon && <Icon name={icon} size={19} variant="duotone" />))}
+      <span className={`wg-chip ${tone} ${initial && !face && !photo ? 'wg-chip--letter' : ''} sm`}>
+        {photo
+          ? <Avatar id={initial || name} src={photo} />
+          : face && initial ? <Avatar id={initial} /> : (initial ?? (icon && <Icon name={icon} size={19} variant="duotone" />))}
       </span>
       <span className="wg-mrow__tx">
         <span className="wg-mrow__top">

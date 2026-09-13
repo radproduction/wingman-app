@@ -21,7 +21,7 @@ async function listContacts(user, { max = 250 } = {}) {
   do {
     const res = await people.people.connections.list({
       resourceName: 'people/me',
-      personFields: 'names,emailAddresses,organizations',
+      personFields: 'names,emailAddresses,organizations,photos',
       pageSize: 200,
       sortOrder: 'LAST_MODIFIED_DESCENDING',
       pageToken,
@@ -33,10 +33,13 @@ async function listContacts(user, { max = 250 } = {}) {
       const key = (email || name).toLowerCase();
       if (seen.has(key)) continue;
       seen.add(key);
+      // A real, user-set photo — People marks the generic silhouette default:true.
+      const photo = (p.photos || []).find((ph) => ph.url && !ph.default);
       out.push({
         name: name || email,
         email: email || null,
         company: (p.organizations && p.organizations[0] && p.organizations[0].name) || null,
+        photo: photo ? photo.url : null,
       });
       if (out.length >= max) break;
     }
@@ -46,4 +49,43 @@ async function listContacts(user, { max = 250 } = {}) {
   return out;
 }
 
-module.exports = { listContacts };
+// ── Email → real contact photo map (for showing actual sender faces) ────────
+//   People API is heavy, so cache per user for a few minutes; a whole inbox
+//   render then costs one lookup, not one API call per sender.
+const photoCache = new Map(); // userId -> { at, map }
+const PHOTO_TTL_MS = 10 * 60 * 1000;
+
+async function contactPhotoMap(user) {
+  if (!user || !user.id) return {};
+  const cached = photoCache.get(user.id);
+  if (cached && Date.now() - cached.at < PHOTO_TTL_MS) return cached.map;
+
+  const map = {};
+  try {
+    const auth = googleAuth.getAuthorizedClient(user, 'gmail');
+    const people = google.people({ version: 'v1', auth });
+    let pageToken;
+    do {
+      const res = await people.people.connections.list({
+        resourceName: 'people/me',
+        personFields: 'emailAddresses,photos',
+        pageSize: 500,
+        pageToken,
+      });
+      for (const p of res.data.connections || []) {
+        const photo = (p.photos || []).find((ph) => ph.url && !ph.default);
+        if (!photo) continue;
+        for (const e of p.emailAddresses || []) {
+          if (e.value) map[e.value.trim().toLowerCase()] = photo.url;
+        }
+      }
+      pageToken = res.data.nextPageToken;
+    } while (pageToken);
+  } catch (_) {
+    // insufficient scope / not connected — empty map, callers fall back to Gravatar/initials
+  }
+  photoCache.set(user.id, { at: Date.now(), map });
+  return map;
+}
+
+module.exports = { listContacts, contactPhotoMap };

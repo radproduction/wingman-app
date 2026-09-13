@@ -12,6 +12,7 @@ export type PersonRow = {
   note?: string
   initial: string
   tone: ChipTone
+  photo?: string | null
 }
 
 export type PeopleData = {
@@ -27,7 +28,7 @@ type ServerFollowup = {
   due_date?: string | null
   status?: string
 }
-type ServerContact = { name?: string; email?: string; company?: string; notes?: string | null }
+type ServerContact = { name?: string; email?: string; company?: string; notes?: string | null; photo?: string | null }
 
 let data: PeopleData | null = null
 const listeners = new Set<() => void>()
@@ -82,6 +83,7 @@ export const hydratePeople = async (): Promise<void> => {
         context: c.company || c.notes || (c.email ?? ''),
         initial: initialOf(name),
         tone: toneFor(i),
+        photo: c.photo || null,
       }
     })
 
