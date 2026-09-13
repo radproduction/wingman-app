@@ -88,7 +88,7 @@ async function learnForUser(userId, { messages = 40, persist = true } = {}) {
   try {
     raw = await claude.chat(
       [{ role: 'user', content: `KNOWN FACTS:\n${known}\n\nCONVERSATION:\n${transcript}` }],
-      { system: SYSTEM, maxTokens: 700 },
+      { system: SYSTEM, maxTokens: 700, model: require('../config').anthropic.modelCheap },
     );
   } catch (err) {
     console.warn('[behaviorLearner] extraction failed:', err.message);

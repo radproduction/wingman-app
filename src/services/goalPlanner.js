@@ -33,7 +33,7 @@ async function plan({ title, detail = '', targetDate = null } = {}) {
   ].filter(Boolean).join('\n');
 
   let raw = '';
-  try { raw = await claude.complete(prompt, { system: SYSTEM, maxTokens: 700 }); }
+  try { raw = await claude.complete(prompt, { system: SYSTEM, maxTokens: 700, model: require('../config').anthropic.modelDeep }); }
   catch (_) { return { steps: [], ideas: [] }; }
 
   const o = extractJson(raw) || {};

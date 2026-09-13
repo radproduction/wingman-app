@@ -289,7 +289,7 @@ async function runToolLoop(user, messages, system, maxRounds = 4) {
         ...automationTools,
         ...agentTools,
       ],
-      maxTokens: 1024,
+      maxTokens: 2048,
     });
 
     if (response.stop_reason === 'tool_use') {

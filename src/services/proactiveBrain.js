@@ -202,7 +202,7 @@ async function think(userId, { now = new Date() } = {}) {
 
   let insights;
   try {
-    insights = parseInsights(await claude.complete(prompt, { system: SYSTEM, maxTokens: 400 }));
+    insights = parseInsights(await claude.complete(prompt, { system: SYSTEM, maxTokens: 400, model: require('../config').anthropic.modelDeep }));
   } catch (err) {
     console.warn('[proactiveBrain] think failed:', err.message);
     return { insights: [], skipped: 'llm_error' };

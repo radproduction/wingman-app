@@ -16,7 +16,12 @@ const config = {
 
   anthropic: {
     apiKey: process.env.ANTHROPIC_API_KEY || '',
-    model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-5',
+    // Main chat engine — Sonnet 5: smart + fast + reasonable cost (WhatsApp).
+    model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-5',
+    // Deep reasoning (proactive brain, goal planning) — Opus 5.
+    modelDeep: process.env.ANTHROPIC_MODEL_DEEP || 'claude-opus-5',
+    // Cheap / high-volume (email classify, behaviour learning) — Haiku 4.5.
+    modelCheap: process.env.ANTHROPIC_MODEL_CHEAP || 'claude-haiku-4-5',
   },
 
   database: {

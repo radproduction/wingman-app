@@ -21,9 +21,9 @@ function getClient() {
  * @param {number} [opts.maxTokens=1024]
  * @returns {Promise<string>}
  */
-async function complete(prompt, { system, maxTokens = 1024 } = {}) {
+async function complete(prompt, { system, maxTokens = 2048, model } = {}) {
   const resp = await getClient().messages.create({
-    model: config.anthropic.model,
+    model: model || config.anthropic.model,
     max_tokens: maxTokens,
     system: system || undefined,
     messages: [{ role: 'user', content: prompt }],
@@ -43,9 +43,9 @@ async function complete(prompt, { system, maxTokens = 1024 } = {}) {
  * @param {number} [opts.maxTokens=1024]
  * @returns {Promise<string>}
  */
-async function chat(messages, { system, maxTokens = 1024 } = {}) {
+async function chat(messages, { system, maxTokens = 2048, model } = {}) {
   const resp = await getClient().messages.create({
-    model: config.anthropic.model,
+    model: model || config.anthropic.model,
     max_tokens: maxTokens,
     system: system || undefined,
     messages,
@@ -67,9 +67,9 @@ async function chat(messages, { system, maxTokens = 1024 } = {}) {
  * @param {number} [opts.maxTokens=1024]
  * @returns {Promise<Object>} the Anthropic message response
  */
-async function chatWithTools(messages, { system, tools, maxTokens = 1024 } = {}) {
+async function chatWithTools(messages, { system, tools, maxTokens = 2048, model } = {}) {
   return getClient().messages.create({
-    model: config.anthropic.model,
+    model: model || config.anthropic.model,
     max_tokens: maxTokens,
     system: system || undefined,
     tools: tools && tools.length ? tools : undefined,

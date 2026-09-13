@@ -81,7 +81,7 @@ async function analyzeEmail(email, { context = '' } = {}) {
     email.subject || '(no subject)', email.sender || '(unknown)', email.body || '', context,
   );
   try {
-    const raw = await claude.complete(prompt, { maxTokens: 900 });
+    const raw = await claude.complete(prompt, { maxTokens: 900, model: require('../config').anthropic.modelCheap });
     const parsed = parseJson(raw);
     return {
       category: ['urgent', 'needs_reply', 'fyi', 'spam'].includes(parsed.category) ? parsed.category : 'fyi',
