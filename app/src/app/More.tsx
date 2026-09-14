@@ -158,6 +158,21 @@ export const More = () => {
                 </div>
                 <IconChevronR size={18} className="chev" />
               </button>
+              <button
+                className="wg-conn wg-card-line"
+                data-feedback="header"
+                style={{ width: '100%', textAlign: 'left' }}
+                onClick={() => navigate('settings/work')}
+              >
+                <span className="wg-chip mint sm">
+                  <Icon name="checkCircle" size={18} variant="duotone" />
+                </span>
+                <div className="wg-conn__tx">
+                  <div className="wg-conn__name">{t('Work clock')}</div>
+                  <div className="wg-conn__desc">{t('Connect your attendance system (NOW HRMS) — clock in/out from chat')}</div>
+                </div>
+                <IconChevronR size={18} className="chev" />
+              </button>
             </div>
 
             <div className="wg-panel-head">

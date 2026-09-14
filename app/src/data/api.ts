@@ -258,6 +258,25 @@ export const api = {
     ),
   webmailDisconnect: () => req<{ connected: boolean }>('POST', '/webmail/disconnect'),
 
+  // ── Work clock (attendance / HRMS) ──
+  //   Inbound: the HRMS POSTs clock events to webhook_url so Wingman notices a
+  //   forgotten clock-out. Outbound: Wingman POSTs to the user's own endpoint
+  //   (action_url) with an X-Wingman-Secret header so "clock out kar do" works.
+  workConnect: () =>
+    get<{
+      webhook_url: string
+      connected: boolean
+      action_configured: boolean
+      action_url: string | null
+      employee_ref: string | null
+    }>('/work/connect'),
+  workSetAction: (body: { url: string; secret?: string; employee_ref?: string | null }) =>
+    req<{ ok: boolean; configured: boolean; url?: string }>('POST', '/work/action', body),
+  workClearAction: () => req<{ ok: boolean; configured: boolean }>('POST', '/work/action', { disconnect: true }),
+  workTestAction: (event: 'clock_in' | 'clock_out') =>
+    req<{ ok: boolean; event: string; at: string }>('POST', '/work/action/test', { event }),
+  workResetLink: () => req<{ webhook_url: string }>('POST', '/work/reset-link'),
+
   // ── Location (device geolocation → traffic origin + "use my location") ──
   saveLocation: (lat: number, lng: number) =>
     req<{ ok: boolean; label: string | null }>('POST', '/location', { lat, lng }),
