@@ -469,6 +469,39 @@ app.post('/work/company-event', (req, res) => {
   }
 });
 
+// ─── NOW HRMS event alerts (Phase 1) ───────────────────────────────
+//   NOW HRMS forwards an employee event (new project/task assigned, leave
+//   decided, payslip) so Wingman can push it to WhatsApp proactively. Same
+//   company-level auth as /work/company-event (one shared secret, email routing).
+//     headers: X-Wingman-Secret: <shared secret>
+//     body: { "employee": "<email>", "type": "project_assigned"|"task_assigned"|...,
+//             "title": "...", "message": "...", "due"?, "projectName"?, "taskTitle"? }
+app.post('/work/company-notify', (req, res) => {
+  const config = require('./config');
+  const crypto = require('crypto');
+  const secret = config.nowhrms.sharedSecret;
+  if (!secret) return res.status(503).json({ error: 'Integration not configured.' });
+
+  const sent = String(req.get('X-Wingman-Secret') || '');
+  const a = Buffer.from(sent);
+  const b = Buffer.from(secret);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+    return res.status(401).json({ error: 'Bad secret.' });
+  }
+
+  const body = req.body || {};
+  const email = body.employee || body.email || body.employee_email;
+  const usersRepo = require('./db/users');
+  const user = usersRepo.getByWorkEmployeeRef(email);
+  // Employee hasn't linked Wingman yet — ack so the HRMS doesn't retry; no one to tell.
+  if (!user) return res.json({ ok: true, linked: false });
+
+  // Fire-and-forget: the HRMS must never wait on our WhatsApp send.
+  const hrmsAlerts = require('./services/hrmsAlerts');
+  hrmsAlerts.handleEvent(user, body).catch((e) => console.error('[work] company-notify failed:', e.message));
+  res.json({ ok: true, linked: true });
+});
+
 // ─── WhatsApp Cloud API webhook ─────────────────────────────────────
 //   GET  → Meta verification handshake (hub.challenge)
 //   POST → incoming messages: parse, run the engine, reply via Cloud API.
