@@ -154,9 +154,15 @@ async function processTranscript(user, meeting, transcript, opts = {}) {
 
   // Guard: an empty / near-empty transcript (bot never admitted, a silent or
   // cancelled meeting, or corrupted audio) must NOT be turned into a made-up
-  // "summary" — that's how a cancelled meeting produced fake action items. Flag
-  // it so the caller tells the user honestly instead of emailing invented notes.
-  if (clean.length < 40) {
+  // "summary" — that's how a cancelled meeting produced fake action items.
+  //
+  // Also guard against a FRAGMENT: a full meeting produces a substantial
+  // transcript, so too few words means the notetaker only caught a snippet
+  // (joined late, half-admitted, poor audio). Summarising a fragment yields a
+  // confident but WRONG summary of the whole meeting (the "wrong subject" bug) —
+  // far worse in front of a client than an honest "couldn't capture enough".
+  const words = clean ? clean.split(/\s+/).filter(Boolean).length : 0;
+  if (clean.length < 40 || words < 50) {
     meetingsRepo.update(user.id, meeting.id, { status: 'no-content' });
     return { meeting: meetingsRepo.getForUser(user.id, meeting.id), summary: null, email: null, tasks: [], empty: true };
   }
