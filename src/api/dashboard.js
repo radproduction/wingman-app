@@ -815,7 +815,30 @@ router.get('/work/connect', (req, res) => {
     action_configured: work.hasAction(req.user),
     action_url: req.user.work_action_url || null,
     employee_ref: req.user.work_employee_ref || null,
+    // One-tap NOW HRMS connector: whether the server offers it, and this user's
+    // link status. The app leads with this so an employee just enters their email.
+    nowhrms: work.nowHrmsStatus(req.user),
   });
+});
+
+/**
+ * One-tap NOW HRMS connect: the employee sends ONLY their company email. The
+ * endpoint URL + shared secret come from server config, so nothing technical is
+ * typed. This is the whole per-user step for the first-class connector.
+ */
+router.post('/work/nowhrms/connect', async (req, res) => {
+  if (!req.user) return res.status(401).json({ error: 'Authentication required.' });
+  const work = require('../services/work');
+  const r = await work.connectNowHrms(req.user.id, (req.body || {}).email);
+  if (!r.ok) return res.status(400).json({ error: r.error });
+  res.json({ ok: true, connected: true, email: (req.body || {}).email });
+});
+
+router.post('/work/nowhrms/disconnect', (req, res) => {
+  if (!req.user) return res.status(401).json({ error: 'Authentication required.' });
+  const work = require('../services/work');
+  work.clearAction(req.user.id);
+  res.json({ ok: true, connected: false });
 });
 
 /**

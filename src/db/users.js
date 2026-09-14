@@ -54,6 +54,20 @@ function getById(id) {
 }
 
 /**
+ * Find a user by the company email they linked for the work clock
+ * (work_employee_ref). Used by the NOW HRMS company webhook to route a clock
+ * event to the right person. Case-insensitive; ignores blanks.
+ */
+function getByWorkEmployeeRef(email) {
+  const e = String(email || '').trim().toLowerCase();
+  if (!e) return null;
+  const row = db
+    .prepare('SELECT * FROM users WHERE lower(work_employee_ref) = ?')
+    .get(e);
+  return hydrate(row);
+}
+
+/**
  * Create a new user with just a phone number — stored in the canonical form.
  * If a row already exists under ANY format, reuse it instead of making a
  * duplicate (the root cause of the double accounts).
@@ -354,7 +368,7 @@ function toPublic(user) {
 
 module.exports = {
   DEFAULT_SKILLS,
-  getByPhone, getById, create, update, hydrate, isOnboarded, hasSkill,
+  getByPhone, getById, getByWorkEmployeeRef, create, update, hydrate, isOnboarded, hasSkill,
   listConnectedEmailUsers, listWebmailUsers, listAll, listOnboarded, updatePreferences,
   completeOnboarding, toPublic, normPhone, mergeDuplicatePhones, deleteUserCascade,
 };

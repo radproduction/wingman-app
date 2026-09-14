@@ -269,7 +269,12 @@ export const api = {
       action_configured: boolean
       action_url: string | null
       employee_ref: string | null
+      nowhrms: { available: boolean; connected: boolean; email: string | null }
     }>('/work/connect'),
+  // One-tap NOW HRMS: employee sends only their company email.
+  workConnectNowHrms: (email: string) =>
+    req<{ ok: boolean; connected: boolean; email: string }>('POST', '/work/nowhrms/connect', { email }),
+  workDisconnectNowHrms: () => req<{ ok: boolean; connected: boolean }>('POST', '/work/nowhrms/disconnect'),
   workSetAction: (body: { url: string; secret?: string; employee_ref?: string | null }) =>
     req<{ ok: boolean; configured: boolean; url?: string }>('POST', '/work/action', body),
   workClearAction: () => req<{ ok: boolean; configured: boolean }>('POST', '/work/action', { disconnect: true }),

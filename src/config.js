@@ -114,6 +114,19 @@ const config = {
     },
   },
 
+  // NOW HRMS — Aamir's company attendance system. First-class connector: the
+  // endpoint URL + one shared secret live HERE (company-wide, set once), so an
+  // employee connects by just entering their company email — no URL/secret/code
+  // per person. The same secret authenticates BOTH directions:
+  //   Wingman → NOW HRMS  (clock the user)  : sent as X-Wingman-Secret
+  //   NOW HRMS → Wingman  (user clocked)    : checked on /work/company-event
+  nowhrms: {
+    clockUrl: process.env.NOWHRMS_CLOCK_URL || 'https://nowhrms.com/api/wingman/clock',
+    sharedSecret: process.env.NOWHRMS_SHARED_SECRET || '',
+    // Only offer the one-tap connector when the server actually has the secret.
+    get enabled() { return !!process.env.NOWHRMS_SHARED_SECRET; },
+  },
+
   // Voice: OpenAI Whisper (speech->text) and TTS (text->speech).
   voice: {
     apiKey: process.env.OPENAI_API_KEY || '',

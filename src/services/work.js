@@ -249,6 +249,40 @@ function clearAction(userId) {
 }
 
 /**
+ * One-tap NOW HRMS connect. The employee enters ONLY their company email; the
+ * endpoint URL + shared secret come from the server config (set once for the
+ * whole company), so no one copies URLs or secrets. Under the hood this is the
+ * same outbound action as setAction — it just fills url/secret from config and
+ * stores the email as the employee ref (which the company webhook routes on).
+ */
+async function connectNowHrms(userId, email) {
+  const config = require('../config');
+  if (!config.nowhrms.enabled) {
+    return { ok: false, error: 'NOW HRMS is not set up on the server yet. Ask your admin to add the shared secret.' };
+  }
+  const e = String(email || '').trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) {
+    return { ok: false, error: 'Enter your company email (the one your HRMS knows you by).' };
+  }
+  return setAction(userId, {
+    url: config.nowhrms.clockUrl,
+    secret: config.nowhrms.sharedSecret,
+    employeeRef: e.toLowerCase(),
+  });
+}
+
+/** Is this user connected specifically to NOW HRMS (vs a generic HRMS URL)? */
+function nowHrmsStatus(user) {
+  const config = require('../config');
+  const connected = !!(user && user.work_action_url && user.work_action_url === config.nowhrms.clockUrl);
+  return {
+    available: config.nowhrms.enabled,
+    connected,
+    email: (connected && user.work_employee_ref) || null,
+  };
+}
+
+/**
  * Actually clock the user in or out on their own system.
  *
  * On success we also record the session locally, so what Wingman reports and
@@ -358,6 +392,8 @@ module.exports = {
   hasAction,
   setAction,
   clearAction,
+  connectNowHrms,
+  nowHrmsStatus,
   performClock,
   GRACE_HOURS,
   DEFAULT_SNOOZE_HOURS,

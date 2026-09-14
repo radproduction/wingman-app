@@ -426,6 +426,49 @@ app.post('/work/event/:token', (req, res) => {
   }
 });
 
+// ─── NOW HRMS company webhook (all employees, one URL) ──────────────
+//   The company's HRMS posts EVERY employee's clock event here, identifying the
+//   person by their company email in the body. One shared secret (set once for
+//   the whole company) authenticates it — so no per-user token/URL. This is the
+//   inbound half of the one-tap "Connect NOW HRMS" flow.
+//     headers: X-Wingman-Secret: <shared secret>
+//     body: { "employee": "<company email>", "event": "clock_in"|"clock_out", "at"?: "<ISO>" }
+app.post('/work/company-event', (req, res) => {
+  const config = require('./config');
+  const crypto = require('crypto');
+  const secret = config.nowhrms.sharedSecret;
+  if (!secret) return res.status(503).json({ error: 'Integration not configured.' });
+
+  // Constant-time secret check (never leak match/length via timing).
+  const sent = String(req.get('X-Wingman-Secret') || '');
+  const a = Buffer.from(sent);
+  const b = Buffer.from(secret);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+    return res.status(401).json({ error: 'Bad secret.' });
+  }
+
+  const body = req.body || {};
+  const email = body.employee || body.email || body.employee_email;
+  const usersRepo = require('./db/users');
+  const user = usersRepo.getByWorkEmployeeRef(email);
+  // Unknown email = an employee who hasn't linked Wingman yet. Not an error for
+  // the HRMS — ack 200 so it doesn't retry forever; we simply have no one to log.
+  if (!user) return res.json({ ok: true, linked: false });
+
+  try {
+    const work = require('./services/work');
+    const result = work.handleEvent(user.id, body, { source: 'hrms' });
+    if (!result.ok) {
+      return res.status(400).json({ error: 'Send "event": "clock_in" or "clock_out".' });
+    }
+    console.log(`[work] company-event ${user.phone} (${email}): ${result.event}${result.duplicate ? ' (already open)' : ''}`);
+    res.json({ ok: true, linked: true, event: result.event });
+  } catch (err) {
+    console.error('[work] company-event failed:', err.message);
+    res.status(500).json({ error: 'Could not record that.' });
+  }
+});
+
 // ─── WhatsApp Cloud API webhook ─────────────────────────────────────
 //   GET  → Meta verification handshake (hub.challenge)
 //   POST → incoming messages: parse, run the engine, reply via Cloud API.
