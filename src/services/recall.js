@@ -69,13 +69,29 @@ async function createBot({ meetingUrl, botName = BOT_NAME, metadata } = {}) {
   const base = { meeting_url: meetingUrl, bot_name: botName };
   if (metadata) base.metadata = metadata;
 
+  // Stay in the call through the NORMAL quiet gaps — admitted early, the client
+  // joining a few minutes late, brief silences — instead of leaving and missing
+  // the real conversation. Recall's defaults leave too eagerly (≈silence/alone),
+  // which is exactly how an admitted bot vanished before the other side joined
+  // and came back with a fragment/empty transcript. Leave promptly only once
+  // EVERYONE has truly left (meeting over).
+  const automatic_leave = {
+    waiting_room_timeout: 1800,          // up to 30 min stuck in the waiting room
+    noone_joined_timeout: 1800,          // up to 30 min waiting for the other side
+    everyone_left_timeout: { timeout: 90, activate_after: 300 }, // only after 5 min in; then leave 90s after all are gone
+    in_call_not_recording_timeout: 3600, // don't bail while not yet recording
+    silence_detection: { timeout: 3600, activate_after: 1800 },  // tolerate long silence
+    bot_detection: { using_participant_names: { matches: [] } }, // don't leave just because a name looks bot-ish
+  };
+  const withLeave = { automatic_leave };
+
   // Record a clean MIXED AUDIO file — small and reliable to transcribe — and ALSO
   // ask for a caption transcript. audio_mixed is what we actually feed to the
   // transcriber; the default video-only recording is a big mp4 our transcriber
   // handles poorly (that's what made real meetings come back empty/garbled).
   const recFull = { audio_mixed: {}, transcript: { provider: { meeting_captions: {} } } };
-  const withRec = { ...base, recording_config: recFull };
-  const transcriptOnly = { ...base, recording_config: { transcript: { provider: { meeting_captions: {} } } } };
+  const withRec = { ...base, recording_config: recFull, ...withLeave };
+  const transcriptOnly = { ...base, recording_config: { transcript: { provider: { meeting_captions: {} } } }, ...withLeave };
   // Clean mixed AUDIO with no transcript config. Some accounts/API versions
   // reject the combined recording_config above, and we then fell all the way to
   // `base` — whose DEFAULT recording is video-only, which our transcriber reads
