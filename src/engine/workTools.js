@@ -82,7 +82,19 @@ const workTools = [
       '"mere aaj ke tasks?", "kaun se projects pe hoon?", "kitni chhutti bachi / ' +
       'leave ka kya bana?", "is hafte kitne ghante kaam kiya?", "am I clocked in?". ' +
       'If it returns NOWHRMS_NOT_CONNECTED, tell them to connect NOW HRMS in ' +
-      'Settings → Work clock, and do not invent any tasks or hours.',
+      'Settings → Work clock, and do not invent any tasks or hours. The result ' +
+      'also splits tasks into overdue / due_today so you can flag what is late.',
+    input_schema: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'get_team_status',
+    description:
+      "For MANAGERS only: read the team's live status in NOW HRMS — who is " +
+      'clocked in, on a break, on leave, or offline, with hours and office/ ' +
+      'remote. Use for "team ka kya haal hai?", "kaun aaya / kaun late hai?", ' +
+      '"who is on leave today?", "how many are in right now?". If it returns ' +
+      'NOT_A_MANAGER, the user is not allowed team data — tell them plainly and ' +
+      'do not guess. If NOWHRMS_NOT_CONNECTED, tell them to connect NOW HRMS.',
     input_schema: { type: 'object', properties: {}, required: [] },
   },
 ];

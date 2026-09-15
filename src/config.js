@@ -127,6 +127,10 @@ const config = {
     dataUrl:
       process.env.NOWHRMS_DATA_URL ||
       (process.env.NOWHRMS_CLOCK_URL || 'https://nowhrms.com/api/wingman/clock').replace(/\/clock$/, '/employee-data'),
+    // Manager team snapshot endpoint (Phase 4b) — sibling of the clock URL.
+    teamUrl:
+      process.env.NOWHRMS_TEAM_URL ||
+      (process.env.NOWHRMS_CLOCK_URL || 'https://nowhrms.com/api/wingman/clock').replace(/\/clock$/, '/team-snapshot'),
     sharedSecret: process.env.NOWHRMS_SHARED_SECRET || '',
     // Only offer the one-tap connector when the server actually has the secret.
     get enabled() { return !!process.env.NOWHRMS_SHARED_SECRET; },

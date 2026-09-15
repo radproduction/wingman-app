@@ -81,18 +81,36 @@ async function executeWorkTool(user, toolUse) {
         // force: a direct question deserves a live read, not a cached one.
         const d = await nowHrmsData.getData(user, { force: true });
         if (!d) return { error: 'NOWHRMS_UNREACHABLE', detail: 'Could not reach NOW HRMS just now.' };
+        const dg = nowHrmsData.taskDigest(d);
+        const slim = (t) => ({ title: t.title, status: t.status, priority: t.priority, due: t.due, project: t.project });
         return {
           clocked_in: (d.clock && d.clock.clocked_in) || false,
           clocked_in_since: (d.clock && d.clock.since) || null,
           hours_today: (d.hours && d.hours.today) || 0,
           hours_week: (d.hours && d.hours.week) || 0,
           open_tasks: (d.tasks && d.tasks.open) || 0,
-          tasks: ((d.tasks && d.tasks.items) || []).map((t) => ({
-            title: t.title, status: t.status, priority: t.priority, due: t.due, project: t.project,
-          })),
+          overdue: dg.overdue.map(slim),
+          due_today: dg.dueToday.map(slim),
+          tasks: ((d.tasks && d.tasks.items) || []).map(slim),
           projects: (d.projects || []).map((p) => ({ name: p.name, status: p.status, priority: p.priority })),
           leaves_pending: (d.leaves && d.leaves.pending) || 0,
           leaves: (d.leaves && d.leaves.items) || [],
+        };
+      }
+
+      case 'get_team_status': {
+        const nowHrmsData = require('../services/nowHrmsData');
+        if (!nowHrmsData.connected(user)) return { error: 'NOWHRMS_NOT_CONNECTED' };
+        const snap = await nowHrmsData.getTeamSnapshot(user, { force: true });
+        if (!snap) return { error: 'NOWHRMS_UNREACHABLE', detail: 'Could not reach NOW HRMS just now.' };
+        if (snap.forbidden) return { error: 'NOT_A_MANAGER' };
+        return {
+          total: snap.total,
+          counts: snap.counts, // { in, on_break, on_leave, offline }
+          team: (snap.team || []).map((m) => ({
+            name: m.name, designation: m.designation, status: m.status,
+            since: m.since, hours: m.hours, where: m.where,
+          })),
         };
       }
 
