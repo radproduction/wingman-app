@@ -149,6 +149,41 @@ function typicalEndMinutes(userId, { timezone = 'Asia/Karachi', weekday = null, 
   return median(mins);
 }
 
+/**
+ * When this user actually tends to START on a given weekday, in minutes past
+ * local midnight (median, so one odd day doesn't move it). Mirror of
+ * typicalEndMinutes — this is the baseline the clock-IN reminder calibrates to.
+ * Returns null until there are enough real days to call it a pattern.
+ */
+function typicalStartMinutes(userId, { timezone = 'Asia/Karachi', weekday = null, minSamples = 3 } = {}) {
+  const sessions = recent(userId, { days: 60 });
+  const mins = [];
+  for (const s of sessions) {
+    if (!s.clock_in_at) continue;
+    const inAt = new Date(s.clock_in_at);
+    if (weekday != null && localWeekday(inAt, timezone) !== weekday) continue;
+    mins.push(t.minutesInTz(timezone, inAt));
+  }
+  if (mins.length < minSamples) return null;
+  return median(mins);
+}
+
+/** How many recent sessions started on a given local weekday (0=Sun). Lets the
+ *  reminder tell "a day they sometimes work" from "a day off". */
+function weekdaySampleCount(userId, weekday, timezone = 'Asia/Karachi') {
+  const sessions = recent(userId, { days: 60 });
+  let n = 0;
+  for (const s of sessions) {
+    if (s.clock_in_at && localWeekday(new Date(s.clock_in_at), timezone) === weekday) n += 1;
+  }
+  return n;
+}
+
+/** Every user who has ANY clock history — candidates for a clock-in reminder. */
+function usersWithClockData() {
+  return db.prepare('SELECT DISTINCT user_id FROM work_sessions').all().map((r) => r.user_id);
+}
+
 /** Local day of week (0=Sun) for an instant, in the given timezone. */
 function localWeekday(date, timeZone) {
   const label = new Intl.DateTimeFormat('en-US', { timeZone, weekday: 'short' }).format(date);
@@ -177,8 +212,11 @@ module.exports = {
   recent,
   forDay,
   typicalEndMinutes,
+  typicalStartMinutes,
+  weekdaySampleCount,
   localWeekday,
   usersWithOpenSessions,
+  usersWithClockData,
   hasAnyData,
   hoursBetween,
   IMPLAUSIBLE_SHIFT_HOURS,

@@ -204,6 +204,59 @@ function stayLate(userId, { untilISO = null, hours = DEFAULT_SNOOZE_HOURS, now =
   return { ok: true, until };
 }
 
+// ── Clock-IN reminder (learns each person's usual start) ─────────────
+//   The mirror of shouldNudge: instead of "you're still in past your usual
+//   finish", this is "you usually start by now and haven't". Calibrated to the
+//   user's OWN history so it never fires on a day/weekday they don't work, and
+//   only once the pattern is real. This is the behaviour engine's clock-in half.
+
+const CLOCKIN_GRACE_MIN = 30;    // let their usual time pass a little before nudging
+const CLOCKIN_WINDOW_MIN = 180;  // stop well past it — by then it's clearly a late/off day
+
+/**
+ * Should we remind this user to clock in right now?
+ * Quiet by default: needs a real per-user baseline, only nudges inside a window
+ * after their usual start, once per day, and never on a weekday they don't work.
+ */
+function shouldRemindClockIn(userId, { now = new Date() } = {}) {
+  const user = usersRepo.getById(userId);
+  if (!user) return { remind: false, reason: 'no_user' };
+  const tz = user.timezone || 'Asia/Karachi';
+
+  // In right now, or already worked today → nothing to remind.
+  if (sessionsRepo.currentOpen(userId)) return { remind: false, reason: 'already_in' };
+  const todayKey = t.dateKeyInTz(tz, now);
+  if (sessionsRepo.forDay(userId, todayKey).length) return { remind: false, reason: 'clocked_today' };
+
+  const weekday = sessionsRepo.localWeekday(now, tz);
+
+  // Baseline: this weekday's own start time if we have enough of them, else the
+  // overall start time — but only if they DO sometimes work this weekday (a
+  // weekday with zero history is a day off, and we stay silent).
+  let typical = sessionsRepo.typicalStartMinutes(userId, { timezone: tz, weekday });
+  if (typical == null) {
+    if (sessionsRepo.weekdaySampleCount(userId, weekday, tz) === 0) return { remind: false, reason: 'day_off' };
+    typical = sessionsRepo.typicalStartMinutes(userId, { timezone: tz, minSamples: 4 });
+  }
+  if (typical == null) return { remind: false, reason: 'no_pattern' };
+
+  const nowMin = t.minutesInTz(tz, now);
+  if (nowMin < typical + CLOCKIN_GRACE_MIN) return { remind: false, reason: 'not_yet' };
+  if (nowMin > typical + CLOCKIN_WINDOW_MIN) return { remind: false, reason: 'too_late' };
+
+  // Once per day.
+  if ((user.preferences || {}).work_clockin_reminded === todayKey) {
+    return { remind: false, reason: 'already_reminded' };
+  }
+
+  return { remind: true, typicalMinutes: typical, typicalLabel: minutesToLabel(typical), todayKey };
+}
+
+/** Remember we reminded today, so it never repeats within the same day. */
+function markClockInReminded(userId, dayKey) {
+  usersRepo.updatePreferences(userId, { work_clockin_reminded: dayKey });
+}
+
 // ── Acting ON the attendance system (Wingman → HRMS) ─────────────────
 //   The inbound webhook only tells us what happened. This is the other
 //   direction: the user says "clock me out" and we actually do it.
@@ -386,6 +439,8 @@ module.exports = {
   expectedDayHours,
   status,
   shouldNudge,
+  shouldRemindClockIn,
+  markClockInReminded,
   stayLate,
   summaryLine,
   fmtDuration,

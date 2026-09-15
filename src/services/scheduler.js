@@ -101,6 +101,7 @@ async function runMeetingPrepTick(now = new Date()) {
     await require('./webmailInbox').syncAllUsers();     // pull business mail into the app's Email section
     await healthAlerts.runAllUsers({ now });     // readings drifting from the user's own normal
     await workAlerts.runAllUsers({ now });       // still clocked in past their usual finish
+    await workAlerts.runClockInReminders({ now }); // usually started by now but haven't (learned)
     await taskDueAlerts.runAllUsers({ now });    // tasks due in ~15 minutes
   } catch (err) {
     console.warn('[scheduler] meeting tick error:', err.message);
