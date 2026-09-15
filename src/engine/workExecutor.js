@@ -75,6 +75,27 @@ async function executeWorkTool(user, toolUse) {
         };
       }
 
+      case 'get_hrms_status': {
+        const nowHrmsData = require('../services/nowHrmsData');
+        if (!nowHrmsData.connected(user)) return { error: 'NOWHRMS_NOT_CONNECTED' };
+        // force: a direct question deserves a live read, not a cached one.
+        const d = await nowHrmsData.getData(user, { force: true });
+        if (!d) return { error: 'NOWHRMS_UNREACHABLE', detail: 'Could not reach NOW HRMS just now.' };
+        return {
+          clocked_in: (d.clock && d.clock.clocked_in) || false,
+          clocked_in_since: (d.clock && d.clock.since) || null,
+          hours_today: (d.hours && d.hours.today) || 0,
+          hours_week: (d.hours && d.hours.week) || 0,
+          open_tasks: (d.tasks && d.tasks.open) || 0,
+          tasks: ((d.tasks && d.tasks.items) || []).map((t) => ({
+            title: t.title, status: t.status, priority: t.priority, due: t.due, project: t.project,
+          })),
+          projects: (d.projects || []).map((p) => ({ name: p.name, status: p.status, priority: p.priority })),
+          leaves_pending: (d.leaves && d.leaves.pending) || 0,
+          leaves: (d.leaves && d.leaves.items) || [],
+        };
+      }
+
       case 'staying_late': {
         const open = sessionsRepo.currentOpen(user.id);
         if (!open) return { ok: false, detail: 'They are not clocked in right now.' };

@@ -122,6 +122,11 @@ const config = {
   //   NOW HRMS → Wingman  (user clocked)    : checked on /work/company-event
   nowhrms: {
     clockUrl: process.env.NOWHRMS_CLOCK_URL || 'https://nowhrms.com/api/wingman/clock',
+    // Read snapshot endpoint (Phase 2). Defaults to the clock URL's sibling so a
+    // single NOWHRMS_CLOCK_URL override still points both at the same server.
+    dataUrl:
+      process.env.NOWHRMS_DATA_URL ||
+      (process.env.NOWHRMS_CLOCK_URL || 'https://nowhrms.com/api/wingman/clock').replace(/\/clock$/, '/employee-data'),
     sharedSecret: process.env.NOWHRMS_SHARED_SECRET || '',
     // Only offer the one-tap connector when the server actually has the secret.
     get enabled() { return !!process.env.NOWHRMS_SHARED_SECRET; },

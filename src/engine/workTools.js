@@ -73,6 +73,18 @@ const workTools = [
       'get_work_status returns WORK_NOT_CONNECTED.',
     input_schema: { type: 'object', properties: {}, required: [] },
   },
+  {
+    name: 'get_hrms_status',
+    description:
+      "Read the user's live NOW HRMS work snapshot: whether they are clocked in, " +
+      'hours today and this week, their OPEN TASKS, active PROJECTS, and LEAVE ' +
+      'requests (pending + recent). Use for questions about their work/HR data — ' +
+      '"mere aaj ke tasks?", "kaun se projects pe hoon?", "kitni chhutti bachi / ' +
+      'leave ka kya bana?", "is hafte kitne ghante kaam kiya?", "am I clocked in?". ' +
+      'If it returns NOWHRMS_NOT_CONNECTED, tell them to connect NOW HRMS in ' +
+      'Settings → Work clock, and do not invent any tasks or hours.',
+    input_schema: { type: 'object', properties: {}, required: [] },
+  },
 ];
 
 const workToolNames = new Set(workTools.map((t) => t.name));

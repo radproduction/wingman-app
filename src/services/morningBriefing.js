@@ -63,8 +63,13 @@ async function aggregate(user, now = new Date()) {
     console.warn('[morningBriefing] news failed:', err.message);
   }
 
+  // NOW HRMS snapshot line (best-effort; a slow HRMS must not hold the briefing).
+  let hrmsLine = null;
+  try { hrmsLine = await require('./nowHrmsData').briefingLine(user); }
+  catch (err) { console.warn('[morningBriefing] hrms failed:', err.message); }
+
   return {
-    tz, weather: w, events, emailConnected, emailCounts, tasksDue, bills, deliveries, health,
+    tz, weather: w, events, emailConnected, emailCounts, tasksDue, bills, deliveries, health, hrmsLine,
     healthLine: (() => { try { return require('./health').summaryLine(user.id); } catch (_) { return null; } })(),
     news: newsBulletin,
     todayStart, tomorrowStart,
@@ -111,6 +116,9 @@ function format(user, agg) {
     lines.push('\u2022 Nothing due today. \ud83c\udf89');
   }
   lines.push('');
+
+  // NOW HRMS — clock / open tasks / pending leaves, when connected.
+  if (agg.hrmsLine) { lines.push(agg.hrmsLine); lines.push(''); }
 
   // Bills
   if (agg.bills.length) {
