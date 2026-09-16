@@ -171,6 +171,19 @@ async function finish(session, bot) {
   } catch (e) {
     console.warn('[recallPoll] processing failed:', e.message);
     botsRepo.update(session.id, { status: 'failed', error: e.message.slice(0, 400) });
+    // Never let a meeting vanish silently — the user found out in front of a
+    // client last time. Tell them it failed (recording is safe on Recall) so
+    // THEY know before anyone else. Best-effort.
+    try {
+      const wa = require('../whatsapp/client');
+      if (wa.ready()) {
+        await wa.sendMessage(
+          user.phone,
+          `⚠️ I recorded *${meeting.title || 'your meeting'}* but hit a snag turning it into notes this time. `
+          + `The recording is safe — I've flagged it. Please try again, and tell the team if it keeps happening.`,
+        );
+      }
+    } catch (_) { /* best-effort */ }
     return false;
   }
 

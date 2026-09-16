@@ -151,10 +151,13 @@ const config = {
   // well, so it's the primary meeting transcriber (Whisper stays as a fallback).
   gemini: {
     apiKey: process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY || '',
-    // gemini-2.0/2.5-flash are deprecated ("no longer available to new users");
-    // the *-latest alias auto-tracks the current flash so it won't break on the
-    // next deprecation. Override with GEMINI_MODEL if needed.
-    model: process.env.GEMINI_MODEL || 'gemini-flash-latest',
+    // PINNED to a specific GA version, NOT the *-latest alias. The alias silently
+    // moved to a 2.5 "thinking" flash once, which made transcripts come back
+    // empty — a pinned version can't change behaviour under us like that. A GA
+    // model gets long deprecation notice, and any real failure now alerts the
+    // user (recallPoll), so we're not blind. Override with GEMINI_MODEL only to a
+    // version you've verified. (transcription also sets thinkingBudget: 0.)
+    model: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
     get enabled() { return !!(process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY); },
   },
 
