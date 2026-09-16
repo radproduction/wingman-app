@@ -81,8 +81,25 @@ async function summarize({ title, attendees = [], notes } = {}) {
     .filter((x) => x !== null)
     .join('\n');
 
-  const raw = await claude.complete(prompt, { system: SYSTEM, maxTokens: 1500 });
-  return normalize(extractJson(raw));
+  // Budget for the OUTPUT summary must be generous: a real meeting's structured
+  // JSON (overview + discussion + decisions + multi-field actions + questions +
+  // follow-ups) easily runs past a small cap, and a truncated response is
+  // invalid JSON → parse fails → we'd silently drop a real meeting as "empty".
+  // (That's exactly what a 1500-token cap did to a 26k-char transcript.)
+  let raw = await claude.complete(prompt, { system: SYSTEM, maxTokens: 8000 });
+  let parsed = extractJson(raw);
+  if (!parsed) {
+    // A parse miss on a non-trivial transcript is almost always truncation or
+    // stray prose — retry once, demanding compact JSON, before giving up.
+    console.warn(`[meetingNotes] summary JSON parse failed (raw ${raw ? raw.length : 0} chars) — retrying`);
+    raw = await claude.complete(
+      `${prompt}\n\nReturn ONLY the JSON object, compact, with no commentary before or after.`,
+      { system: SYSTEM, maxTokens: 8000 },
+    );
+    parsed = extractJson(raw);
+    if (!parsed) console.warn(`[meetingNotes] summary still unparseable; raw head: ${String(raw || '').slice(0, 200)}`);
+  }
+  return normalize(parsed);
 }
 
 module.exports = { summarize, normalize };
