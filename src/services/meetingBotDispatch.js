@@ -24,15 +24,19 @@ function enabled() {
 }
 
 /**
- * The bot's display name in the call — personalised to the user: their first
- * name + " Wingman" (e.g. "Aamir Wingman", "Fayyaz Wingman"). Falls back to
+ * The bot's display name in the call — "Wingman (FirstName)", e.g.
+ * "Wingman (Aamir)", "Wingman (Fayyaz)". It leads with "Wingman" on purpose:
+ * Recall bots join anonymously and can't set a profile picture, so Google Meet
+ * shows the name's INITIAL as the avatar placeholder (and briefly on every tile
+ * re-render). Leading with "Wingman" makes that placeholder a "W" that matches
+ * the logo, instead of the user's initial clashing with it. Falls back to
  * BOT_NAME when the user has no name on file.
  */
 function botNameForUser(userId) {
   try {
     const user = usersRepo.getById(userId);
     const first = String((user && user.name) || '').trim().split(/\s+/)[0];
-    if (first) return `${first} Wingman`;
+    if (first) return `Wingman (${first})`;
   } catch (_) { /* fall back */ }
   return BOT_NAME;
 }
