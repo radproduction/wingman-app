@@ -35,6 +35,17 @@ function key() {
   return encodeURIComponent(config.gemini.apiKey);
 }
 
+// A pinned model can be RETIRED (Google returned 404 "gemini-2.5-flash is no
+// longer available"), so we never trust a single name. Try the configured model,
+// then these known-good fallbacks on a 404, and remember the one that works.
+// gemini-flash-latest tracks the current flash — thinkingBudget:0 keeps it safe.
+const MODEL_FALLBACKS = ['gemini-flash-latest', 'gemini-3.6-flash', 'gemini-2.5-flash'];
+let resolvedModel = null;
+function modelCandidates() {
+  const list = [resolvedModel, config.gemini.model, ...MODEL_FALLBACKS].filter(Boolean);
+  return list.filter((m, i) => list.indexOf(m) === i);
+}
+
 function fmtClock(totalSeconds) {
   const s = Math.max(0, Math.floor(totalSeconds));
   const hh = Math.floor(s / 3600);
@@ -51,11 +62,11 @@ function fmtClock(totalSeconds) {
  * { text, finishReason }; throws only on an HTTP error.
  */
 async function generate(parts) {
-  const url = `${GEMINI_BASE}/v1beta/models/${config.gemini.model}:generateContent?key=${key()}`;
   const contents = [{ parts }];
   const baseGen = { temperature: 0, maxOutputTokens: 65536 };
 
-  async function call(withThinking) {
+  const callModel = async (model, withThinking) => {
+    const url = `${GEMINI_BASE}/v1beta/models/${model}:generateContent?key=${key()}`;
     const generationConfig = withThinking ? { ...baseGen, thinkingConfig: { thinkingBudget: 0 } } : baseGen;
     const res = await fetch(url, {
       method: 'POST',
@@ -64,25 +75,36 @@ async function generate(parts) {
     });
     const data = await res.json().catch(() => ({}));
     return { res, data };
-  }
+  };
 
-  let { res, data } = await call(true);
-  if (!res.ok && res.status === 400 && /thinking|generationConfig|unknown|unexpected/i.test(JSON.stringify(data))) {
-    ({ res, data } = await call(false));
-  }
-  if (!res.ok) {
-    const msg = (data && data.error && data.error.message) || `HTTP ${res.status}`;
-    throw new Error(`gemini_${res.status}: ${msg}`);
-  }
+  let lastErr;
+  for (const model of modelCandidates()) {
+    let { res, data } = await callModel(model, true);
+    if (!res.ok && res.status === 400 && /thinking|generationConfig|unknown|unexpected/i.test(JSON.stringify(data))) {
+      ({ res, data } = await callModel(model, false));
+    }
+    if (!res.ok) {
+      const msg = (data && data.error && data.error.message) || `HTTP ${res.status}`;
+      // Model retired / unavailable → try the next candidate instead of failing.
+      if (res.status === 404 || /no longer available|not found|not available|unsupported/i.test(msg)) {
+        console.warn(`[geminiTranscribe] model ${model} unavailable (${res.status}) — trying next`);
+        lastErr = new Error(`gemini_404: ${msg}`);
+        continue;
+      }
+      throw new Error(`gemini_${res.status}: ${msg}`);
+    }
 
-  const cand = data.candidates && data.candidates[0];
-  const p = cand && cand.content && cand.content.parts;
-  const text = (p || []).map((x) => x && x.text).filter(Boolean).join('\n').trim();
-  const finishReason =
-    (cand && cand.finishReason) ||
-    (data.promptFeedback && data.promptFeedback.blockReason) ||
-    '';
-  return { text, finishReason };
+    resolvedModel = model; // remember the one that works, use it first next time
+    const cand = data.candidates && data.candidates[0];
+    const p = cand && cand.content && cand.content.parts;
+    const text = (p || []).map((x) => x && x.text).filter(Boolean).join('\n').trim();
+    const finishReason =
+      (cand && cand.finishReason) ||
+      (data.promptFeedback && data.promptFeedback.blockReason) ||
+      '';
+    return { text, finishReason };
+  }
+  throw lastErr || new Error('gemini_no_working_model');
 }
 
 /**
