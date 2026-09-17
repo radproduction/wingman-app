@@ -74,7 +74,18 @@ async function runOnce() {
         botsRepo.update(s.id, { status: 'failed', error: `recall: ${status}` });
       } else {
         const mapped = STATUS_MAP[status];
-        if (mapped && mapped !== s.status) botsRepo.update(s.id, { status: mapped });
+        if (mapped && mapped !== s.status) {
+          botsRepo.update(s.id, { status: mapped });
+          // Just reached the waiting room → tell the user to ADMIT it, once, so
+          // it doesn't sit un-admitted and leave with no recording.
+          if (mapped === 'waiting') {
+            try {
+              const user = usersRepo.getById(s.user_id);
+              const meeting = user && s.meeting_id ? meetingsRepo.getForUser(user.id, s.meeting_id) : null;
+              if (user) await pingKnocking(user, (meeting && meeting.title) || 'your meeting');
+            } catch (_) { /* best-effort */ }
+          }
+        }
       }
     } catch (e) {
       console.warn('[recallPoll]', s.id, e.message);
@@ -105,6 +116,23 @@ async function pingCouldntCapture(user, title) {
       `⚠️ I joined *${title}* but couldn't capture any usable audio, so there are no notes this time.\n\n`
       + `This usually means the notetaker wasn't admitted into the call (tap *Admit* when "…Wingman" knocks), `
       + `or there wasn't enough conversation to record. Please try again.`,
+    );
+  } catch (_) { /* best-effort */ }
+}
+
+/**
+ * The bot is in the waiting room — tell the user to ADMIT it, NOW, or it records
+ * nothing (it waits, then leaves un-admitted, and there is no recording to
+ * recover — exactly how a real meeting was lost). Best-effort.
+ */
+async function pingKnocking(user, title) {
+  try {
+    const wa = require('../whatsapp/client');
+    if (!wa.ready()) return;
+    await wa.sendMessage(
+      user.phone,
+      `🔔 Wingman is knocking to join *${title}* — please tap *Admit* in the meeting so it can record and take notes.\n\n`
+      + `If it isn't admitted it waits about 30 minutes, then leaves, and there'll be no recording.`,
     );
   } catch (_) { /* best-effort */ }
 }
