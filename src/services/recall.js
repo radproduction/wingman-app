@@ -88,12 +88,17 @@ async function createBot({ meetingUrl, botName = BOT_NAME, metadata } = {}) {
   };
   const withLeave = { automatic_leave };
 
-  // Clean MIXED AUDIO (small + reliable to transcribe) plus a caption transcript.
-  // audio_mixed is what we feed the transcriber; the default video-only recording
-  // is a big mp4 our transcriber reads poorly (empty/garbled real meetings).
-  const recFull = { audio_mixed: {}, transcript: { provider: { meeting_captions: {} } } };
+  // Record clean MIXED AUDIO ONLY (small + fast to transcribe), NOT the big video.
+  // Recall's CURRENT API keys are `audio_mixed_mp3` (make the audio file) and
+  // `video_mixed_mp4` (video — ON by default, so we set it null to turn it OFF).
+  // The OLD `audio_mixed` key was silently ignored by this account, so only the
+  // default video was ever produced and we were stuck transcribing a ~300MB mp4.
+  const recFull = { audio_mixed_mp3: {}, video_mixed_mp4: null, transcript: { provider: { meeting_captions: {} } } };
   const transcriptOnly = { ...base, recording_config: { transcript: { provider: { meeting_captions: {} } } }, ...withLeave };
-  const audioOnly = { ...base, recording_config: { audio_mixed: {} } };
+  const audioOnly = { ...base, recording_config: { audio_mixed_mp3: {}, video_mixed_mp4: null } };
+  // Last-ditch audio via the OLD key, in case an account/API version rejects the
+  // new one — still far better than falling all the way to the video default.
+  const audioOldKey = { ...base, recording_config: { audio_mixed: {} } };
 
   // The Wingman logo, broadcast as the bot's camera — Recall bots join anonymous
   // with no profile picture, so this image is their only "face" in the call
@@ -114,10 +119,11 @@ async function createBot({ meetingUrl, botName = BOT_NAME, metadata } = {}) {
     attempts.push({ ...recLeave, ...avatarOut });                        // rec + leave + logo (best)
     attempts.push({ ...base, recording_config: recFull, ...avatarOut }); // rec + logo (keep logo, drop leave)
   }
-  attempts.push(recLeave);                                               // rec + leave (no logo)
-  attempts.push({ ...base, recording_config: recFull });                // rec only
+  attempts.push(recLeave);                                               // audio + transcript + leave (no logo)
+  attempts.push({ ...base, recording_config: recFull });                // audio + transcript
+  attempts.push(audioOnly);                                             // audio only (new key, video off)
+  attempts.push(audioOldKey);                                           // audio only (old key fallback)
   attempts.push(transcriptOnly);                                        // transcript + leave
-  attempts.push(audioOnly);                                             // clean audio only
   attempts.push(base);                                                  // last resort (video-only default)
   let lastErr;
   for (const body of attempts) {
