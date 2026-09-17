@@ -54,6 +54,11 @@ const STATUS_MAP = {
   call_ended: 'processing',
 };
 
+// How long to keep waiting for the recording AFTER the call ENDS — Recall needs
+// time to process, and a longer meeting's recording takes longer. Measured from
+// call end (see finish), so the meeting's own length never triggers a timeout.
+const PROCESSING_WAIT_MIN = 45;
+
 async function runOnce() {
   if (!recall.enabled()) return { checked: 0, finished: 0 };
   const active = botsRepo.listRecallActive();
@@ -132,7 +137,15 @@ async function finish(session, bot) {
   // (The old code finalised at call_ended before the media existed, so real
   // meetings came back "couldn't capture".) Give up only after it's been too long.
   if (!haveTranscript && !haveRecording) {
-    if (ageMinutes(session.created_at) < 25) {
+    // Wait measured from when the CALL ENDED, not when the bot was created. A long
+    // meeting is already older than any short window the moment it ends, so timing
+    // from creation marked every 25-min-plus meeting "timed out" before Recall had
+    // even finished processing the recording — the real reason long meetings
+    // failed. Stamp ended_at the first time we notice the call is over, then wait
+    // from there so meeting length itself never causes a timeout.
+    const endedAt = session.ended_at || new Date().toISOString();
+    if (!session.ended_at) botsRepo.update(session.id, { status: 'processing', endedAt });
+    if (ageMinutes(endedAt) < PROCESSING_WAIT_MIN) {
       botsRepo.update(session.id, { status: 'processing' });
       return false;
     }
