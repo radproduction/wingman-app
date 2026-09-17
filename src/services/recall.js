@@ -88,14 +88,15 @@ async function createBot({ meetingUrl, botName = BOT_NAME, metadata } = {}) {
   };
   const withLeave = { automatic_leave };
 
-  // Record clean MIXED AUDIO ONLY (small + fast to transcribe), NOT the big video.
-  // Recall's CURRENT API keys are `audio_mixed_mp3` (make the audio file) and
-  // `video_mixed_mp4` (video — ON by default, so we set it null to turn it OFF).
-  // The OLD `audio_mixed` key was silently ignored by this account, so only the
-  // default video was ever produced and we were stuck transcribing a ~300MB mp4.
-  const recFull = { audio_mixed_mp3: {}, video_mixed_mp4: null, transcript: { provider: { meeting_captions: {} } } };
+  // Record BOTH: small MIXED AUDIO (`audio_mixed_mp3`) AND the video (which is ON
+  // by default — we leave it on as a safety net). recordingUrl() PREFERS audio,
+  // so we transcribe the small/fast audio; if the audio is ever missing/bad we
+  // fall back to the video. The bug before was requesting the OLD `audio_mixed`
+  // key, which this account ignored — so NO audio was made and only the big
+  // video existed. `audio_mixed_mp3` is the current key that actually produces it.
+  const recFull = { audio_mixed_mp3: {}, transcript: { provider: { meeting_captions: {} } } };
   const transcriptOnly = { ...base, recording_config: { transcript: { provider: { meeting_captions: {} } } }, ...withLeave };
-  const audioOnly = { ...base, recording_config: { audio_mixed_mp3: {}, video_mixed_mp4: null } };
+  const audioOnly = { ...base, recording_config: { audio_mixed_mp3: {} } };
   // Last-ditch audio via the OLD key, in case an account/API version rejects the
   // new one — still far better than falling all the way to the video default.
   const audioOldKey = { ...base, recording_config: { audio_mixed: {} } };
