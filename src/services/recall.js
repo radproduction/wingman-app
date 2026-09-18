@@ -82,7 +82,7 @@ async function createBot({ meetingUrl, botName = BOT_NAME, metadata } = {}) {
   const automatic_leave = {
     waiting_room_timeout: 1800,          // up to 30 min stuck in the waiting room
     noone_joined_timeout: 1800,          // up to 30 min waiting for the other side
-    everyone_left_timeout: { timeout: 90, activate_after: 300 }, // 5 min in, then leave 90s after all are gone
+    everyone_left_timeout: { timeout: 300, activate_after: 300 }, // 5 min in; then wait 5 min after all are gone — a net blip (both sides briefly disconnect) won't make the bot bail
     in_call_not_recording_timeout: 3600, // don't bail while not yet recording
     silence_detection: { timeout: 3600, activate_after: 1800 },  // tolerate long silence
   };
