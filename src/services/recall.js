@@ -229,6 +229,22 @@ function recordingUrl(bot) {
   return scan ? { url: scan, kind: 'scan' } : null;
 }
 
+/**
+ * The mixed-VIDEO download URL specifically — for SAVING the video to Drive,
+ * separate from transcription (which prefers the small audio). Returns null when
+ * no video recording is available. Does NOT touch recordingUrl (transcription).
+ * @returns {string|null}
+ */
+function videoRecordingUrl(bot) {
+  const recs = Array.isArray(bot && bot.recordings) ? bot.recordings : [];
+  for (const r of recs) {
+    const sc = r && r.media_shortcuts && r.media_shortcuts.video_mixed;
+    const url = sc && sc.data && sc.data.download_url;
+    if (typeof url === 'string' && /^https?:\/\//.test(url)) return url;
+  }
+  return null;
+}
+
 /** Download the recording as a buffer (fallback when there's no transcript). */
 async function fetchRecording(bot) {
   const picked = recordingUrl(bot);
@@ -245,6 +261,6 @@ async function fetchRecording(bot) {
 }
 
 module.exports = {
-  enabled, createBot, getBot, getTranscript, fetchRecording, recordingUrl,
+  enabled, createBot, getBot, getTranscript, fetchRecording, recordingUrl, videoRecordingUrl,
   botStatus, isDone, isFatal, assembleTranscript, findMediaUrl, BOT_NAME,
 };

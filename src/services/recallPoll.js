@@ -137,6 +137,36 @@ async function pingKnocking(user, title) {
   } catch (_) { /* best-effort */ }
 }
 
+/**
+ * Save the meeting VIDEO to Drive (the boss wants the recording), STREAMED so a
+ * long/large video never buffers in RAM. Completely separate from transcription
+ * (which uses the small audio). Best-effort: never throws, never blocks notes.
+ */
+async function saveVideoToDrive(user, meeting, bot) {
+  try {
+    if (!require('../auth/googleAuth').isConnected(user)) return;
+    const url = recall.videoRecordingUrl(bot);
+    if (!url) return;
+    const res = await fetch(url);
+    if (!res.ok || !res.body) { console.warn(`[recallPoll] video download ${res.status}`); return; }
+    const { Readable } = require('stream');
+    const drive = require('./drive');
+    const stamp = new Date().toISOString().slice(0, 16).replace('T', ' ');
+    const up = await drive.uploadStream(user, {
+      name: `${meeting.title || 'Meeting'} — ${stamp}.mp4`,
+      mimeType: 'video/mp4',
+      body: Readable.fromWeb(res.body),
+      folderName: 'Wingman Meetings',
+    });
+    if (up && up.link) {
+      meetingsRepo.update(user.id, meeting.id, { recordingUrl: up.link });
+      console.log(`[recallPoll] saved meeting VIDEO to Drive: ${up.link}`);
+    }
+  } catch (e) {
+    console.warn('[recallPoll] video->Drive failed:', e.message);
+  }
+}
+
 /** Turn a finished Recall bot into notes + summary + email + tasks. */
 async function finish(session, bot) {
   const user = usersRepo.getById(session.user_id);
@@ -206,8 +236,10 @@ async function finish(session, bot) {
     if (haveTranscript) {
       result = await meetingIngest.processTranscript(user, meeting, transcript, { emailUser: true, createTasks: true });
     } else {
-      const saveToDrive = !!(user.preferences && user.preferences.saveMeetingRecording);
-      result = await meetingIngest.processAudio(user, meeting, rec.buffer, rec.mime, { emailUser: true, createTasks: true, saveToDrive });
+      // Transcribe from the small audio, and DON'T save that audio to Drive —
+      // the video goes to Drive separately (saveVideoToDrive), which is what the
+      // boss actually wants to keep.
+      result = await meetingIngest.processAudio(user, meeting, rec.buffer, rec.mime, { emailUser: true, createTasks: true, saveToDrive: false });
     }
   } catch (e) {
     console.warn('[recallPoll] processing failed:', e.message);
@@ -247,6 +279,9 @@ async function finish(session, bot) {
     }
   } catch (_) { /* best-effort */ }
   try { require('../db/agentActions').log(user.id, { kind: 'meeting.notes', summary: `Sent notes for "${meeting.title || 'a meeting'}"`, source: 'proactive' }); } catch (_) { /* audit best-effort */ }
+  // Save the meeting VIDEO to Drive (boss wants the recording) — fire-and-forget
+  // AFTER the notes have already gone out, so it can never block or break them.
+  saveVideoToDrive(user, meeting, bot).catch(() => {});
   return true;
 }
 

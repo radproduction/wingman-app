@@ -269,7 +269,26 @@ async function move(user, { fileId, folderName } = {}) {
   return { moved: true, name: res.data.name, link: res.data.webViewLink, folderName };
 }
 
+/**
+ * Upload to Drive from a readable STREAM instead of a full buffer — so a big/long
+ * recording (a multi-hour meeting video) is streamed through and never has to sit
+ * in memory. Mirrors uploadFile; used for saving meeting videos.
+ */
+async function uploadStream(user, { name, mimeType = 'application/octet-stream', body, folderName } = {}) {
+  if (!body) throw new Error('EMPTY_STREAM');
+  const drive = driveFor(user);
+  const requestBody = { name: name || 'file', mimeType };
+  const parentId = folderName ? await getOrCreateFolderId(drive, folderName) : null;
+  if (parentId) requestBody.parents = [parentId];
+  const res = await drive.files.create({
+    requestBody,
+    media: { mimeType, body },
+    fields: 'id,name,webViewLink',
+  });
+  return { id: res.data.id, name: res.data.name, link: res.data.webViewLink };
+}
+
 module.exports = {
-  search, readFile, createDoc, createSheet, createFolder, uploadFile,
+  search, readFile, createDoc, createSheet, createFolder, uploadFile, uploadStream,
   share, trashFile, rename, move,
 };
