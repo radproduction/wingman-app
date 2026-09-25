@@ -36,7 +36,12 @@ const CONTACTS_SCOPES = [
 // Identity — lets us label each linked account with its Google address so a
 // user can tell their personal and work accounts apart (and disconnect one).
 const IDENTITY_SCOPES = [
+  'openid',
   'https://www.googleapis.com/auth/userinfo.email',
+  // profile is REQUIRED for userinfo to return the account's name + PICTURE — without
+  // it Google never sends `picture`, so no user ever gets a real avatar. (Existing
+  // users must reconnect once to grant it; new users get it on first connect.)
+  'https://www.googleapis.com/auth/userinfo.profile',
 ];
 
 // We request all scopes together so a single consent connects Calendar, Gmail,

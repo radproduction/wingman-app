@@ -74,17 +74,38 @@ router.get('/me', async (req, res) => {
   // Real email + Google profile photo, so the header avatar and the profile
   // screen show the actual user. Prefer the primary Google account email; the
   // avatar is fetched once from the OpenID userinfo endpoint and cached.
-  let email = u.webmail_address || null;
+  // Real email + Google photo, resolved dynamically and SELF-HEALING — so a
+  // wrong/blank-email Google account never leaves the profile showing the wrong
+  // person (that used to need a manual DB fix per user; now it corrects itself).
+  let email = null;
   let avatarUrl = u.avatar_url || null;
+  const accountsRepo = require('../db/googleAccounts');
   try {
-    const ga = require('../db/googleAccounts').getPrimary(u.id);
-    if (ga && ga.email) email = ga.email;
+    const accounts = accountsRepo.listForUser(u.id);
+    let primary = accounts.find((a) => a.is_primary) || accounts[0] || null;
+    // If the primary account has no email but another linked one does, promote the
+    // real one — exactly the "wrong account became primary" case, fixed on the fly.
+    if (primary && !primary.email) {
+      const withEmail = accounts.find((a) => a.email);
+      if (withEmail) { accountsRepo.setPrimary(u.id, withEmail.id); primary = withEmail; }
+    }
+    if (primary && primary.email) email = primary.email;
   } catch (_) { /* none linked */ }
+  if (!email) email = u.webmail_address || null;
+
+  // Fill a missing email/photo from Google, and BACKFILL the email onto the
+  // account so a null email is never left behind to confuse the next load.
   if (require('../auth/googleAuth').isConnected(u) && (!avatarUrl || !email)) {
     try {
       const ident = await require('../services/gmail').getIdentity(u);
       if (ident) {
-        if (!email && ident.email) email = ident.email;
+        if (ident.email) {
+          if (!email) email = ident.email;
+          try {
+            const primary = accountsRepo.getPrimary(u.id);
+            if (primary && !primary.email) accountsRepo.setEmail(primary.id, ident.email);
+          } catch (_) { /* best-effort */ }
+        }
         if (ident.picture && ident.picture !== u.avatar_url) {
           avatarUrl = ident.picture;
           usersRepo.update(u.id, { avatar_url: ident.picture });
