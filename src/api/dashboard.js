@@ -611,6 +611,25 @@ const WAITLIST_TO = ['hello@wehearyou.studio', 'aamir@wehearyou.studio', 'fayyaz
 const WAITLIST_FROM = process.env.WAITLIST_FROM || 'hello@wehearyou.studio';
 const WAITLIST_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// The visitor's real IP — behind Caddy the client address is the first entry in
+// X-Forwarded-For; fall back to the socket. Strips the IPv6-mapped IPv4 prefix.
+function clientIp(req) {
+  const xff = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+  const ip = xff || req.ip || (req.socket && req.socket.remoteAddress) || '';
+  return ip.replace(/^::ffff:/, '') || null;
+}
+
+// Best-effort country from an IP (free, no key). Never throws; null on any issue.
+async function ipCountry(ip) {
+  if (!ip) return null;
+  try {
+    const res = await fetch(`https://ipapi.co/${encodeURIComponent(ip)}/country_name/`, { signal: AbortSignal.timeout(5000) });
+    if (!res.ok) return null;
+    const t = (await res.text()).trim();
+    return (t && t.length < 60 && !/error|reserved|undefined|not found/i.test(t)) ? t : null;
+  } catch (_) { return null; }
+}
+
 router.post('/home/notify', async (req, res) => {
   const b = req.body || {};
   const email = String(b.email || '').trim().toLowerCase();
@@ -624,11 +643,29 @@ router.post('/home/notify', async (req, res) => {
   }
 
   // 1) Persist first — a signup must never be lost even if email delivery fails.
+  //    Also capture the visitor's IP (boss wants to know which country signups
+  //    come from); the country is filled in best-effort just after, from the IP.
+  const ip = clientIp(req);
   try {
     const { db } = require('../db');
     db.prepare("CREATE TABLE IF NOT EXISTS waitlist (email TEXT PRIMARY KEY, created_at TEXT DEFAULT (datetime('now')))").run();
-    db.prepare('INSERT OR IGNORE INTO waitlist (email) VALUES (?)').run(email);
+    // Add the columns on a table that predates them (no-op once they exist).
+    try { db.prepare('ALTER TABLE waitlist ADD COLUMN ip TEXT').run(); } catch (_) { /* already there */ }
+    try { db.prepare('ALTER TABLE waitlist ADD COLUMN country TEXT').run(); } catch (_) { /* already there */ }
+    db.prepare('INSERT OR IGNORE INTO waitlist (email, ip) VALUES (?, ?)').run(email, ip);
+    // Fill the IP if this email was stored before the column existed.
+    if (ip) db.prepare('UPDATE waitlist SET ip = COALESCE(ip, ?) WHERE email = ?').run(ip, email);
   } catch (e) { console.warn('[waitlist] store failed:', e.message); }
+
+  // Country from the IP — best-effort and AFTER the response path, so it can never
+  // delay or fail the signup. Written onto the row when it resolves.
+  if (ip) {
+    ipCountry(ip).then((country) => {
+      if (!country) return;
+      try { const { db } = require('../db'); db.prepare('UPDATE waitlist SET country = ? WHERE email = ?').run(country, email); }
+      catch (_) { /* best-effort */ }
+    }).catch(() => {});
+  }
 
   // 2) Notify the team by email (best-effort, via Brevo over HTTPS — SMTP is
   //    blocked in prod). One message per recipient; a failure to one never
