@@ -22,6 +22,18 @@
     /></noscript>
     <!-- End Meta Pixel Code -->
 
+    <!-- Google Search Console verification -->
+    <meta name="google-site-verification" content="0kf8yi6M6PScLo0CipnERO8bmQhrfoXKYpMFv4_p0Rs" />
+
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-XMYP7WB2NB"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-XMYP7WB2NB');
+    </script>
+
     <!-- Waitlist success → confetti Thank-You page. Wraps window.fetch so a
          successful POST to /api/home/notify sends the visitor to /thank-you.html,
          WITHOUT touching the (bundled) signup component. Reads only res.ok, so the
@@ -35,10 +47,9 @@
         var p = origFetch(input, init);
         if (method === 'POST' && url.indexOf('/api/home/notify') !== -1) {
           p.then(function (res) {
-            if (res && res.ok) {
-              try { if (window.fbq) fbq('track', 'Lead'); } catch (e) {}
-              window.location.assign('/thank-you.html');
-            }
+            // Redirect on success; the /waitlist page fires the Pixel "Lead" and
+            // GA conversion on load (more reliable than firing here mid-navigation).
+            if (res && res.ok) window.location.assign('/waitlist');
           }).catch(function () {});
         }
         return p;

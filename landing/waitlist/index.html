@@ -26,6 +26,16 @@
     /></noscript>
     <!-- End Meta Pixel Code -->
 
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-XMYP7WB2NB"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-XMYP7WB2NB');
+      gtag('event', 'waitlist_signup');
+    </script>
+
     <style>
       :root {
         --ink: #0e1116;
@@ -134,7 +144,6 @@
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
     <script>
       (function () {
-        // Confetti burst on arrival + a couple of follow-ups.
         try {
           if (window.confetti) {
             var myConfetti = window.confetti.create(document.getElementById('confetti'), { resize: true, useWorker: true });
@@ -145,7 +154,6 @@
           }
         } catch (e) {}
 
-        // Countdown + redirect home after 5 seconds.
         var n = 5;
         var el = document.getElementById('secs');
         var t = setInterval(function () {
