@@ -4,6 +4,48 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
 
+    <!-- Meta Pixel Code -->
+    <script>
+    !function(f,b,e,v,n,t,s)
+    {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+    n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+    if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+    n.queue=[];t=b.createElement(e);t.async=!0;
+    t.src=v;s=b.getElementsByTagName(e)[0];
+    s.parentNode.insertBefore(t,s)}(window, document,'script',
+    'https://connect.facebook.net/en_US/fbevents.js');
+    fbq('init', '1634177868286804');
+    fbq('track', 'PageView');
+    </script>
+    <noscript><img height="1" width="1" style="display:none"
+    src="https://www.facebook.com/tr?id=1634177868286804&ev=PageView&noscript=1"
+    /></noscript>
+    <!-- End Meta Pixel Code -->
+
+    <!-- Waitlist success → confetti Thank-You page. Wraps window.fetch so a
+         successful POST to /api/home/notify sends the visitor to /thank-you.html,
+         WITHOUT touching the (bundled) signup component. Reads only res.ok, so the
+         form's own code still gets the response. Loaded before the bundle. -->
+    <script>
+    (function () {
+      var origFetch = window.fetch.bind(window);
+      window.fetch = function (input, init) {
+        var url = typeof input === 'string' ? input : (input && input.url) || '';
+        var method = ((init && init.method) || (input && input.method) || 'GET').toUpperCase();
+        var p = origFetch(input, init);
+        if (method === 'POST' && url.indexOf('/api/home/notify') !== -1) {
+          p.then(function (res) {
+            if (res && res.ok) {
+              try { if (window.fbq) fbq('track', 'Lead'); } catch (e) {}
+              window.location.assign('/thank-you.html');
+            }
+          }).catch(function () {});
+        }
+        return p;
+      };
+    })();
+    </script>
+
     <!--
       The landing surface, v1. This is NOT the app's entry.
 

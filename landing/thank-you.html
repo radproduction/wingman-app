@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>You're on the list — Wingman</title>
+    <meta name="robots" content="noindex" />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+
+    <!-- Meta Pixel Code -->
+    <script>
+    !function(f,b,e,v,n,t,s)
+    {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+    n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+    if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+    n.queue=[];t=b.createElement(e);t.async=!0;
+    t.src=v;s=b.getElementsByTagName(e)[0];
+    s.parentNode.insertBefore(t,s)}(window, document,'script',
+    'https://connect.facebook.net/en_US/fbevents.js');
+    fbq('init', '1634177868286804');
+    fbq('track', 'PageView');
+    fbq('track', 'Lead');
+    </script>
+    <noscript><img height="1" width="1" style="display:none"
+    src="https://www.facebook.com/tr?id=1634177868286804&ev=PageView&noscript=1"
+    /></noscript>
+    <!-- End Meta Pixel Code -->
+
+    <style>
+      :root {
+        --ink: #0e1116;
+        --muted: #5b6472;
+        --bg: #f6f7fb;
+        --card: #ffffff;
+        --brand1: #7c5cff;
+        --brand2: #3d7bff;
+        --ok: #16a34a;
+      }
+      * { box-sizing: border-box; }
+      html, body { height: 100%; margin: 0; }
+      body {
+        font-family: "Switzer", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        color: var(--ink);
+        background:
+          radial-gradient(1200px 600px at 50% -10%, rgba(124,92,255,0.12), transparent 60%),
+          radial-gradient(900px 500px at 90% 110%, rgba(61,123,255,0.10), transparent 60%),
+          var(--bg);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        overflow: hidden;
+      }
+      canvas#confetti {
+        position: fixed; inset: 0; width: 100%; height: 100%;
+        pointer-events: none; z-index: 30;
+      }
+      .card {
+        position: relative; z-index: 10;
+        width: 100%; max-width: 520px;
+        background: var(--card);
+        border: 1px solid rgba(14,17,22,0.06);
+        border-radius: 28px;
+        padding: 48px 40px;
+        text-align: center;
+        box-shadow: 0 24px 60px -20px rgba(20,24,40,0.22);
+        animation: rise 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+      }
+      @keyframes rise { from { opacity: 0; transform: translateY(16px) scale(0.98); } to { opacity: 1; transform: none; } }
+
+      .wordmark {
+        font-weight: 800; letter-spacing: 0.02em; font-size: 20px;
+        background: linear-gradient(90deg, var(--brand1), var(--brand2));
+        -webkit-background-clip: text; background-clip: text; color: transparent;
+        margin-bottom: 28px;
+      }
+
+      .check {
+        width: 84px; height: 84px; margin: 0 auto 24px;
+        border-radius: 999px;
+        background: linear-gradient(135deg, rgba(22,163,74,0.14), rgba(22,163,74,0.08));
+        display: grid; place-items: center;
+        animation: pop 0.5s 0.15s cubic-bezier(0.22, 1, 0.36, 1) both;
+      }
+      @keyframes pop { from { transform: scale(0.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+      .check svg { width: 44px; height: 44px; }
+      .check svg path {
+        stroke: var(--ok); stroke-width: 4; fill: none;
+        stroke-linecap: round; stroke-linejoin: round;
+        stroke-dasharray: 48; stroke-dashoffset: 48;
+        animation: draw 0.5s 0.5s ease forwards;
+      }
+      @keyframes draw { to { stroke-dashoffset: 0; } }
+
+      h1 { font-size: 30px; line-height: 1.15; margin: 0 0 12px; letter-spacing: -0.01em; }
+      p.sub { color: var(--muted); font-size: 16px; line-height: 1.55; margin: 0 auto 28px; max-width: 400px; }
+
+      .home-btn {
+        display: inline-block; text-decoration: none;
+        background: linear-gradient(90deg, var(--brand1), var(--brand2));
+        color: #fff; font-weight: 600; font-size: 15px;
+        padding: 13px 26px; border-radius: 999px;
+        transition: transform 0.15s ease;
+      }
+      .home-btn:hover { transform: scale(1.03); }
+
+      .count { margin-top: 22px; font-size: 13px; color: var(--muted); }
+      .count b { color: var(--ink); }
+      @media (max-width: 480px) { .card { padding: 40px 24px; } h1 { font-size: 25px; } }
+    </style>
+  </head>
+  <body>
+    <canvas id="confetti"></canvas>
+
+    <main class="card">
+      <div class="wordmark">WiNGMAN</div>
+
+      <div class="check" aria-hidden="true">
+        <svg viewBox="0 0 48 48"><path d="M14 25l7 7 14-16" /></svg>
+      </div>
+
+      <h1>You're on the list! 🎉</h1>
+      <p class="sub">
+        Thank you for joining the Wingman waitlist. We'll reach out the moment it
+        opens up — one message when there's something real to try, and nothing else.
+      </p>
+
+      <a class="home-btn" href="/">Back to home</a>
+
+      <div class="count">Taking you home in <b><span id="secs">5</span></b> seconds…</div>
+    </main>
+
+    <!-- Confetti (external lib is fine on a normal site; degrades gracefully). -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+    <script>
+      (function () {
+        // Confetti burst on arrival + a couple of follow-ups.
+        try {
+          if (window.confetti) {
+            var myConfetti = window.confetti.create(document.getElementById('confetti'), { resize: true, useWorker: true });
+            var colors = ['#7c5cff', '#3d7bff', '#16a34a', '#ffd166', '#ff6b9a'];
+            myConfetti({ particleCount: 140, spread: 75, origin: { y: 0.6 }, colors: colors });
+            setTimeout(function () { myConfetti({ particleCount: 80, angle: 60, spread: 60, origin: { x: 0 }, colors: colors }); }, 250);
+            setTimeout(function () { myConfetti({ particleCount: 80, angle: 120, spread: 60, origin: { x: 1 }, colors: colors }); }, 400);
+          }
+        } catch (e) {}
+
+        // Countdown + redirect home after 5 seconds.
+        var n = 5;
+        var el = document.getElementById('secs');
+        var t = setInterval(function () {
+          n -= 1;
+          if (el) el.textContent = String(Math.max(0, n));
+          if (n <= 0) { clearInterval(t); window.location.assign('/'); }
+        }, 1000);
+      })();
+    </script>
+  </body>
+</html>
