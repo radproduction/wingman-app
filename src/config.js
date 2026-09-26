@@ -173,6 +173,20 @@ const config = {
     get enabled() { return !!process.env.BREVO_API_KEY; },
   },
 
+  // Landing-page waitlist → live Google Sheet.
+  //   The boss wants a Google Sheet that updates itself as signups arrive. We do
+  //   that by POSTing each signup to a Google Apps Script "Web App" bound to the
+  //   sheet (it appends/updates a row). This needs NO Google service account or
+  //   key on our side — just the deployed Web App URL. The shared secret is an
+  //   optional token the Apps Script checks so only we can write to the sheet.
+  //   Leave sheetWebhookUrl empty and this feature is simply off (signups still
+  //   land in the DB + team email exactly as before).
+  waitlist: {
+    sheetWebhookUrl: process.env.WAITLIST_SHEET_WEBHOOK_URL || '',
+    sheetSecret: process.env.WAITLIST_SHEET_SECRET || '',
+    get sheetEnabled() { return !!process.env.WAITLIST_SHEET_WEBHOOK_URL; },
+  },
+
   weather: {
     apiKey: process.env.WEATHER_API_KEY || '',
     defaultCity: process.env.WEATHER_DEFAULT_CITY || 'Dubai',

@@ -657,6 +657,19 @@ router.post('/home/notify', async (req, res) => {
     if (ip) db.prepare('UPDATE waitlist SET ip = COALESCE(ip, ?) WHERE email = ?').run(ip, email);
   } catch (e) { console.warn('[waitlist] store failed:', e.message); }
 
+  // Mirror into the boss's live Google Sheet — the moment a lead arrives. Sent
+  // right away with what we have (email + IP); the country fills into the SAME
+  // row a few seconds later (the sheet upserts by email). Fire-and-forget: it can
+  // never delay or fail the signup.
+  try {
+    const waitlistSheet = require('../services/waitlistSheet');
+    if (waitlistSheet.enabled()) {
+      waitlistSheet.pushRow({ email, ip, created_at: new Date().toISOString() })
+        .then((r) => { if (!r.ok) console.warn('[waitlist] sheet push failed:', r.error); })
+        .catch(() => {});
+    }
+  } catch (_) { /* best-effort */ }
+
   // Country from the IP — best-effort and AFTER the response path, so it can never
   // delay or fail the signup. Written onto the row when it resolves.
   if (ip) {
@@ -664,6 +677,11 @@ router.post('/home/notify', async (req, res) => {
       if (!country) return;
       try { const { db } = require('../db'); db.prepare('UPDATE waitlist SET country = ? WHERE email = ?').run(country, email); }
       catch (_) { /* best-effort */ }
+      // Update the sheet row now that we know the country.
+      try {
+        const waitlistSheet = require('../services/waitlistSheet');
+        if (waitlistSheet.enabled()) waitlistSheet.pushRow({ email, ip, country }).catch(() => {});
+      } catch (_) { /* best-effort */ }
     }).catch(() => {});
   }
 
@@ -686,6 +704,25 @@ router.post('/home/notify', async (req, res) => {
   } catch (e) { console.warn('[waitlist] notify failed:', e.message); }
 
   res.json({ ok: true });
+});
+
+// ── Backfill the Google Sheet with every stored signup (admin-only). ──
+//   Run once after wiring up the sheet so the rows collected before it existed
+//   show up too. Safe to re-run — the Apps Script upserts by email. Guarded by
+//   ADMIN_PASSWORD: POST (or GET) /api/admin/waitlist/sync-sheet?key=<ADMIN_PASSWORD>
+router.all('/admin/waitlist/sync-sheet', async (req, res) => {
+  const admin = config.adminPassword;
+  if (admin && req.query.key !== admin) return res.status(403).json({ error: 'forbidden' });
+  try {
+    const waitlistSheet = require('../services/waitlistSheet');
+    if (!waitlistSheet.enabled()) {
+      return res.status(400).json({ ok: false, error: 'WAITLIST_SHEET_WEBHOOK_URL is not set on the server.' });
+    }
+    const result = await waitlistSheet.syncAllFromDb();
+    return res.status(result.ok ? 200 : 502).json(result);
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: e.message });
+  }
 });
 
 // ── PATCH /api/me — update profile / settings (auth required) ─────────
