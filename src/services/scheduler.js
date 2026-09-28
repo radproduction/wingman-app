@@ -77,6 +77,9 @@ async function runBriefingTick(now = new Date()) {
     // today's fire uses the freshly-learned time, then sweep and fire.
     await require('./automations').retuneAnchored({ now });
     await require('./automations').runDueUsers({ now, windowMin: 15 });
+    // "Getting to know you" — drive the 7-day onboarding calibration window
+    // (daily refining passes, confirming questions, and the closing summary).
+    await require('./onboardingAnalyzer').runDueUsers({ now });
   } catch (err) {
     console.warn('[scheduler] briefing tick error:', err.message);
   }

@@ -128,6 +128,19 @@ router.get('/auth/google/callback', async (req, res) => {
       }
     }
 
+    // "Getting to know you" — first-run deep analysis across all connected data
+    // (Gmail, Calendar, Tasks, health, business). Fire-and-forget so the OAuth
+    // redirect isn't blocked; it starts a 7-day calibration window.
+    if (calConnected || emailConnected) {
+      try {
+        require('../services/onboardingAnalyzer').start(user.id).catch((e) =>
+          console.warn('[auth] onboarding start failed:', e.message)
+        );
+      } catch (e) {
+        console.warn('[auth] could not start onboarding:', e.message);
+      }
+    }
+
     res.send(`
       <html><body style="font-family:sans-serif;text-align:center;padding:60px;">
         <h2>✅ Google account connected!</h2>
