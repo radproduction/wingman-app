@@ -40,6 +40,8 @@ const { executeMapsTool } = require('./mapsExecutor');
 const { executeMemoryTool } = require('./memoryExecutor');
 const { executeNewsTool } = require('./newsExecutor');
 const { executeShopifyTool } = require('./shopifyExecutor');
+const { integrationToolsForUser } = require('./integrationTools');
+const { executeIntegrationTool } = require('./integrationExecutor');
 const googleAuth = require('../auth/googleAuth');
 const config = require('../config');
 const emailDigest = require('../services/emailDigest');
@@ -265,6 +267,9 @@ async function runAutomatedInstruction(user, instruction) {
 
 async function runToolLoop(user, messages, system, maxRounds = 4) {
   const convo = [...messages];
+  // Third-party app tools (Composio) for the apps THIS user has connected.
+  // Built once per turn; never throws — an outage just means no app tools.
+  const integrations = await integrationToolsForUser(user);
 
   for (let round = 0; round < maxRounds; round++) {
     const response = await claude.chatWithTools(convo, {
@@ -288,6 +293,7 @@ async function runToolLoop(user, messages, system, maxRounds = 4) {
         ...workTools,
         ...automationTools,
         ...agentTools,
+        ...integrations.tools,
       ],
       maxTokens: 2048,
     });
@@ -300,7 +306,11 @@ async function runToolLoop(user, messages, system, maxRounds = 4) {
         if (block.type !== 'tool_use') continue;
 
         let result;
-        if (taskToolNames.has(block.name)) {
+        if (integrations.names.has(block.name)) {
+          // Checked first: app tool names are Composio slugs, and anything not
+          // matched below would otherwise fall through to the calendar executor.
+          result = await executeIntegrationTool(user, { name: block.name, input: block.input });
+        } else if (taskToolNames.has(block.name)) {
           result = await executeTaskTool(user, { name: block.name, input: block.input });
         } else if (goalToolNames.has(block.name)) {
           result = await executeGoalTool(user, { name: block.name, input: block.input });

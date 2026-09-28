@@ -10,6 +10,17 @@ const appDist = path.resolve(__dirname, '..', 'app', 'dist');
 const legacyDist = path.resolve(__dirname, '..', 'client', 'dist');
 const uiDist = fs.existsSync(path.join(appDist, 'index.html')) ? appDist : legacyDist;
 
+// Parse a JSON env var; a malformed value logs and falls back rather than
+// crashing boot (a feature with bad config degrades, it doesn't take us down).
+function parseJsonEnv(name, fallback) {
+  const raw = process.env[name];
+  if (!raw) return fallback;
+  try { return JSON.parse(raw); } catch (e) {
+    console.warn(`[config] ${name} is not valid JSON — ignoring it (${e.message})`);
+    return fallback;
+  }
+}
+
 const config = {
   port: parseInt(process.env.PORT, 10) || 3000,
   nodeEnv: process.env.NODE_ENV || 'development',
@@ -114,6 +125,34 @@ const config = {
     },
   },
 
+  // Composio — the third-party integration bridge (Outlook/M365, Teams, Zoom,
+  // Slack, HubSpot, Pipedrive, WooCommerce, Facebook Pages, Instagram, …).
+  // Composio stores each user's OAuth tokens and runs the API calls, so we don't
+  // build one client per app. Gmail/Google Calendar/Shopify/WhatsApp stay on our
+  // own direct integrations — Composio is only for the NEW apps.
+  //   COMPOSIO_API_KEY       project API key from the Composio dashboard.
+  //   COMPOSIO_AUTH_CONFIGS  JSON map toolkit slug → auth config id, e.g.
+  //                          {"outlook":"ac_123","slack":"ac_456"}. Only apps in
+  //                          this map are offered to users. Use OUR OWN OAuth
+  //                          app per auth config in production so the consent
+  //                          screen says "Wingman", not "Composio".
+  //   COMPOSIO_TOOLS         optional JSON map toolkit → [tool slugs] to expose.
+  //                          Without it we expose Composio's "important" tools,
+  //                          capped by COMPOSIO_TOOLS_PER_APP — every schema is
+  //                          sent to Claude on every turn, so keep this tight.
+  // With no key or no auth configs the feature is simply off.
+  composio: {
+    apiKey: process.env.COMPOSIO_API_KEY || '',
+    authConfigs: parseJsonEnv('COMPOSIO_AUTH_CONFIGS', {}),
+    tools: parseJsonEnv('COMPOSIO_TOOLS', {}),
+    toolsPerApp: parseInt(process.env.COMPOSIO_TOOLS_PER_APP, 10) || 12,
+    // Pending write actions expire if the user never says yes.
+    approvalTtlMinutes: parseInt(process.env.COMPOSIO_APPROVAL_TTL_MINUTES, 10) || 30,
+    get enabled() {
+      return !!(process.env.COMPOSIO_API_KEY && Object.keys(this.authConfigs).length);
+    },
+  },
+
   // NOW HRMS — Aamir's company attendance system. First-class connector: the
   // endpoint URL + one shared secret live HERE (company-wide, set once), so an
   // employee connects by just entering their company email — no URL/secret/code
@@ -185,6 +224,34 @@ const config = {
     sheetWebhookUrl: process.env.WAITLIST_SHEET_WEBHOOK_URL || '',
     sheetSecret: process.env.WAITLIST_SHEET_SECRET || '',
     get sheetEnabled() { return !!process.env.WAITLIST_SHEET_WEBHOOK_URL; },
+
+    // Team alert on every signup (existing behaviour, now configurable).
+    notifyFrom: process.env.WAITLIST_FROM || 'hello@wehearyou.studio',
+
+    // Thank-you email to the person who just joined (thank-you-v1 design,
+    // src/templates/email/waitlist-thank-you.html). Sent via Brevo, once per
+    // email address, only on a NEW signup. On by default whenever Brevo is
+    // configured; WAITLIST_THANKYOU=0 switches it off without a code change.
+    //   From: the template tells people to add hello@imyourwingman.ai to their
+    //   contacts, so we send FROM that address. The imyourwingman.ai domain MUST
+    //   be authenticated in Brevo (Senders & Domains → SPF + DKIM + DMARC) or
+    //   Brevo rejects/spam-folders it. Replies go to the same inbox.
+    //   Images: served by this container at /email/v1/ (src/assets/email/v1),
+    //   on the app domain — no third-party host, no bot challenge.
+    //   Unsubscribe links are HMAC-signed with SECRET_KEY so nobody can
+    //   unsubscribe someone else by guessing the URL.
+    thankYou: {
+      from: process.env.WAITLIST_THANKYOU_FROM || 'hello@imyourwingman.ai',
+      fromName: process.env.WAITLIST_THANKYOU_FROM_NAME || 'Wingman',
+      subject: process.env.WAITLIST_THANKYOU_SUBJECT || "You're on the list",
+      // Public origin of THIS server for images + unsubscribe links. The root
+      // domain only proxies /api/* to us, so use the app subdomain.
+      publicUrl: (process.env.WAITLIST_EMAIL_PUBLIC_URL || 'https://app.imyourwingman.ai').replace(/\/+$/, ''),
+      signingSecret: process.env.SECRET_KEY || process.env.SESSION_SECRET || '',
+      get enabled() {
+        return process.env.WAITLIST_THANKYOU !== '0' && !!process.env.BREVO_API_KEY;
+      },
+    },
   },
 
   weather: {

@@ -23,7 +23,7 @@ function enabled() {
  * Send one message. Throws on failure with a `BREVO:<detail>` message so the
  * caller's friendlyError can surface something useful.
  */
-async function sendEmail({ from, fromName, to, subject, text, replyTo, inReplyTo }) {
+async function sendEmail({ from, fromName, to, subject, text, html, replyTo, inReplyTo, headers, tags }) {
   if (!enabled()) throw new Error('BREVO:not_configured');
   if (!from || !to) throw new Error('BREVO:missing_from_or_to');
 
@@ -33,9 +33,15 @@ async function sendEmail({ from, fromName, to, subject, text, replyTo, inReplyTo
     subject: subject || '(no subject)',
     textContent: text || '',
   };
+  // Optional HTML body (marketing/transactional templates). textContent stays as
+  // the plain-text alternative — better deliverability than HTML-only.
+  if (html) payload.htmlContent = html;
   if (replyTo) payload.replyTo = { email: replyTo };
-  // Preserve threading when replying to a customer.
-  if (inReplyTo) payload.headers = { 'In-Reply-To': inReplyTo, References: inReplyTo };
+  // Extra headers (e.g. List-Unsubscribe) plus threading when replying.
+  const hdrs = { ...(headers || {}) };
+  if (inReplyTo) Object.assign(hdrs, { 'In-Reply-To': inReplyTo, References: inReplyTo });
+  if (Object.keys(hdrs).length) payload.headers = hdrs;
+  if (Array.isArray(tags) && tags.length) payload.tags = tags;
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);

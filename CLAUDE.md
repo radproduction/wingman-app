@@ -64,10 +64,23 @@ Every LLM capability is a **pair** of files in `src/engine/`:
 
 Existing pairs: `gmail`, `calendar`, `drive`, `task`, `goal`, `health`, `maps`,
 `memory`, `news`, `shopify`, `vault`, `voice`, `webmail`, `work`, `browser`,
-`agent`, `audit`, `automation`.
+`agent`, `audit`, `automation`, `integration`.
 
 **To add a capability, add both files and register them** — don't put tool logic
 in `services/`. `services/` is for integrations the executors call.
+
+### Third-party apps go through Composio
+
+New app integrations (Outlook/M365, Teams, Zoom, Slack, HubSpot, Pipedrive,
+WooCommerce, Facebook, Instagram…) are **not** hand-built. `services/composio.js`
+talks to Composio, and the `integration` engine pair exposes each user's
+connected apps to Claude. Adding an app = create an auth config in Composio and
+add it to `COMPOSIO_AUTH_CONFIGS` — no code. Gmail, Google Calendar, Shopify and
+WhatsApp stay on their existing direct integrations.
+
+**Every write action is gated server-side** (`integration_actions` table): it is
+parked as pending and only runs after the user sends a NEW message and the model
+calls `approve_integration_action`. Do not add a bypass.
 
 ---
 

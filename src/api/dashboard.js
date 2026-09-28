@@ -608,7 +608,7 @@ router.post('/bills/:id/pay', (req, res) => {
 //    here). Stores every signup so none is ever lost, and emails the team so a
 //    new lead reaches them straight away. ──
 const WAITLIST_TO = ['hello@wehearyou.studio', 'aamir@wehearyou.studio', 'fayyazkhanfk57@gmail.com'];
-const WAITLIST_FROM = process.env.WAITLIST_FROM || 'hello@wehearyou.studio';
+const WAITLIST_FROM = config.waitlist.notifyFrom;
 const WAITLIST_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // The visitor's real IP — behind Caddy the client address is the first entry in
@@ -646,16 +646,26 @@ router.post('/home/notify', async (req, res) => {
   //    Also capture the visitor's IP (boss wants to know which country signups
   //    come from); the country is filled in best-effort just after, from the IP.
   const ip = clientIp(req);
+  let isNewSignup = false;
   try {
-    const { db } = require('../db');
-    db.prepare("CREATE TABLE IF NOT EXISTS waitlist (email TEXT PRIMARY KEY, created_at TEXT DEFAULT (datetime('now')))").run();
-    // Add the columns on a table that predates them (no-op once they exist).
-    try { db.prepare('ALTER TABLE waitlist ADD COLUMN ip TEXT').run(); } catch (_) { /* already there */ }
-    try { db.prepare('ALTER TABLE waitlist ADD COLUMN country TEXT').run(); } catch (_) { /* already there */ }
-    db.prepare('INSERT OR IGNORE INTO waitlist (email, ip) VALUES (?, ?)').run(email, ip);
+    // Table + columns (ip, country, thankyou_sent_at, unsubscribed_at) — idempotent.
+    const db = require('../services/waitlistThankYou').ensureTable();
+    const ins = db.prepare('INSERT OR IGNORE INTO waitlist (email, ip) VALUES (?, ?)').run(email, ip);
+    isNewSignup = ins.changes === 1;
     // Fill the IP if this email was stored before the column existed.
     if (ip) db.prepare('UPDATE waitlist SET ip = COALESCE(ip, ?) WHERE email = ?').run(ip, email);
   } catch (e) { console.warn('[waitlist] store failed:', e.message); }
+
+  // Thank-you email to the person who just joined (thank-you-v1). Only for a
+  // NEW signup, and sendOnce() also guards per address, so a double-submit never
+  // sends twice. Fire-and-forget: it can never delay or fail the signup.
+  if (isNewSignup) {
+    try {
+      require('../services/waitlistThankYou').sendOnce(email)
+        .then((r) => { if (r && r.error) console.warn('[waitlist] thank-you failed:', r.error); })
+        .catch((e) => console.warn('[waitlist] thank-you failed:', e.message));
+    } catch (e) { console.warn('[waitlist] thank-you failed:', e.message); }
+  }
 
   // Mirror into the boss's live Google Sheet — the moment a lead arrives. Sent
   // right away with what we have (email + IP); the country fills into the SAME
@@ -704,6 +714,85 @@ router.post('/home/notify', async (req, res) => {
   } catch (e) { console.warn('[waitlist] notify failed:', e.message); }
 
   res.json({ ok: true });
+});
+
+// ── Unsubscribe from waitlist emails (PUBLIC, link in the thank-you email). ──
+//   GET  shows a confirm button — link scanners (Outlook Safe Links, Gmail
+//        previews) follow GETs, so a GET alone must never unsubscribe anyone.
+//   POST unsubscribes. Also the RFC 8058 one-click target for the
+//        List-Unsubscribe-Post header (mail providers POST to the same URL).
+//   The token is an HMAC of the address, so nobody can unsubscribe someone else.
+function unsubPage(title, body, form) {
+  return '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
+    '<title>Wingman</title><body style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:32rem;margin:15vh auto;padding:0 1rem;text-align:center;color:#1c1b1a">' +
+    `<h1 style="font-weight:500">${title}</h1><p>${body}</p>${form || ''}</body>`;
+}
+function unsubParams(req) {
+  const email = String((req.query && req.query.e) || '').trim().toLowerCase();
+  const token = String((req.query && req.query.t) || '');
+  return { email, token };
+}
+router.get('/waitlist/unsubscribe', (req, res) => {
+  const { email, token } = unsubParams(req);
+  const tu = require('../services/waitlistThankYou');
+  if (!email || !tu.verify(email, token)) {
+    return res.status(400).type('html').send(unsubPage('Link not valid', 'This unsubscribe link is incomplete or has expired. Reply to any of our emails and we will take you off the list.'));
+  }
+  // Re-post to the same URL (query string carries e + t). No user input is
+  // echoed into the page.
+  const action = `/api/waitlist/unsubscribe?e=${encodeURIComponent(email)}&t=${encodeURIComponent(token)}`;
+  res.type('html').send(unsubPage(
+    'Unsubscribe from Wingman emails?',
+    'You will stop getting waitlist emails from us.',
+    `<form method="post" action="${action.replace(/"/g, '&quot;')}"><button type="submit" style="font:inherit;padding:12px 28px;border:0;border-radius:999px;background:#4a6fd4;color:#fff;cursor:pointer">Unsubscribe</button></form>`,
+  ));
+});
+router.post('/waitlist/unsubscribe', (req, res) => {
+  const { email, token } = unsubParams(req);
+  const tu = require('../services/waitlistThankYou');
+  if (!email || !tu.verify(email, token)) {
+    return res.status(400).type('html').send(unsubPage('Link not valid', 'This unsubscribe link is incomplete or has expired.'));
+  }
+  try { tu.unsubscribe(email); } catch (e) {
+    console.warn('[waitlist] unsubscribe failed:', e.message);
+    return res.status(500).type('html').send(unsubPage('Something went wrong', 'Please try again, or reply to our email and we will remove you.'));
+  }
+  console.log('[waitlist] unsubscribed:', email);
+  res.type('html').send(unsubPage('You are unsubscribed', 'You will not get any more waitlist emails from Wingman.'));
+});
+
+// ── Send the thank-you to signups who never got one (admin-only). ──
+//   For people who joined BEFORE this email existed. Dry run by default:
+//     GET  /api/admin/waitlist/send-thankyou            → how many would get it
+//     POST /api/admin/waitlist/send-thankyou?confirm=1  → actually send
+//   Admin key in the X-Admin-Key header (not the URL, so it stays out of logs).
+//   Fails closed if ADMIN_PASSWORD is unset. Each address still goes through
+//   sendOnce(), so nobody is ever emailed twice and unsubscribes are respected.
+function adminKeyOk(req) {
+  const admin = String(config.adminPassword || '');
+  const given = String(req.headers['x-admin-key'] || '');
+  if (!admin || !given || admin.length !== given.length) return false;
+  return require('crypto').timingSafeEqual(Buffer.from(admin), Buffer.from(given));
+}
+let thankYouBackfillRunning = false;
+router.all('/admin/waitlist/send-thankyou', async (req, res) => {
+  if (!adminKeyOk(req)) return res.status(403).json({ error: 'forbidden' });
+  const tu = require('../services/waitlistThankYou');
+  if (!tu.enabled()) return res.status(400).json({ ok: false, error: 'Thank-you email is off (needs BREVO_API_KEY, and WAITLIST_THANKYOU not 0).' });
+  const pending = tu.pendingRecipients(1000);
+  const doSend = req.method === 'POST' && req.query.confirm === '1';
+  if (!doSend) return res.json({ ok: true, dryRun: true, wouldSend: pending.length, sample: pending.slice(0, 5).map((r) => r.email) });
+  if (thankYouBackfillRunning) return res.status(409).json({ ok: false, error: 'A backfill is already running.' });
+  thankYouBackfillRunning = true;
+  let sent = 0; let skipped = 0; const failed = [];
+  try {
+    for (const row of pending) {
+      const r = await tu.sendOnce(row.email);
+      if (r.sent) sent++; else if (r.error) failed.push({ email: row.email, error: r.error }); else skipped++;
+      await new Promise((ok) => setTimeout(ok, 300)); // stay well under Brevo rate limits
+    }
+  } finally { thankYouBackfillRunning = false; }
+  res.json({ ok: failed.length === 0, sent, skipped, failed });
 });
 
 // ── Backfill the Google Sheet with every stored signup (admin-only). ──

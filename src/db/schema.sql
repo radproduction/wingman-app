@@ -486,3 +486,25 @@ CREATE INDEX IF NOT EXISTS idx_meeting_bots_status ON meeting_bots(status);
 -- second row for the same event is allowed. dispatchForEvent() guards against
 -- two *active* sessions via findActiveForEvent().
 CREATE INDEX IF NOT EXISTS idx_meeting_bots_event ON meeting_bots(user_id, gcal_event_id);
+
+-- ─── Integration approval gate (Composio write actions) ─────────────
+-- Every third-party action that changes something (send, post, create, update,
+-- delete) is parked here first and only runs after the user says yes in a LATER
+-- message. `after_msg_rowid` = the user's newest conversation rowid when the
+-- action was proposed; approval requires a user message with a higher rowid, so
+-- the model can never approve its own proposal in the same turn. No bypass flag.
+CREATE TABLE IF NOT EXISTS integration_actions (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  toolkit TEXT NOT NULL,                 -- e.g. 'outlook', 'slack'
+  tool_slug TEXT NOT NULL,               -- e.g. 'OUTLOOK_SEND_EMAIL', or '__DISCONNECT__'
+  tool_version TEXT,                     -- schema version the model saw
+  arguments TEXT NOT NULL DEFAULT '{}',  -- JSON
+  summary TEXT,                          -- human-readable preview shown to the user
+  status TEXT NOT NULL DEFAULT 'pending', -- pending | executing | done | failed | cancelled | expired
+  after_msg_rowid INTEGER NOT NULL DEFAULT 0,
+  result TEXT,                           -- JSON (truncated)
+  created_at TEXT DEFAULT (datetime('now')),
+  decided_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_integration_actions_user ON integration_actions(user_id, status);

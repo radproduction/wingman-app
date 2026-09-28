@@ -314,6 +314,16 @@ Example: "Tap this to connect your store: <link>\\n\\nShopify will ask you to ap
 - If already_connected comes back true, tell them it's already linked and offer to just show the numbers instead.
 - If a tool returns {"error":"SHOPIFY_AUTH_FAILED"}, the store's access was revoked or expired — send a fresh connect link so they can re-approve.`;
 
+  const integrationsGuide = require('../config').composio.enabled ? `
+
+--- OTHER APPS (Outlook, Teams, Zoom, Slack, HubSpot, Pipedrive, WooCommerce, Facebook, Instagram…) ---
+Beyond Gmail/Calendar/Shopify, the user can connect other apps. Tools named in CAPITALS (e.g. OUTLOOK_SEND_EMAIL, HUBSPOT_LIST_DEALS) belong to apps they HAVE connected — use them like any other tool.
+- "What can you connect to?" → list_integrations. "Connect my Outlook/Slack/HubSpot" → connect_integration with the app slug, then send the link: "Tap to connect Outlook: <link> — log in, approve, and come back here." Nothing to copy back.
+- If they ask for something in an app with no CAPITALS tools for it, it isn't connected — offer the connect link instead of saying you can't.
+- APPROVAL IS ENFORCED BY THE SYSTEM, not optional: any tool that changes something (send, post, create, update, delete, disconnect) returns approval_required + action_id instead of running. Then show the user EXACTLY what will happen — which app/account, recipient, the full text or change — and ask "Go ahead? (yes/no)". Only when they reply yes, call approve_integration_action with that action_id. If they say no, call cancel_integration_action. Never call approve in the same reply you proposed it — it will be refused.
+- After it runs, confirm briefly with the app name ("Done ✅ Posted to your Instagram."). If a tool returns an error, say plainly what failed — never claim it worked.
+- Reading (list, search, get) runs straight away — no approval needed.` : '';
+
   const travelCrmGuide = `
 
 --- TRAVEL & PEOPLE ---
@@ -322,7 +332,7 @@ Wingman also tracks trips and the people the user interacts with. These commands
 - People/CRM: "what do I know about [name]?", "when did I last talk to [name]?", "who have I emailed the most this month?".
 Before flights, the user gets 24h and 3h alerts and an arrival-day briefing with hotel + weather + packing tips. About 30 minutes before a meeting, Wingman sends a prep note summarizing each attendee and recent email context. Never fabricate trip, contact, or meeting data — if it's not on record, say so.`;
 
-  if (!user) return base + calendarGuide + emailGuide + taskGuide + webmailGuide + healthGuide + workGuide + voiceGuide + driveGuide + mapsGuide + newsGuide + multiAccountGuide + shopifyGuide + travelCrmGuide;
+  if (!user) return base + calendarGuide + emailGuide + taskGuide + webmailGuide + healthGuide + workGuide + voiceGuide + driveGuide + mapsGuide + newsGuide + multiAccountGuide + shopifyGuide + integrationsGuide + travelCrmGuide;
 
   const firstName = (user.name || '').trim().split(/\s+/)[0] || 'there';
   const tz = user.timezone || 'Asia/Dubai';
@@ -446,7 +456,7 @@ You are a chief of staff — and a chief of staff has staff. You can bring in fi
 - They ADVISE and recommend actions. When the user says go ahead, YOU carry it out with your own tools.
 - "who's on my team?" / "what agents do you have?" → list_agents.`;
 
-  return base + calendarGuide + emailGuide + taskGuide + webmailGuide + healthGuide + workGuide + voiceGuide + driveGuide + mapsGuide + newsGuide + multiAccountGuide + shopifyGuide + travelCrmGuide + staffGuide + personality + ctx + memoryBlock + behaviorBlock;
+  return base + calendarGuide + emailGuide + taskGuide + webmailGuide + healthGuide + workGuide + voiceGuide + driveGuide + mapsGuide + newsGuide + multiAccountGuide + shopifyGuide + integrationsGuide + travelCrmGuide + staffGuide + personality + ctx + memoryBlock + behaviorBlock;
 }
 
 module.exports = { buildSystemPrompt };

@@ -1,0 +1,227 @@
+<!doctype html>
+<!--
+  Wingman - thank-you email, v1.
+
+  Sent right after someone signs up. It thanks them, says what happens next
+  and keeps the product itself under wraps: no screenshots, no feature list.
+  Same visual language as news-and-updates-v1, table-based and fully
+  inline-styled for Gmail, Outlook and Apple Mail.
+
+  Images load from https://wingman-rouge.vercel.app/email/v1/. To host them
+  elsewhere, upload ./images and find/replace that base URL.
+
+  Merge tags use Resend's syntax:
+    {{{FIRST_NAME|there}}}       greeting name, falls back to "there"
+    {{{RESEND_UNSUBSCRIBE_URL}}} one-click unsubscribe
+-->
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="x-apple-disable-message-reformatting">
+  <meta name="color-scheme" content="light dark">
+  <meta name="supported-color-schemes" content="light dark">
+  <title>Thanks for signing up</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Google+Sans+Flex:opsz,wght,ROND@6..144,300..700,0..100&display=swap">
+  <style>
+    body { margin: 0; padding: 0; width: 100% !important; -webkit-text-size-adjust: 100%; }
+    table { border-collapse: collapse; }
+    img { border: 0; outline: none; text-decoration: none; -ms-interpolation-mode: bicubic; }
+    a { color: #3a5cb8; }
+    .wm-font { font-family: 'Google Sans Flex', -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-variation-settings: 'ROND' 100; }
+
+    @media (max-width: 620px) {
+      .wm-container { width: 100% !important; }
+      .wm-gutter { padding-left: 16px !important; padding-right: 16px !important; }
+      .wm-pad { padding-left: 24px !important; padding-right: 24px !important; }
+      .wm-h1 { font-size: 32px !important; line-height: 38px !important; }
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .wm-bg { background: #131313 !important; }
+      .wm-hero, .wm-band { background: #222f4f !important; }
+      .wm-panel { background: #191919 !important; }
+      .wm-ink { color: #f4f4f4 !important; }
+      .wm-muted { color: #a0a0a0 !important; }
+      .wm-line { border-color: rgba(255,255,255,0.09) !important; }
+      .wm-num { background: #223349 !important; color: #adcbff !important; }
+      .wm-btn { background: #8ab4f8 !important; color: #101014 !important; }
+      .wm-link { color: #adcbff !important; }
+      .wm-logo-light { display: none !important; }
+      .wm-logo-dark { display: block !important; max-height: none !important; overflow: visible !important; }
+    }
+  </style>
+</head>
+<body class="wm-bg" style="margin:0;padding:0;background:#ffffff;">
+
+  <!-- Preheader: the grey line inbox lists show after the subject. -->
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;">
+    You are on the list. Here is what happens next.
+    &#8199;&#65279;&#847;&#8199;&#65279;&#847;&#8199;&#65279;&#847;&#8199;&#65279;&#847;&#8199;&#65279;&#847;&#8199;&#65279;&#847;
+  </div>
+
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="wm-bg" style="background:#ffffff;">
+    <tr>
+      <td align="center" style="padding:24px 0;">
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" class="wm-container" style="width:600px;max-width:600px;">
+
+          <!-- SECTION: header -->
+          <tr>
+            <td align="center" style="padding:8px 32px 24px;">
+              <a href="https://imyourwingman.ai" style="text-decoration:none;">
+                <img src="https://wingman-rouge.vercel.app/email/v1/logo.png" width="140" height="33" alt="Wingman" class="wm-logo-light" style="display:block;width:140px;height:33px;">
+                <!--[if !mso]><!-->
+                <img src="https://wingman-rouge.vercel.app/email/v1/logo-dark.png" width="140" height="33" alt="Wingman" class="wm-logo-dark" style="display:none;max-height:0;overflow:hidden;width:140px;height:33px;">
+                <!--<![endif]-->
+              </a>
+            </td>
+          </tr>
+
+          <!-- SECTION: hero -->
+          <tr>
+            <td class="wm-gutter" style="padding:0 16px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="wm-hero" style="background:#dde5f8;border-radius:24px;">
+                <tr>
+                  <td align="center" style="padding:16px 16px 0;">
+                    <img src="https://wingman-rouge.vercel.app/email/v1/thanks-hero.png" width="536" alt="" style="display:block;width:100%;max-width:536px;height:auto;border-radius:16px;">
+                  </td>
+                </tr>
+                <tr>
+                  <td align="center" class="wm-font wm-ink wm-h1" style="padding:32px 32px 0;font-family:'Google Sans Flex',-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:38px;line-height:44px;font-weight:400;letter-spacing:-0.02em;color:#1c1b1a;">
+                    You're on the list
+                  </td>
+                </tr>
+                <tr>
+                  <td align="center" class="wm-font wm-ink" style="padding:12px 48px 40px;font-family:'Google Sans Flex',-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;line-height:24px;color:#1c1b1a;">
+                    Thanks for signing up for Wingman. You will be among the first to hear when it is ready.
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- SECTION: note -->
+          <tr>
+            <td class="wm-pad wm-font" style="padding:48px 32px 0;font-family:'Google Sans Flex',-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+              <p class="wm-ink" style="margin:0 0 12px;font-size:17px;line-height:24px;font-weight:500;color:#1c1b1a;">Hi {{{FIRST_NAME|there}}},</p>
+              <p class="wm-ink" style="margin:0 0 16px;font-size:15px;line-height:24px;color:#1c1b1a;">
+                We are building Wingman to take the everyday admin off your plate, and we are keeping the details close while we get it right.
+              </p>
+              <p class="wm-ink" style="margin:0;font-size:15px;line-height:24px;color:#1c1b1a;">
+                Signing up this early genuinely helps. It tells us people want this, and it gives us a small group to share the first version with.
+              </p>
+            </td>
+          </tr>
+
+          <!-- SECTION: what happens next. Numbered because it is a real sequence. -->
+          <tr>
+            <td class="wm-gutter" style="padding:40px 16px 0;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="wm-panel" style="background:#e9edf4;border-radius:24px;">
+                <tr>
+                  <td class="wm-pad wm-font wm-ink" style="padding:32px 32px 8px;font-family:'Google Sans Flex',-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:22px;line-height:28px;letter-spacing:-0.01em;color:#1c1b1a;">
+                    What happens next
+                  </td>
+                </tr>
+                <tr>
+                  <td class="wm-pad" style="padding:8px 32px 32px;">
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td width="32" valign="top" style="padding:16px 0 0;">
+                          <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" valign="middle" class="wm-num wm-font" style="width:32px;height:32px;border-radius:999px;background:#ffffff;font-family:'Google Sans Flex',-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:14px;line-height:32px;font-weight:500;color:#3a5cb8;">1</td></tr></table>
+                        </td>
+                        <td valign="top" class="wm-font" style="padding:16px 0 0 16px;font-family:'Google Sans Flex',-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+                          <p class="wm-ink" style="margin:0;font-size:15px;line-height:22px;font-weight:500;color:#1c1b1a;">Nothing to do for now</p>
+                          <p class="wm-muted" style="margin:4px 0 0;font-size:13px;line-height:19px;color:#6f6d68;">Your spot is saved. There is no app to download yet.</p>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td width="32" valign="top" style="padding:24px 0 0;">
+                          <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" valign="middle" class="wm-num wm-font" style="width:32px;height:32px;border-radius:999px;background:#ffffff;font-family:'Google Sans Flex',-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:14px;line-height:32px;font-weight:500;color:#3a5cb8;">2</td></tr></table>
+                        </td>
+                        <td valign="top" class="wm-font" style="padding:24px 0 0 16px;font-family:'Google Sans Flex',-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+                          <p class="wm-ink" style="margin:0;font-size:15px;line-height:22px;font-weight:500;color:#1c1b1a;">The occasional update</p>
+                          <p class="wm-muted" style="margin:4px 0 0;font-size:13px;line-height:19px;color:#6f6d68;">We only write when there is something worth telling you.</p>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td width="32" valign="top" style="padding:24px 0 0;">
+                          <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" valign="middle" class="wm-num wm-font" style="width:32px;height:32px;border-radius:999px;background:#ffffff;font-family:'Google Sans Flex',-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:14px;line-height:32px;font-weight:500;color:#3a5cb8;">3</td></tr></table>
+                        </td>
+                        <td valign="top" class="wm-font" style="padding:24px 0 0 16px;font-family:'Google Sans Flex',-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+                          <p class="wm-ink" style="margin:0;font-size:15px;line-height:22px;font-weight:500;color:#1c1b1a;">Your invite, first</p>
+                          <p class="wm-muted" style="margin:4px 0 0;font-size:13px;line-height:19px;color:#6f6d68;">When we open the doors, you get in before anyone else.</p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- SECTION: deliverability tip -->
+          <tr>
+            <td class="wm-pad wm-font wm-muted" style="padding:24px 32px 0;font-family:'Google Sans Flex',-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:13px;line-height:20px;color:#6f6d68;">
+              So you do not miss the invite, add <a href="mailto:hello@imyourwingman.ai" class="wm-link" style="color:#3a5cb8;text-decoration:none;font-weight:500;">hello@imyourwingman.ai</a> to your contacts.
+            </td>
+          </tr>
+
+          <!-- SECTION: share band -->
+          <tr>
+            <td class="wm-gutter" style="padding:40px 16px 0;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="wm-band" style="background:#dde5f8;border-radius:24px;">
+                <tr>
+                  <td align="center" class="wm-font" style="padding:32px;font-family:'Google Sans Flex',-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+                    <p class="wm-ink" style="margin:0;font-size:22px;line-height:28px;letter-spacing:-0.01em;color:#1c1b1a;">Know someone who could use a hand?</p>
+                    <p class="wm-ink" style="margin:8px 0 0;font-size:14px;line-height:21px;color:#1c1b1a;">Send them our way and they can join the list too.</p>
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:24px auto 0;">
+                      <tr>
+                        <td align="center" class="wm-btn" style="background:#4a6fd4;border-radius:999px;">
+                          <a href="https://imyourwingman.ai" class="wm-btn" style="display:inline-block;padding:12px 28px;font-family:'Google Sans Flex',-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:24px;font-weight:500;color:#ffffff;text-decoration:none;border-radius:999px;">Share Wingman</a>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- SECTION: sign-off -->
+          <tr>
+            <td class="wm-pad wm-font" style="padding:40px 32px 0;font-family:'Google Sans Flex',-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+              <p class="wm-ink" style="margin:0;font-size:15px;line-height:24px;color:#1c1b1a;">Thanks again,<br>The Wingman team</p>
+              <p class="wm-muted" style="margin:12px 0 0;font-size:13px;line-height:20px;color:#6f6d68;">Questions? Just reply. A person reads every email.</p>
+            </td>
+          </tr>
+
+          <!-- SECTION: footer -->
+          <tr>
+            <td class="wm-pad" style="padding:40px 32px 0;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td align="center" class="wm-line" style="border-top:1px solid rgba(28,27,26,0.10);padding-top:32px;">
+                    <a href="https://imyourwingman.ai" style="text-decoration:none;">
+                      <img src="https://wingman-rouge.vercel.app/email/v1/logo.png" width="116" height="28" alt="Wingman" class="wm-logo-light" style="display:block;width:116px;height:28px;">
+                      <!--[if !mso]><!-->
+                      <img src="https://wingman-rouge.vercel.app/email/v1/logo-dark.png" width="116" height="27" alt="Wingman" class="wm-logo-dark" style="display:none;max-height:0;overflow:hidden;width:116px;height:27px;">
+                      <!--<![endif]-->
+                    </a>
+                  </td>
+                </tr>
+                <tr>
+                  <td align="center" class="wm-font wm-muted" style="padding:16px 16px 32px;font-family:'Google Sans Flex',-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:19px;color:#6f6d68;">
+                    You are getting this because you signed up at imyourwingman.ai.<br>Changed your mind? <a href="{{{RESEND_UNSUBSCRIBE_URL}}}" class="wm-link" style="color:#3a5cb8;font-weight:500;">Unsubscribe</a> in one click.<br><br>
+                    &copy; 2026 Wingman. All rights reserved.
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

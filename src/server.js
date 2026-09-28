@@ -15,6 +15,7 @@ const dashboardApi = require('./api/dashboard');
 const meetingsApi = require('./api/meetings');
 const meetingBotApi = require('./api/meetingBot');
 const assistantApi = require('./api/assistant');
+const integrationsApi = require('./api/integrations');
 const adminQr = require('./admin/qr');
 const fs = require('fs');
 const path = require('path');
@@ -40,6 +41,18 @@ app.use('/api', dashboardApi);
 app.use('/api', meetingsApi);
 app.use('/api', meetingBotApi);
 app.use('/api', assistantApi);
+app.use('/api', integrationsApi.router);
+// Composio post-login landing page (/auth/* is proxied on the root domain too)
+app.use('/', integrationsApi.callbackRouter);
+
+// Email images (waitlist thank-you etc.) — referenced by absolute URL from
+// emails, so they must be public, stable and fast. Only /email/v1/* is served
+// here; anything else under /email falls through to the app as before.
+app.use('/email/v1', express.static(path.join(__dirname, 'assets', 'email', 'v1'), {
+  maxAge: '30d',
+  index: false,
+  fallthrough: true,
+}));
 
 // Browser-based WhatsApp pairing (/admin/qr, /admin/qr.json)
 app.use('/admin', adminQr);
