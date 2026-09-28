@@ -634,6 +634,9 @@ router.post('/home/notify', async (req, res) => {
   const b = req.body || {};
   const email = String(b.email || '').trim().toLowerCase();
   const company = String(b.company || '').trim(); // honeypot — humans leave it blank
+  // Optional first name for the thank-you greeting ("Hi Aamir,"). Cleaned and
+  // validated in one place; junk becomes null and the email says "Hi there,".
+  const firstName = require('../services/waitlistThankYou').cleanFirstName(b.name || b.firstName || b.first_name);
 
   // A bot that filled the honeypot gets the same success a human sees, but we do
   // nothing with it (mirrors the landing form's own comment).
@@ -650,8 +653,10 @@ router.post('/home/notify', async (req, res) => {
   try {
     // Table + columns (ip, country, thankyou_sent_at, unsubscribed_at) — idempotent.
     const db = require('../services/waitlistThankYou').ensureTable();
-    const ins = db.prepare('INSERT OR IGNORE INTO waitlist (email, ip) VALUES (?, ?)').run(email, ip);
+    const ins = db.prepare('INSERT OR IGNORE INTO waitlist (email, ip, first_name) VALUES (?, ?, ?)').run(email, ip, firstName);
     isNewSignup = ins.changes === 1;
+    // Someone re-submitting with a name we didn't have yet — keep it.
+    if (!isNewSignup && firstName) db.prepare('UPDATE waitlist SET first_name = COALESCE(first_name, ?) WHERE email = ?').run(firstName, email);
     // Fill the IP if this email was stored before the column existed.
     if (ip) db.prepare('UPDATE waitlist SET ip = COALESCE(ip, ?) WHERE email = ?').run(ip, email);
   } catch (e) { console.warn('[waitlist] store failed:', e.message); }

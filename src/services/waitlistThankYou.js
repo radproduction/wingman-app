@@ -14,7 +14,7 @@
  *    logged and the claim is released so a later backfill can retry.
  *
  * The template was written for Resend merge tags; we fill them ourselves:
- *   {{{FIRST_NAME|there}}}       → "there" (the form collects email only)
+ *   {{{FIRST_NAME|there}}}       → the first name typed on the form, else "there"
  *   {{{RESEND_UNSUBSCRIBE_URL}}} → our own signed unsubscribe link
  * and point the image URLs at this server (/email/v1/, see server.js).
  */
@@ -49,13 +49,25 @@ function escapeHtml(s) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+/**
+ * Tidy a first name typed into the signup form: first word only, letters plus
+ * ' and - (any script), max 30 chars, first letter capitalised. Anything else
+ * (empty, emails, numbers, junk) → null, and the email falls back to "there".
+ */
+function cleanFirstName(raw) {
+  const word = String(raw || '').trim().split(/\s+/)[0] || '';
+  if (!word || word.length > 30) return null;
+  if (!/^[\p{L}][\p{L}'\u2019-]*$/u.test(word)) return null;
+  return word.charAt(0).toLocaleUpperCase() + word.slice(1);
+}
+
 // ─── DB (sync, better-sqlite3) ───────────────────────────────────────
 
 /** Waitlist table + the columns this feature needs. Idempotent. */
 function ensureTable() {
   const { db } = require('../db');
   db.prepare("CREATE TABLE IF NOT EXISTS waitlist (email TEXT PRIMARY KEY, created_at TEXT DEFAULT (datetime('now')))").run();
-  for (const col of ['ip TEXT', 'country TEXT', 'thankyou_sent_at TEXT', 'unsubscribed_at TEXT']) {
+  for (const col of ['ip TEXT', 'country TEXT', 'thankyou_sent_at TEXT', 'unsubscribed_at TEXT', 'first_name TEXT']) {
     try { db.prepare(`ALTER TABLE waitlist ADD COLUMN ${col}`).run(); } catch (_) { /* already there */ }
   }
   return db;
@@ -109,7 +121,8 @@ function loadTemplate() {
 }
 
 /** { html, text, unsubUrl } for one recipient. Throws if a merge tag is left. */
-function render(email) {
+function render(email, firstName) {
+  const greetName = cleanFirstName(firstName) || 'there';
   const unsubUrl = unsubscribeUrl(email);
   // No signing secret → fall back to a reply-to-unsubscribe mailto so the link
   // still works (and we never ship an email with a broken unsubscribe).
@@ -118,7 +131,7 @@ function render(email) {
 
   let html = loadTemplate()
     .split(TEMPLATE_IMAGE_BASE).join(imageBase)
-    .split('{{{FIRST_NAME|there}}}').join('there')
+    .split('{{{FIRST_NAME|there}}}').join(escapeHtml(greetName))
     .split('{{{RESEND_UNSUBSCRIBE_URL}}}').join(escapeHtml(unsubHref));
 
   if (html.includes('{{{') || html.includes(TEMPLATE_IMAGE_BASE)) {
@@ -131,7 +144,7 @@ function render(email) {
     '',
     'Thanks for signing up for Wingman. You will be among the first to hear when it is ready.',
     '',
-    'Hi there,',
+    `Hi ${greetName},`,
     '',
     'We are building Wingman to take the everyday admin off your plate, and we are keeping the details close while we get it right.',
     '',
@@ -161,8 +174,8 @@ function render(email) {
 
 // ─── Sending ─────────────────────────────────────────────────────────
 
-async function deliver(email) {
-  const { html, text, unsubUrl } = render(email);
+async function deliver(email, firstName) {
+  const { html, text, unsubUrl } = render(email, firstName);
   const headers = {};
   if (unsubUrl) {
     // RFC 8058 one-click unsubscribe — Gmail/Yahoo bulk-sender requirement.
@@ -192,9 +205,12 @@ async function sendOnce(rawEmail) {
   if (!enabled()) return { skipped: 'disabled' };
 
   let db;
+  let firstName = null;
   try {
     db = ensureTable();
     if (!claim(db, email)) return { skipped: 'already_sent_or_unsubscribed' };
+    const row = db.prepare('SELECT first_name FROM waitlist WHERE email = ?').get(email);
+    firstName = row && row.first_name;
   } catch (e) {
     console.warn('[waitlist:thankyou] claim failed:', e.message);
     return { error: e.message };
@@ -204,7 +220,7 @@ async function sendOnce(rawEmail) {
   let lastErr = null;
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
-      const r = await deliver(email);
+      const r = await deliver(email, firstName);
       db.prepare("UPDATE waitlist SET thankyou_sent_at = datetime('now') WHERE email = ?").run(email);
       console.log(`[waitlist:thankyou] sent to ${email}${r && r.messageId ? ` (${r.messageId})` : ''}`);
       return { sent: true };
@@ -238,4 +254,5 @@ module.exports = {
   verify,
   unsubscribe,
   pendingRecipients,
+  cleanFirstName,
 };

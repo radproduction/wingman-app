@@ -358,7 +358,19 @@
     <script type="module" crossorigin src="/assets/home-v1-DeHcKcHT.js"></script>
     <link rel="modulepreload" crossorigin href="/assets/jsx-runtime-Uact3P9m.js">
     <link rel="stylesheet" crossorigin href="/assets/home-v1-Da1W4tL1.css">
-  </head>
+      <!-- Waitlist form: optional first-name field (added to the bundled form) so
+         the thank-you email can greet people by name. Desktop: one pill row
+         [first name | email | button]; mobile keeps the stacked layout. -->
+    <style>
+      @media (width >= 48rem) {
+        .w1-form { max-width: 38rem; grid-template-columns: minmax(0, 0.75fr) minmax(0, 1fr) auto; }
+        .w1-form__input--name { border-inline-end: 1px solid var(--w1-color-rule, #0000001a); border-radius: 0; }
+      }
+      @media (width < 48rem) {
+        .w1-form__input--name { border-block-end: 1px solid var(--w1-color-rule, #0000001a); border-radius: 0; }
+      }
+    </style>
+</head>
   <body>
     <!--
       The lockup, inline, because it has to be in the document that paints first.
