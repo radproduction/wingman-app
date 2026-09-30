@@ -47,6 +47,14 @@ const slugIndex = new Map();         // tool slug -> { toolkit, version, readOnl
 // after a restart the assistant simply searches again.
 const userExtras = new Map();
 const MAX_EXTRAS_PER_USER = 40;
+const catalogCache = new Map();      // toolkit -> { at, tools: [rawTool] } — EVERY tool of the app
+
+// Basics every user of an app needs, always loaded on top of Composio's
+// "important" set (which, e.g. for Facebook, leaves out listing your Pages —
+// and every other Facebook tool needs a page_id). Merged with COMPOSIO_TOOLS.
+const DEFAULT_PINNED = {
+  facebook: ['FACEBOOK_LIST_MANAGED_PAGES', 'FACEBOOK_GET_PAGE_POSTS', 'FACEBOOK_GET_PAGE_DETAILS'],
+};
 
 function appName(toolkit) {
   return APP_NAMES[toolkit] || toolkit.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
@@ -146,7 +154,7 @@ async function schemasFor(toolkit) {
   // Default set = Composio's "important" tools for the app, PLUS any slugs
   // pinned in COMPOSIO_TOOLS (merged, not instead). Anything else the assistant
   // can still load on demand with find_app_tools.
-  const pinned = (config.composio.tools || {})[toolkit];
+  const pinned = [...new Set([...(DEFAULT_PINNED[toolkit] || []), ...(((config.composio.tools || {})[toolkit]) || [])])];
   let raw = await composio.tools.getRawComposioTools({ toolkits: [toolkit], important: true, limit: config.composio.toolsPerApp });
   if (Array.isArray(pinned) && pinned.length) {
     const have = new Set((raw || []).map((t) => t.slug));
@@ -214,30 +222,85 @@ async function toolsForUser(user) {
  * and make them available to this user from the assistant's next step on.
  * Returns a short list the model can read.
  */
+/** Every tool of one app (cached 1h) — the pool find_app_tools picks from. */
+async function catalogFor(toolkit) {
+  const hit = catalogCache.get(toolkit);
+  if (hit && Date.now() - hit.at < SCHEMA_TTL_MS) return hit.tools;
+  const composio = await getClient();
+  const raw = await composio.tools.getRawComposioTools({ toolkits: [toolkit], limit: 500 });
+  const tools = (raw || []).filter((t) => t && t.slug && t.slug.length <= MAX_TOOL_NAME && !t.isDeprecated);
+  catalogCache.set(toolkit, { at: Date.now(), tools });
+  return tools;
+}
+
+const STOP = new Set(['my', 'the', 'a', 'an', 'of', 'to', 'for', 'on', 'in', 'and', 'or', 'all', 'me', 'your', 'from', 'with', 'by', 'is', 'what', 'which']);
+const SYN = { show: 'get', fetch: 'get', read: 'get', see: 'get', view: 'get', find: 'search', add: 'create', make: 'create', new: 'create', publish: 'create', remove: 'delete', edit: 'update', change: 'update' };
+function words(s) {
+  return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').split(' ')
+    .filter((w) => w && !STOP.has(w))
+    .map((w) => SYN[w] || w)
+    .map((w) => (w.length > 3 && w.endsWith('s') ? w.slice(0, -1) : w));
+}
+function score(tool, qWords) {
+  const slugW = new Set(words(tool.slug.replace(/_/g, ' ')));
+  const textW = new Set(words(`${tool.name || ''} ${tool.description || ''}`));
+  let n = 0;
+  for (const w of qWords) { if (slugW.has(w)) n += 3; else if (textW.has(w)) n += 1; }
+  return n;
+}
+
 async function findTools(user, toolkit, what) {
   const slug = String(toolkit || '').toLowerCase();
   const apps = await listConnections(user);
   if (!apps.some((a) => a.toolkit === slug)) return { error: 'APP_NOT_CONNECTED', app: slug };
-  const composio = await getClient();
-  const raw = await composio.tools.getRawComposioTools({ toolkits: [slug], search: String(what || '').slice(0, 200), limit: 8 });
-  const found = (raw || []).filter((t) => t && t.slug && t.slug.length <= MAX_TOOL_NAME && !t.isDeprecated);
+
+  const catalog = await catalogFor(slug);
+  const query = String(what || '').slice(0, 200);
+  const exact = catalog.find((t) => t.slug.toLowerCase() === query.trim().toLowerCase());
+  let found;
+  if (exact) {
+    found = [exact];
+  } else {
+    // Local keyword ranking over the whole app, plus Composio's own search.
+    const qWords = words(query);
+    const ranked = catalog.map((t) => ({ t, s: score(t, qWords) })).filter((x) => x.s > 0)
+      .sort((a, b) => b.s - a.s).map((x) => x.t);
+    let remote = [];
+    try {
+      const composio = await getClient();
+      remote = await composio.tools.getRawComposioTools({ toolkits: [slug], search: query, limit: 8 });
+    } catch (e) {
+      console.warn(`[composio] search ${slug} failed:`, e.message);
+    }
+    const bySlug = new Map();
+    for (const t of [...ranked.slice(0, 6), ...(remote || [])]) {
+      if (t && t.slug && t.slug.length <= MAX_TOOL_NAME && !t.isDeprecated && !bySlug.has(t.slug)) bySlug.set(t.slug, t);
+    }
+    found = [...bySlug.values()].slice(0, 8);
+  }
+
   const key = String(user.id);
   const extras = userExtras.get(key) || new Map();
   for (const t of found) {
     t.__toolkit = slug;
+    extras.delete(t.slug);
     extras.set(t.slug, t);
     slugIndex.set(t.slug, { toolkit: slug, version: t.version || null, readOnly: isReadOnly(t) });
   }
   // Keep the per-user set bounded (oldest out first).
   while (extras.size > MAX_EXTRAS_PER_USER) extras.delete(extras.keys().next().value);
   userExtras.set(key, extras);
-  return {
+  console.log(`[integrations] find_app_tools ${slug} "${query}" -> ${found.map((t) => t.slug).join(', ') || 'none'} (catalog ${catalog.length})`);
+
+  const out = {
     app: appName(slug),
     loaded: found.map((t) => ({ tool: t.slug, what: String(t.description || t.name || '').slice(0, 160), changes_data: !isReadOnly(t) })),
     note: found.length
       ? 'These tools are now available — call the right one in your next step.'
-      : 'No matching tools found for that app. Try different words.',
+      : 'Nothing matched. Pick an exact tool name from all_tools and call find_app_tools again with it as "what".',
   };
+  if (!found.length) out.all_tools = catalog.map((t) => t.slug).slice(0, 150);
+  return out;
 }
 
 /** Metadata for a slug we've handed to Claude (null if we never offered it). */

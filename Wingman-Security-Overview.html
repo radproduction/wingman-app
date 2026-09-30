@@ -1,0 +1,347 @@
+<title>Wingman Security Overview</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #f6f7fb;
+    --surface: #ffffff;
+    --surface-2: #fbfcfe;
+    --ink: #171d2e;
+    --muted: #5b6478;
+    --faint: #8a93a8;
+    --rule: #e5e8f0;
+    --accent: #2e4bb0;
+    --accent-2: #3b5bd9;
+    --accent-tint: #eef1fc;
+    --p0: #c0392b; --p0-bg: #fdecea; --p0-line: #f3c6c0;
+    --p1: #a56a12; --p1-bg: #fff6e4; --p1-line: #f0dcae;
+    --p2: #1f7a4d; --p2-bg: #e7f5ec; --p2-line: #bfe3cc;
+    --warn: #8a6100; --warn-bg: #fff4d6; --warn-line: #e6c860;
+    --shadow: 0 1px 2px rgba(20,26,44,.04), 0 8px 28px -18px rgba(20,26,44,.28);
+    --font-display: "Sora", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --bg: #0d1120; --surface: #151a2b; --surface-2: #121728;
+      --ink: #e8ebf5; --muted: #a1aac2; --faint: #7b859f;
+      --rule: #262c42; --accent: #8296f2; --accent-2: #9aabff; --accent-tint: #1a2138;
+      --p0: #f0938a; --p0-bg: #2a1815; --p0-line: #4a2620;
+      --p1: #e0b667; --p1-bg: #271e0e; --p1-line: #443413;
+      --p2: #83d3a3; --p2-bg: #10241a; --p2-line: #204634;
+      --warn: #e6c157; --warn-bg: #241d0c; --warn-line: #463916;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 30px -18px rgba(0,0,0,.6);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #0d1120; --surface: #151a2b; --surface-2: #121728;
+    --ink: #e8ebf5; --muted: #a1aac2; --faint: #7b859f;
+    --rule: #262c42; --accent: #8296f2; --accent-2: #9aabff; --accent-tint: #1a2138;
+    --p0: #f0938a; --p0-bg: #2a1815; --p0-line: #4a2620;
+    --p1: #e0b667; --p1-bg: #271e0e; --p1-line: #443413;
+    --p2: #83d3a3; --p2-bg: #10241a; --p2-line: #204634;
+    --warn: #e6c157; --warn-bg: #241d0c; --warn-line: #463916;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 30px -18px rgba(0,0,0,.6);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; padding-inline: 20px; }
+
+  /* Header */
+  header.bar {
+    position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20;
+    background: color-mix(in srgb, var(--bg) 88%, transparent);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--rule);
+  }
+  .bar-in { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-block: 12px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-family: var(--font-display); font-weight: 700; letter-spacing: -.01em; }
+  .brand svg { width: 22px; height: 22px; color: var(--accent); flex: none; }
+  .brand small { font-family: var(--font-mono); font-weight: 500; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+  .conf { font-family: var(--font-mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--rule); border-radius: 999px; padding: 4px 10px; white-space: nowrap; }
+
+  /* Hero */
+  .hero { padding-block: 44px 30px; border-bottom: 1px solid var(--rule); }
+  .eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: .18em; text-transform: uppercase; color: var(--accent-2); margin: 0 0 14px; }
+  h1 { font-family: var(--font-display); font-weight: 700; letter-spacing: -.02em; line-height: 1.05; font-size: clamp(2rem, 5vw + .5rem, 3.1rem); margin: 0 0 16px; text-wrap: balance; }
+  .lede { font-size: 1.125rem; color: var(--muted); margin: 0 0 20px; max-width: 60ch; }
+  .meta { font-family: var(--font-mono); font-size: 12.5px; color: var(--faint); letter-spacing: .04em; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 22px; }
+  .chip { font-family: var(--font-mono); font-size: 12px; letter-spacing: .02em; color: var(--ink); background: var(--surface); border: 1px solid var(--rule); border-radius: 999px; padding: 6px 12px; box-shadow: var(--shadow); }
+  .chip b { color: var(--accent-2); font-weight: 600; }
+
+  /* Sections */
+  section { padding-block: 34px; border-bottom: 1px solid var(--rule); }
+  .sec-label { font-family: var(--font-mono); font-size: 12px; letter-spacing: .16em; text-transform: uppercase; color: var(--accent-2); margin: 0 0 6px; }
+  h2 { font-family: var(--font-display); font-weight: 700; letter-spacing: -.015em; font-size: 1.6rem; margin: 0 0 8px; text-wrap: balance; }
+  .sec-intro { color: var(--muted); margin: 0 0 22px; max-width: 62ch; }
+
+  /* Layer cards */
+  .layer { display: grid; grid-template-columns: 52px 1fr; gap: 18px; padding: 20px; background: var(--surface); border: 1px solid var(--rule); border-radius: 16px; box-shadow: var(--shadow); }
+  .layer + .layer { margin-top: 14px; }
+  .lnum { font-family: var(--font-mono); font-weight: 500; font-size: 13px; color: var(--accent); }
+  .lnum svg { width: 26px; height: 26px; display: block; margin-bottom: 8px; color: var(--accent); }
+  .layer h3 { font-family: var(--font-display); font-weight: 600; font-size: 1.12rem; margin: 2px 0 10px; letter-spacing: -.01em; }
+  ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 9px; }
+  ul.checks li { position: relative; padding-left: 26px; color: var(--ink); }
+  ul.checks li::before {
+    content: ""; position: absolute; left: 0; top: .5em; width: 15px; height: 15px;
+    background: var(--accent); border-radius: 5px;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='white' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round' d='M20 6 9 17l-5-5'/%3E%3C/svg%3E") center/12px no-repeat;
+            mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='white' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round' d='M20 6 9 17l-5-5'/%3E%3C/svg%3E") center/12px no-repeat;
+  }
+  code.k { font-family: var(--font-mono); font-size: .86em; background: var(--accent-tint); color: var(--accent-2); padding: 1px 6px; border-radius: 5px; }
+
+  /* Privacy grid */
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .pcard { background: var(--surface); border: 1px solid var(--rule); border-radius: 14px; padding: 18px 20px; box-shadow: var(--shadow); }
+  .pcard h3 { font-family: var(--font-display); font-weight: 600; font-size: 1rem; margin: 0 0 6px; }
+  .pcard p { margin: 0; color: var(--muted); font-size: .95rem; }
+
+  /* Assurances panel */
+  .assure { background: var(--accent-tint); border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--rule)); border-radius: 18px; padding: 26px; }
+  .assure .sec-label { color: var(--accent); }
+  .assure h2 { margin-bottom: 4px; }
+  .assure .note { font-size: .9rem; color: var(--muted); margin: 0 0 18px; }
+  .assure ul { display: grid; grid-template-columns: 1fr 1fr; gap: 11px 24px; }
+
+  /* Confidential banner */
+  .conf-banner { display: flex; gap: 12px; align-items: flex-start; background: var(--warn-bg); border: 1px solid var(--warn-line); border-left: 4px solid var(--warn); border-radius: 12px; padding: 14px 16px; margin-bottom: 22px; }
+  .conf-banner svg { width: 20px; height: 20px; color: var(--warn); flex: none; margin-top: 2px; }
+  .conf-banner b { color: var(--warn); }
+  .conf-banner p { margin: 2px 0 0; font-size: .92rem; color: var(--muted); }
+
+  /* Roadmap groups */
+  .road { display: flex; flex-direction: column; gap: 16px; }
+  .rgroup { border: 1px solid var(--rule); border-radius: 16px; overflow: hidden; background: var(--surface); box-shadow: var(--shadow); }
+  .rhead { display: flex; align-items: center; gap: 12px; padding: 14px 18px; }
+  .rtag { font-family: var(--font-mono); font-weight: 500; font-size: 13px; letter-spacing: .05em; padding: 4px 10px; border-radius: 8px; }
+  .rhead strong { font-family: var(--font-display); font-weight: 600; font-size: 1rem; }
+  .r0 .rhead { background: var(--p0-bg); } .r0 .rtag { color: var(--p0); border: 1px solid var(--p0-line); } .r0 .rhead strong { color: var(--p0); }
+  .r1 .rhead { background: var(--p1-bg); } .r1 .rtag { color: var(--p1); border: 1px solid var(--p1-line); } .r1 .rhead strong { color: var(--p1); }
+  .r2 .rhead { background: var(--p2-bg); } .r2 .rtag { color: var(--p2); border: 1px solid var(--p2-line); } .r2 .rhead strong { color: var(--p2); }
+  .ritems { list-style: none; margin: 0; padding: 6px 18px 16px; display: flex; flex-direction: column; gap: 12px; }
+  .ritems li { display: block; padding-top: 12px; border-top: 1px solid var(--rule); }
+  .ritems li:first-child { border-top: none; }
+  .ritems .what { font-weight: 600; color: var(--ink); }
+  .ritems .why { display: block; color: var(--muted); font-size: .92rem; margin-top: 2px; }
+
+  footer { padding-block: 30px 46px; color: var(--muted); font-size: .92rem; }
+  footer .next { display: flex; gap: 10px; align-items: flex-start; background: var(--surface); border: 1px solid var(--rule); border-radius: 12px; padding: 14px 16px; margin-bottom: 16px; }
+  footer .next svg { width: 18px; height: 18px; color: var(--accent); flex: none; margin-top: 3px; }
+  footer .next b { color: var(--ink); }
+  .fmeta { font-family: var(--font-mono); font-size: 11.5px; letter-spacing: .04em; color: var(--faint); }
+
+  @media (max-width: 620px) {
+    .grid, .assure ul { grid-template-columns: 1fr; }
+    .layer { grid-template-columns: 42px 1fr; gap: 14px; padding: 16px; }
+  }
+</style>
+
+<header class="bar">
+  <div class="wrap bar-in">
+    <span class="brand">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 5 6v5c0 4.5 3 7.5 7 9 4-1.5 7-4.5 7-9V6l-7-3Z"/><path d="m9 12 2 2 4-4"/></svg>
+      Wingman <small>Security</small>
+    </span>
+    <span class="conf">Confidential</span>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+    <div class="hero">
+      <p class="eyebrow">Security &amp; Data Protection</p>
+      <h1>How Wingman keeps customer data safe</h1>
+      <p class="lede">A plain-language overview of the protections around your data — how it is encrypted, who can access it, and the safeguards built into the AI itself.</p>
+      <p class="meta">Version 1.0 &nbsp;·&nbsp; 28 September 2026 &nbsp;·&nbsp; Prepared for management review</p>
+      <div class="chips">
+        <span class="chip"><b>AES-256-GCM</b> at rest</span>
+        <span class="chip"><b>TLS 1.2 / 1.3</b> in transit</span>
+        <span class="chip">Per-user isolation</span>
+        <span class="chip">Human approval on critical actions</span>
+        <span class="chip">Full audit trail</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <section>
+      <p class="sec-intro" style="margin-bottom:0"><b style="color:var(--ink)">Part A</b> is written to be shared with customers. <b style="color:var(--ink)">Part B</b> is an internal engineering roadmap and should not be shared externally.</p>
+    </section>
+
+    <section>
+      <p class="sec-label">Part A · For customers</p>
+      <h2>Five overlapping security layers</h2>
+      <p class="sec-intro">Wingman uses defence-in-depth: your data stays protected even if any single layer is bypassed.</p>
+
+      <div class="layer">
+        <div class="lnum">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="7" rx="1.5"/><rect x="3" y="13" width="18" height="7" rx="1.5"/><path d="M7 7.5h.01M7 16.5h.01"/></svg>
+          01
+        </div>
+        <div>
+          <h3>Infrastructure</h3>
+          <ul class="checks">
+            <li>Runs on a dedicated, private server — not a shared, multi-tenant platform.</li>
+            <li>The application listens only on the server's internal interface; it is never directly reachable from the internet. All traffic passes through a hardened reverse proxy.</li>
+            <li>A firewall limits inbound access to essential ports only, and an intrusion-prevention service blocks repeated malicious login attempts.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="layer">
+        <div class="lnum">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 2.5 15.3 0 18M12 3c-2.5 2.7-2.5 15.3 0 18"/></svg>
+          02
+        </div>
+        <div>
+          <h3>Network &amp; transport</h3>
+          <ul class="checks">
+            <li>All web traffic is encrypted in transit with HTTPS (<code class="k">TLS 1.2 / 1.3</code>) and automatically renewed certificates.</li>
+            <li>Messages exchanged over WhatsApp reach Wingman over encrypted channels.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="layer">
+        <div class="lnum">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="m10.8 12.2 8.2-8.2M17 6l2 2M14 9l1.5 1.5"/></svg>
+          03
+        </div>
+        <div>
+          <h3>Access &amp; authentication</h3>
+          <ul class="checks">
+            <li>One-time-passcode sign-in: a six-digit code that expires in five minutes, allows five attempts, and can be used only once.</li>
+            <li>Sessions use cryptographically random 256-bit tokens that expire and can be revoked — sent in request headers, not cookies, which reduces cross-site request risk.</li>
+            <li>Strict per-user isolation — no customer can reach another customer's data.</li>
+            <li>Administrative functions are password-protected and kept separate from customer access.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="layer">
+        <div class="lnum">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/><path d="M12 14v3"/></svg>
+          04
+        </div>
+        <div>
+          <h3>Data encryption at rest</h3>
+          <ul class="checks">
+            <li>Sensitive stored credentials are encrypted with <code class="k">AES-256-GCM</code> — authenticated encryption with a unique key per value, so any tampering is detected.</li>
+            <li>Encryption keys derive from a secret held only in the secured server environment — never in source code or version control.</li>
+            <li>Encrypted at rest: saved third-party passwords (credential vault), health-wearable tokens, work / HRMS integration secrets, and email-mailbox passwords.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="layer">
+        <div class="lnum">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="12" rx="2"/><path d="M12 8V4M9 4h6M8.5 13h.01M15.5 13h.01M9 17h6"/></svg>
+          05
+        </div>
+        <div>
+          <h3>AI-safety</h3>
+          <ul class="checks">
+            <li>Human approval before critical actions: Wingman shows exactly what it will do — recipient, content, amount — and waits for an explicit "yes" before sending, paying, or deleting.</li>
+            <li>Configurable autonomy: act automatically on routine items, or confirm everything.</li>
+            <li>The AI never sees stored passwords — they are decrypted only by server-side automation and are never exposed to the model or returned in a reply.</li>
+            <li>A full audit trail records every action — requested or proactive — which the user can review at any time.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <p class="sec-label">Part A · For customers</p>
+      <h2>Privacy &amp; compliance</h2>
+      <div class="grid">
+        <div class="pcard"><h3>Never sold</h3><p>Customer data is never sold to anyone.</p></div>
+        <div class="pcard"><h3>Not used to train AI</h3><p>Message content is processed to produce replies and is not used to train AI models.</p></div>
+        <div class="pcard"><h3>Google Limited Use</h3><p>Google data follows the Google API Services User Data Policy — used only for features you request, never for advertising.</p></div>
+        <div class="pcard"><h3>You stay in control</h3><p>Disconnect Google anytime (which removes stored tokens), and request full deletion of your account and data whenever you want.</p></div>
+      </div>
+    </section>
+
+    <section>
+      <div class="assure">
+        <p class="sec-label">Ready to share</p>
+        <h2>Key assurances for customers</h2>
+        <p class="note">Eight lines you can give a customer directly.</p>
+        <ul class="checks">
+          <li>All data is encrypted in transit (HTTPS / TLS).</li>
+          <li>Sensitive credentials are encrypted at rest with AES-256-GCM.</li>
+          <li>Runs on dedicated, firewalled, private infrastructure.</li>
+          <li>One-time-code login, expiring sessions, strict per-user isolation.</li>
+          <li>Explicit approval before any sensitive action, with a full audit trail.</li>
+          <li>The AI never sees your saved passwords.</li>
+          <li>Your data is never sold or used to train AI models.</li>
+          <li>Disconnect integrations or delete your data at any time.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section>
+      <p class="sec-label">Part B · Internal only</p>
+      <h2>Security hardening roadmap</h2>
+      <div class="conf-banner">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 2 21h20L12 3Z"/><path d="M12 9v5M12 17.5h.01"/></svg>
+        <div><b>Confidential — internal only.</b><p>Planned improvements. Not intended for customers.</p></div>
+      </div>
+
+      <div class="road">
+        <div class="rgroup r0">
+          <div class="rhead"><span class="rtag">P0</span><strong>Immediate — high impact, low effort</strong></div>
+          <ul class="ritems">
+            <li><span class="what">Encrypt Google OAuth tokens at rest (Gmail / Calendar)</span><span class="why">Currently stored unencrypted; the most powerful credential — reuse the existing AES-256-GCM scheme.</span></li>
+            <li><span class="what">Set a strong admin password &amp; rotate setup secrets</span><span class="why">Replace the default admin password and rotate any API keys shared during setup.</span></li>
+            <li><span class="what">Automated, encrypted, off-site database backups</span><span class="why">With a tested restore, to guarantee recoverability and durability.</span></li>
+          </ul>
+        </div>
+
+        <div class="rgroup r1">
+          <div class="rhead"><span class="rtag">P1</span><strong>Near-term</strong></div>
+          <ul class="ritems">
+            <li><span class="what">API rate limiting &amp; OTP request throttling</span><span class="why">Prevent brute-force attempts and abuse.</span></li>
+            <li><span class="what">HTTP security headers (HSTS, CSP, X-Frame-Options, no-sniff)</span><span class="why">Harden the web app against common browser-based attacks.</span></li>
+            <li><span class="what">Restrict CORS to known application domains</span><span class="why">Currently permissive; scope to trusted origins only.</span></li>
+            <li><span class="what">Session / device management</span><span class="why">Let users view and revoke their active sessions and devices.</span></li>
+          </ul>
+        </div>
+
+        <div class="rgroup r2">
+          <div class="rhead"><span class="rtag">P2</span><strong>Enterprise readiness</strong></div>
+          <ul class="ritems">
+            <li><span class="what">Full-disk / volume encryption on the server</span><span class="why">Protect the database file at the storage layer.</span></li>
+            <li><span class="what">Centralized secrets manager with key rotation</span><span class="why">Move secrets out of environment files and enable rotation.</span></li>
+            <li><span class="what">Dependency &amp; container-image scanning in CI</span><span class="why">Catch vulnerable packages and images early.</span></li>
+            <li><span class="what">Data Processing Agreement + data-request workflow</span><span class="why">Support enterprise and regulatory (GDPR-style) requirements.</span></li>
+            <li><span class="what">Third-party penetration test; SOC 2 readiness</span><span class="why">Independent security assurance for enterprise customers.</span></li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      <div class="next">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        <span><b>Recommended next step:</b> complete the P0 items first — they are low-effort and materially raise the security baseline.</span>
+      </div>
+      <p class="fmeta">Wingman · Security &amp; Data Protection Overview · v1.0 · Confidential</p>
+    </footer>
+  </div>
+</main>

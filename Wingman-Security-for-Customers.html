@@ -1,0 +1,161 @@
+<title>Your Data, Protected</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #f6f7fb;
+    --surface: #ffffff;
+    --ink: #171d2e;
+    --muted: #56607a;
+    --faint: #8a93a8;
+    --rule: #e5e8f0;
+    --accent: #2e4bb0;
+    --accent-2: #3b5bd9;
+    --accent-tint: #eef1fc;
+    --good: #1f7a4d;
+    --shadow: 0 1px 2px rgba(20,26,44,.04), 0 10px 30px -20px rgba(20,26,44,.30);
+    --font-display: "Sora", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --bg: #0d1120; --surface: #161b2c; --ink: #e8ebf5; --muted: #a6afc6; --faint: #7b859f;
+      --rule: #272d44; --accent: #8296f2; --accent-2: #9aabff; --accent-tint: #1a2138; --good: #83d3a3;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 12px 34px -20px rgba(0,0,0,.65);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #0d1120; --surface: #161b2c; --ink: #e8ebf5; --muted: #a6afc6; --faint: #7b859f;
+    --rule: #272d44; --accent: #8296f2; --accent-2: #9aabff; --accent-tint: #1a2138; --good: #83d3a3;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 12px 34px -20px rgba(0,0,0,.65);
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 900px; margin: 0 auto; padding-inline: 20px; }
+
+  header.bar { border-bottom: 1px solid var(--rule); }
+  .bar-in { display: flex; align-items: center; gap: 10px; padding-block: 14px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-family: var(--font-display); font-weight: 700; letter-spacing: -.01em; font-size: 1.05rem; }
+  .brand svg { width: 22px; height: 22px; color: var(--accent); flex: none; }
+
+  .hero { text-align: center; padding-block: 52px 40px; }
+  .badge { display: inline-flex; align-items: center; gap: 8px; font-size: .8rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--accent); background: var(--accent-tint); border: 1px solid color-mix(in srgb, var(--accent) 20%, var(--rule)); border-radius: 999px; padding: 6px 14px; margin-bottom: 20px; }
+  .badge svg { width: 15px; height: 15px; }
+  h1 { font-family: var(--font-display); font-weight: 700; letter-spacing: -.02em; line-height: 1.08; font-size: clamp(2.1rem, 5.5vw + .4rem, 3.3rem); margin: 0 auto 18px; max-width: 16ch; text-wrap: balance; }
+  .lede { font-size: 1.18rem; color: var(--muted); margin: 0 auto; max-width: 46ch; }
+
+  section { padding-block: 20px 8px; }
+  .sec-head { text-align: center; margin: 26px 0 20px; }
+  h2 { font-family: var(--font-display); font-weight: 700; letter-spacing: -.015em; font-size: 1.5rem; margin: 0; text-wrap: balance; }
+
+  .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .card { background: var(--surface); border: 1px solid var(--rule); border-radius: 16px; padding: 22px; box-shadow: var(--shadow); }
+  .ic { width: 42px; height: 42px; border-radius: 11px; background: var(--accent-tint); display: flex; align-items: center; justify-content: center; margin-bottom: 14px; }
+  .ic svg { width: 22px; height: 22px; color: var(--accent); }
+  .card h3 { font-family: var(--font-display); font-weight: 600; font-size: 1.08rem; margin: 0 0 7px; letter-spacing: -.01em; }
+  .card p { margin: 0; color: var(--muted); font-size: .97rem; }
+
+  .promise { margin-top: 30px; background: var(--accent-tint); border: 1px solid color-mix(in srgb, var(--accent) 20%, var(--rule)); border-radius: 20px; padding: 30px 28px; text-align: center; }
+  .promise h2 { margin-bottom: 18px; }
+  .promise ul { list-style: none; margin: 0 auto; padding: 0; max-width: 640px; display: grid; gap: 12px; text-align: left; }
+  .promise li { display: flex; gap: 12px; align-items: flex-start; font-size: 1.02rem; }
+  .promise li svg { width: 20px; height: 20px; color: var(--good); flex: none; margin-top: 3px; }
+
+  footer { text-align: center; padding-block: 40px 54px; color: var(--muted); }
+  footer .q { font-family: var(--font-display); font-weight: 600; color: var(--ink); font-size: 1.15rem; margin: 0 0 8px; }
+  footer p { margin: 0; }
+
+  @media (max-width: 600px) { .cards { grid-template-columns: 1fr; } }
+</style>
+
+<header class="bar">
+  <div class="wrap bar-in">
+    <span class="brand">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 5 6v5c0 4.5 3 7.5 7 9 4-1.5 7-4.5 7-9V6l-7-3Z"/><path d="m9 12 2 2 4-4"/></svg>
+      Wingman
+    </span>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="hero">
+    <span class="badge">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 5 6v5c0 4.5 3 7.5 7 9 4-1.5 7-4.5 7-9V6l-7-3Z"/></svg>
+      Your data, protected
+    </span>
+    <h1>Your information is safe with Wingman</h1>
+    <p class="lede">Here's how we keep your data private and secure — in plain language, no jargon.</p>
+  </div>
+
+  <section>
+    <div class="sec-head"><h2>How we protect your data</h2></div>
+    <div class="cards">
+      <div class="card">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></div>
+        <h3>Locked with strong encryption</h3>
+        <p>Your sensitive information — like any saved passwords — is scrambled with bank-level encryption while it's stored. Even someone who reached the storage couldn't read it.</p>
+      </div>
+      <div class="card">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 0 1 16 0"/><path d="M2 12h2M20 12h2"/><rect x="7" y="12" width="10" height="8" rx="2"/><path d="M12 15v2"/></svg></div>
+        <h3>Safe while it travels</h3>
+        <p>Everything you send is encrypted as it moves across the internet, so no one in between can read it — the same protection used by online banking.</p>
+      </div>
+      <div class="card">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="7" rx="1.5"/><rect x="3" y="13" width="18" height="7" rx="1.5"/><path d="M7 7.5h.01M7 16.5h.01"/></svg></div>
+        <h3>Your own private space</h3>
+        <p>Your data sits on our own secure, locked-down servers and is kept completely separate from every other user. No customer can ever see another's information.</p>
+      </div>
+      <div class="card">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 5v6c0 5 3.5 8.5 8 10 4.5-1.5 8-5 8-10V5l-8-3Z"/><path d="M12 8v4M12 15h.01"/></svg></div>
+        <h3>Secure sign-in</h3>
+        <p>You log in with a one-time code that expires quickly. Your session can be signed out at any time, and only you can get into your account.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>You're always in control</h2></div>
+    <div class="cards">
+      <div class="card">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div>
+        <h3>Nothing important without your "yes"</h3>
+        <p>Before Wingman sends a message, makes a payment, or deletes anything, it shows you exactly what it's about to do and waits for your approval. You're always the one who decides.</p>
+      </div>
+      <div class="card">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h11M8 12h11M8 18h11"/><path d="M4 6h.01M4 12h.01M4 18h.01"/></svg></div>
+        <h3>A clear record of everything</h3>
+        <p>Every action Wingman takes is recorded, so you can always look back and see exactly what happened and when.</p>
+      </div>
+      <div class="card">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><line x1="4" y1="20" x2="20" y2="4"/></svg></div>
+        <h3>The assistant never sees your passwords</h3>
+        <p>Any passwords you save stay locked away — even Wingman's AI can't read them. They're only used quietly behind the scenes to do the task you asked for.</p>
+      </div>
+      <div class="card">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/><circle cx="12" cy="12" r="10"/></svg></div>
+        <h3>Leave whenever you want</h3>
+        <p>You can disconnect your connected accounts, or delete your data entirely, at any time. It's your data — you stay in charge of it.</p>
+      </div>
+    </div>
+  </section>
+
+  <div class="promise">
+    <h2>Our privacy promise</h2>
+    <ul>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span>We <b>never sell</b> your data — to anyone.</span></li>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span>Your conversations are <b>never used to train AI</b> models.</span></li>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span>If you connect Gmail or Calendar, it's used <b>only for what you ask</b> — never for advertising.</span></li>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span>You can <b>disconnect or delete</b> your data at any time.</span></li>
+    </ul>
+  </div>
+
+  <footer>
+    <p class="q">Have a question about your data?</p>
+    <p>We're always happy to explain. Just ask your Wingman contact, or message us anytime.</p>
+  </footer>
+</main>
