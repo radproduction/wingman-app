@@ -39,18 +39,20 @@ const managementTools = [
   {
     name: 'find_app_tools',
     description:
-      'Load more tools for an app the user HAS connected, when none of your current CAPITALS tools ' +
-      'for that app can do what they asked (e.g. "list my Facebook pages", "reply to a comment", ' +
-      '"get page insights"). Describe the action in a few words. The tools it finds become ' +
-      'available in your next step — then call the right one. Never tell the user you lack a ' +
-      'tool for a connected app before trying this.',
+      'See EVERYTHING a connected app can do and load the tools you need. Use it whenever none of ' +
+      'your current CAPITALS tools for that app fits the request (e.g. "list my Facebook pages", ' +
+      '"reply to a comment", "Slack channel history", "Zoom recordings"). Call with {app, what} to get ' +
+      'the app\'s full tool menu (all_tools); then call again with {app, tools:[exact names]} to load ' +
+      'the ones you picked; they are callable in your next step. Never tell the user a connected app ' +
+      'cannot do something without checking all_tools first.',
     input_schema: {
       type: 'object',
       properties: {
         app: { type: 'string', description: 'Connected app slug, e.g. "facebook", "instagram", "slack".' },
         what: { type: 'string', description: 'The action needed, e.g. "list managed pages".' },
+        tools: { type: 'array', items: { type: 'string' }, description: 'Exact tool names picked from all_tools to load (max 10).' },
       },
-      required: ['app', 'what'],
+      required: ['app'],
     },
   },
   {

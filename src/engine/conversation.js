@@ -271,6 +271,9 @@ async function runToolLoop(user, messages, system, maxRounds = 4) {
   // Built once per turn; never throws — an outage just means no app tools.
   let integrations;
 
+  // Rounds spent only on find_app_tools (looking up / loading an app's tools)
+  // don't eat into the real budget — up to 2 free rounds per turn.
+  let freeRounds = 2;
   for (let round = 0; round < maxRounds; round++) {
     // Rebuilt each round (cached underneath) so tools loaded by find_app_tools
     // in one round are callable in the next.
@@ -303,6 +306,8 @@ async function runToolLoop(user, messages, system, maxRounds = 4) {
 
     if (response.stop_reason === 'tool_use') {
       convo.push({ role: 'assistant', content: response.content });
+      const uses = response.content.filter((b) => b.type === 'tool_use');
+      if (freeRounds > 0 && uses.length && uses.every((b) => b.name === 'find_app_tools')) { freeRounds--; maxRounds++; }
 
       const toolResults = [];
       for (const block of response.content) {

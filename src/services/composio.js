@@ -249,34 +249,29 @@ function score(tool, qWords) {
   return n;
 }
 
-async function findTools(user, toolkit, what) {
+/**
+ * find_app_tools — generic for EVERY app, no per-app keyword lists.
+ *  - With `tools` (exact slugs): load exactly those.
+ *  - Otherwise: return the app's FULL menu (every tool, one line each) so the
+ *    model itself picks by meaning, and pre-load the best keyword guesses.
+ */
+async function findTools(user, toolkit, what, pick) {
   const slug = String(toolkit || '').toLowerCase();
   const apps = await listConnections(user);
   if (!apps.some((a) => a.toolkit === slug)) return { error: 'APP_NOT_CONNECTED', app: slug };
 
   const catalog = await catalogFor(slug);
+  const bySlug = new Map(catalog.map((t) => [t.slug.toUpperCase(), t]));
   const query = String(what || '').slice(0, 200);
-  const exact = catalog.find((t) => t.slug.toLowerCase() === query.trim().toLowerCase());
-  let found;
-  if (exact) {
-    found = [exact];
+  const wanted = (Array.isArray(pick) ? pick : []).concat(query.trim() && bySlug.has(query.trim().toUpperCase()) ? [query.trim()] : []);
+
+  let found = [];
+  if (wanted.length) {
+    found = wanted.map((w) => bySlug.get(String(w).toUpperCase())).filter(Boolean).slice(0, 10);
   } else {
-    // Local keyword ranking over the whole app, plus Composio's own search.
     const qWords = words(query);
-    const ranked = catalog.map((t) => ({ t, s: score(t, qWords) })).filter((x) => x.s > 0)
-      .sort((a, b) => b.s - a.s).map((x) => x.t);
-    let remote = [];
-    try {
-      const composio = await getClient();
-      remote = await composio.tools.getRawComposioTools({ toolkits: [slug], search: query, limit: 8 });
-    } catch (e) {
-      console.warn(`[composio] search ${slug} failed:`, e.message);
-    }
-    const bySlug = new Map();
-    for (const t of [...ranked.slice(0, 6), ...(remote || [])]) {
-      if (t && t.slug && t.slug.length <= MAX_TOOL_NAME && !t.isDeprecated && !bySlug.has(t.slug)) bySlug.set(t.slug, t);
-    }
-    found = [...bySlug.values()].slice(0, 8);
+    found = catalog.map((t) => ({ t, s: score(t, qWords) })).filter((x) => x.s > 0)
+      .sort((a, b) => b.s - a.s).map((x) => x.t).slice(0, 5);
   }
 
   const key = String(user.id);
@@ -287,19 +282,22 @@ async function findTools(user, toolkit, what) {
     extras.set(t.slug, t);
     slugIndex.set(t.slug, { toolkit: slug, version: t.version || null, readOnly: isReadOnly(t) });
   }
-  // Keep the per-user set bounded (oldest out first).
   while (extras.size > MAX_EXTRAS_PER_USER) extras.delete(extras.keys().next().value);
   userExtras.set(key, extras);
-  console.log(`[integrations] find_app_tools ${slug} "${query}" -> ${found.map((t) => t.slug).join(', ') || 'none'} (catalog ${catalog.length})`);
+  console.log(`[integrations] find_app_tools ${slug} what="${query}" pick=${JSON.stringify(pick || [])} -> ${found.map((t) => t.slug).join(', ') || 'none'} (catalog ${catalog.length})`);
 
   const out = {
     app: appName(slug),
     loaded: found.map((t) => ({ tool: t.slug, what: String(t.description || t.name || '').slice(0, 160), changes_data: !isReadOnly(t) })),
-    note: found.length
-      ? 'These tools are now available — call the right one in your next step.'
-      : 'Nothing matched. Pick an exact tool name from all_tools and call find_app_tools again with it as "what".',
   };
-  if (!found.length) out.all_tools = catalog.map((t) => t.slug).slice(0, 150);
+  if (wanted.length) {
+    out.note = 'Loaded. Call the right one in your next step.';
+  } else {
+    // The full menu: the model chooses by meaning, not by keyword luck.
+    out.all_tools = catalog.map((t) => `${t.slug} — ${String(t.description || t.name || '').replace(/\s+/g, ' ').slice(0, 90)}`);
+    out.note = 'all_tools is EVERYTHING this app can do. If a loaded tool fits, call it. Otherwise pick the right names from ' +
+      'all_tools and call find_app_tools again with them in "tools". Only if nothing in all_tools fits, tell the user this app cannot do it.';
+  }
   return out;
 }
 
