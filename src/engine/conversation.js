@@ -41,7 +41,7 @@ const { executeMemoryTool } = require('./memoryExecutor');
 const { executeNewsTool } = require('./newsExecutor');
 const { executeShopifyTool } = require('./shopifyExecutor');
 const { integrationToolsForUser } = require('./integrationTools');
-const { executeIntegrationTool } = require('./integrationExecutor');
+const { executeIntegrationTool, pendingActionsBlock } = require('./integrationExecutor');
 const googleAuth = require('../auth/googleAuth');
 const config = require('../config');
 const emailDigest = require('../services/emailDigest');
@@ -236,7 +236,7 @@ async function runConversation(user, text) {
     messages.push({ role: 'user', content: text });
   }
 
-  const system = buildSystemPrompt(user);
+  const system = buildSystemPrompt(user) + pendingActionsBlock(user);
   const reply = await runToolLoop(user, messages, system);
 
   try {
@@ -261,11 +261,11 @@ async function runAutomatedInstruction(user, instruction) {
     `\n\n--- AUTOMATED RUN ---\nThis is a scheduled standing instruction you set up earlier, firing now — the user did NOT just message you. Carry it out with your tools and reply with ONLY the message to send them: the result itself (e.g. the traffic update), briefly and naturally, as if you proactively reached out. Do not ask questions or say "let me know" — just do it. If for some reason it genuinely cannot be done right now, reply with a short honest note about that instead.`;
 
   const messages = [{ role: 'user', content: `[Scheduled instruction firing now] ${instruction}` }];
-  const reply = await runToolLoop(user, messages, system);
+  const reply = await runToolLoop(user, messages, system, 4, { automated: true });
   return (reply || '').trim() || null;
 }
 
-async function runToolLoop(user, messages, system, maxRounds = 4) {
+async function runToolLoop(user, messages, system, maxRounds = 4, ctx = {}) {
   const convo = [...messages];
   // Third-party app tools (Composio) for the apps THIS user has connected.
   // Built once per turn; never throws — an outage just means no app tools.
@@ -317,7 +317,7 @@ async function runToolLoop(user, messages, system, maxRounds = 4) {
         if (integrations.names.has(block.name)) {
           // Checked first: app tool names are Composio slugs, and anything not
           // matched below would otherwise fall through to the calendar executor.
-          result = await executeIntegrationTool(user, { name: block.name, input: block.input });
+          result = await executeIntegrationTool(user, { name: block.name, input: block.input }, ctx);
         } else if (taskToolNames.has(block.name)) {
           result = await executeTaskTool(user, { name: block.name, input: block.input });
         } else if (goalToolNames.has(block.name)) {

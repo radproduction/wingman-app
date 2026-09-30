@@ -31,7 +31,21 @@ function preview(toolkit, slug, args) {
   return `${composio.appName(toolkit)} — ${what} ${a === '{}' ? '' : a}`.trim();
 }
 
-function propose(user, { toolkit, slug, version, args }) {
+async function propose(user, { toolkit, slug, version, args }, ctx = {}) {
+  // Same action already waiting? Don't pile up duplicates (the chat history is
+  // text-only, so the model often re-calls the tool on the user's "yes"
+  // instead of approve_integration_action). If the user has replied since it
+  // was shown to them, and this is a live chat turn, the re-call is the go-ahead.
+  actions.expireOld(config.composio.approvalTtlMinutes);
+  const same = actions.findSamePending(user.id, slug, args);
+  if (same) {
+    if (!ctx.automated && actions.userHasRepliedSince(user.id, same)) return approve(user, same.id, ctx);
+    return {
+      approval_required: true,
+      action_id: same.id,
+      instruction: 'This exact action is already waiting for the user\'s yes. Show it once and wait for their reply.',
+    };
+  }
   const summary = preview(toolkit, slug, args);
   const row = actions.create({ userId: user.id, toolkit, toolSlug: slug, toolVersion: version, args, summary });
   return {
@@ -59,7 +73,8 @@ async function runApproved(user, row) {
   return composio.execute(user, row.tool_slug, row.arguments, row.tool_version);
 }
 
-async function approve(user, actionId) {
+async function approve(user, actionId, ctx = {}) {
+  if (ctx.automated) return { error: 'NEEDS_USER_CONFIRMATION', detail: 'Automated runs cannot approve actions.' };
   actions.expireOld(config.composio.approvalTtlMinutes);
   const row = actions.get(user.id, String(actionId || ''));
   if (!row) return { error: 'ACTION_NOT_FOUND' };
@@ -72,6 +87,8 @@ async function approve(user, actionId) {
   }
   if (!actions.claim(user.id, row.id)) return { error: 'ACTION_ALREADY_HANDLED' };
 
+  // Duplicates of this same action (e.g. from repeated proposals) must never run twice.
+  actions.cancelDuplicates(user.id, row);
   const res = await runApproved(user, row);
   actions.finish(user.id, row.id, { ok: res.ok, result: res.ok ? res.data : res.error });
   if (res.ok) {
@@ -96,7 +113,7 @@ async function listIntegrations(user) {
   };
 }
 
-async function executeIntegrationTool(user, toolUse) {
+async function executeIntegrationTool(user, toolUse, ctx = {}) {
   const { name, input = {} } = toolUse;
   try {
     if (!config.composio.enabled) return { error: 'INTEGRATIONS_NOT_CONFIGURED' };
@@ -113,10 +130,10 @@ async function executeIntegrationTool(user, toolUse) {
           const slug = String(input.app || '').toLowerCase();
           const apps = await composio.listConnections(user, { fresh: true });
           if (!apps.some((a) => a.toolkit === slug)) return { error: 'NOT_CONNECTED', app: slug };
-          return propose(user, { toolkit: slug, slug: DISCONNECT, version: null, args: {} });
+          return propose(user, { toolkit: slug, slug: DISCONNECT, version: null, args: {} }, ctx);
         }
         case 'approve_integration_action':
-          return approve(user, input.action_id);
+          return approve(user, input.action_id, ctx);
         case 'cancel_integration_action':
           return actions.cancel(user.id, String(input.action_id || ''))
             ? { cancelled: true }
@@ -138,11 +155,36 @@ async function executeIntegrationTool(user, toolUse) {
       const res = await composio.execute(user, name, input, meta.version);
       return res.ok ? { app: composio.appName(meta.toolkit), result: res.data } : { error: 'ACTION_FAILED', detail: res.error };
     }
-    return propose(user, { toolkit: meta.toolkit, slug: name, version: meta.version, args: input });
+    return propose(user, { toolkit: meta.toolkit, slug: name, version: meta.version, args: input }, ctx);
   } catch (e) {
     console.warn(`[integrations] ${name} failed:`, e.message);
     return { error: 'INTEGRATION_ERROR', detail: e.message };
   }
 }
 
-module.exports = { executeIntegrationTool };
+/**
+ * Text block for the system prompt listing this user's waiting actions WITH
+ * their action_ids — chat history is text-only, so without this the model
+ * forgets the id by the time the user says yes.
+ */
+function pendingActionsBlock(user) {
+  try {
+    if (!config.composio.enabled || !user) return '';
+    actions.expireOld(config.composio.approvalTtlMinutes);
+    const seen = new Set();
+    const rows = actions.listPending(user.id).filter((r) => {
+      const k = `${r.tool_slug}|${r.summary}`;
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    }).slice(0, 5);
+    if (!rows.length) return '';
+    return '\n\n--- ACTIONS WAITING FOR THE USER\'S YES ---\n' +
+      rows.map((r) => `- action_id ${r.id}: ${r.summary}`).join('\n') +
+      '\nIf the user\'s latest message agrees to one of these (yes / haan / kar do / ok / go ahead, in any wording), call approve_integration_action with its action_id RIGHT NOW — do not ask again and do not re-create it. If they decline, cancel_integration_action.';
+  } catch (_) {
+    return '';
+  }
+}
+
+module.exports = { executeIntegrationTool, pendingActionsBlock };

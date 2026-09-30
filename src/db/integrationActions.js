@@ -43,6 +43,15 @@ function listPending(userId) {
   ).all(userId);
 }
 
+/** The newest still-pending action with exactly this tool + arguments (re-proposal of the same thing). */
+function findSamePending(userId, toolSlug, args) {
+  const json = JSON.stringify(args || {});
+  const row = db.prepare(
+    "SELECT id FROM integration_actions WHERE user_id = ? AND tool_slug = ? AND arguments = ? AND status = 'pending' ORDER BY created_at DESC LIMIT 1",
+  ).get(userId, toolSlug, json);
+  return row ? get(userId, row.id) : null;
+}
+
 /** True when the user has sent a message since this action was proposed. */
 function userHasRepliedSince(userId, action) {
   return latestUserMsgRowid(userId) > (action.after_msg_rowid || 0);
@@ -74,6 +83,13 @@ function cancel(userId, id) {
   return r.changes === 1;
 }
 
+/** Cancel other pending copies of the same tool + arguments (keeps one action = one run). */
+function cancelDuplicates(userId, row) {
+  db.prepare(
+    "UPDATE integration_actions SET status = 'cancelled', decided_at = datetime('now') WHERE user_id = ? AND tool_slug = ? AND arguments = ? AND status = 'pending' AND id != ?",
+  ).run(userId, row.tool_slug, JSON.stringify(row.arguments || {}), row.id);
+}
+
 /** Expire stale proposals so an old "yes" can't fire a forgotten action. */
 function expireOld(ttlMinutes) {
   db.prepare(
@@ -81,4 +97,4 @@ function expireOld(ttlMinutes) {
   ).run(`-${Math.max(1, ttlMinutes | 0)} minutes`);
 }
 
-module.exports = { create, get, listPending, userHasRepliedSince, claim, finish, cancel, expireOld };
+module.exports = { create, get, findSamePending, listPending, userHasRepliedSince, claim, finish, cancel, cancelDuplicates, expireOld };
