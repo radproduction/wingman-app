@@ -37,6 +37,23 @@ const managementTools = [
     },
   },
   {
+    name: 'find_app_tools',
+    description:
+      'Load more tools for an app the user HAS connected, when none of your current CAPITALS tools ' +
+      'for that app can do what they asked (e.g. "list my Facebook pages", "reply to a comment", ' +
+      '"get page insights"). Describe the action in a few words. The tools it finds become ' +
+      'available in your next step — then call the right one. Never tell the user you lack a ' +
+      'tool for a connected app before trying this.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        app: { type: 'string', description: 'Connected app slug, e.g. "facebook", "instagram", "slack".' },
+        what: { type: 'string', description: 'The action needed, e.g. "list managed pages".' },
+      },
+      required: ['app', 'what'],
+    },
+  },
+  {
     name: 'disconnect_integration',
     description:
       'Disconnect a third-party app. This is proposed first and only runs after the user says yes ' +

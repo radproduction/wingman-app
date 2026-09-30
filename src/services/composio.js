@@ -42,6 +42,11 @@ let clientPromise = null;
 const connectionsCache = new Map();  // composioUserId -> { at, apps: [{toolkit, id, status}] }
 const schemaCache = new Map();       // toolkit -> { at, tools: [rawTool] }
 const slugIndex = new Map();         // tool slug -> { toolkit, version, readOnly }
+// Extra tools a user's assistant discovered on demand (find_app_tools), on top
+// of each app's default set. userId -> Map(slug -> raw tool). Kept in memory:
+// after a restart the assistant simply searches again.
+const userExtras = new Map();
+const MAX_EXTRAS_PER_USER = 40;
 
 function appName(toolkit) {
   return APP_NAMES[toolkit] || toolkit.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
@@ -138,11 +143,22 @@ async function schemasFor(toolkit) {
   if (hit && Date.now() - hit.at < SCHEMA_TTL_MS) return hit.tools;
 
   const composio = await getClient();
+  // Default set = Composio's "important" tools for the app, PLUS any slugs
+  // pinned in COMPOSIO_TOOLS (merged, not instead). Anything else the assistant
+  // can still load on demand with find_app_tools.
   const pinned = (config.composio.tools || {})[toolkit];
-  const query = Array.isArray(pinned) && pinned.length
-    ? { tools: pinned }
-    : { toolkits: [toolkit], important: true, limit: config.composio.toolsPerApp };
-  const raw = await composio.tools.getRawComposioTools(query);
+  let raw = await composio.tools.getRawComposioTools({ toolkits: [toolkit], important: true, limit: config.composio.toolsPerApp });
+  if (Array.isArray(pinned) && pinned.length) {
+    const have = new Set((raw || []).map((t) => t.slug));
+    const missing = pinned.filter((slug) => !have.has(slug));
+    if (missing.length) {
+      try {
+        raw = (raw || []).concat(await composio.tools.getRawComposioTools({ tools: missing }));
+      } catch (e) {
+        console.warn(`[composio] pinned tools for ${toolkit} failed:`, e.message);
+      }
+    }
+  }
   const tools = (raw || []).filter((t) => t && t.slug && t.slug.length <= MAX_TOOL_NAME && !t.isDeprecated);
 
   for (const t of tools) {
@@ -173,7 +189,15 @@ async function toolsForUser(user) {
     const out = [];
     for (const { toolkit } of apps) {
       try {
-        for (const t of await schemasFor(toolkit)) out.push(toAnthropicTool(t, toolkit));
+        const seen = new Set();
+        for (const t of await schemasFor(toolkit)) { seen.add(t.slug); out.push(toAnthropicTool(t, toolkit)); }
+        const extras = userExtras.get(String(user.id));
+        if (extras) {
+          for (const t of extras.values()) {
+            const tk = String((t.toolkit && t.toolkit.slug) || t.__toolkit || '').toLowerCase();
+            if (tk === toolkit && !seen.has(t.slug)) { seen.add(t.slug); out.push(toAnthropicTool(t, toolkit)); }
+          }
+        }
       } catch (e) {
         console.warn(`[composio] tool schemas for ${toolkit} failed:`, e.message);
       }
@@ -183,6 +207,37 @@ async function toolsForUser(user) {
     console.warn('[composio] toolsForUser failed:', e.message);
     return [];
   }
+}
+
+/**
+ * Find more tools in one of the user's CONNECTED apps (e.g. "list my pages"),
+ * and make them available to this user from the assistant's next step on.
+ * Returns a short list the model can read.
+ */
+async function findTools(user, toolkit, what) {
+  const slug = String(toolkit || '').toLowerCase();
+  const apps = await listConnections(user);
+  if (!apps.some((a) => a.toolkit === slug)) return { error: 'APP_NOT_CONNECTED', app: slug };
+  const composio = await getClient();
+  const raw = await composio.tools.getRawComposioTools({ toolkits: [slug], search: String(what || '').slice(0, 200), limit: 8 });
+  const found = (raw || []).filter((t) => t && t.slug && t.slug.length <= MAX_TOOL_NAME && !t.isDeprecated);
+  const key = String(user.id);
+  const extras = userExtras.get(key) || new Map();
+  for (const t of found) {
+    t.__toolkit = slug;
+    extras.set(t.slug, t);
+    slugIndex.set(t.slug, { toolkit: slug, version: t.version || null, readOnly: isReadOnly(t) });
+  }
+  // Keep the per-user set bounded (oldest out first).
+  while (extras.size > MAX_EXTRAS_PER_USER) extras.delete(extras.keys().next().value);
+  userExtras.set(key, extras);
+  return {
+    app: appName(slug),
+    loaded: found.map((t) => ({ tool: t.slug, what: String(t.description || t.name || '').slice(0, 160), changes_data: !isReadOnly(t) })),
+    note: found.length
+      ? 'These tools are now available — call the right one in your next step.'
+      : 'No matching tools found for that app. Try different words.',
+  };
 }
 
 /** Metadata for a slug we've handed to Claude (null if we never offered it). */
@@ -220,6 +275,9 @@ module.exports = {
   connectLink,
   disconnect,
   toolsForUser,
+  findTools,
   toolMeta,
+  // test hook: inject a fake Composio client
+  _setClientForTests: (c) => { clientPromise = Promise.resolve(c); },
   execute,
 };

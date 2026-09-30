@@ -269,9 +269,12 @@ async function runToolLoop(user, messages, system, maxRounds = 4) {
   const convo = [...messages];
   // Third-party app tools (Composio) for the apps THIS user has connected.
   // Built once per turn; never throws — an outage just means no app tools.
-  const integrations = await integrationToolsForUser(user);
+  let integrations;
 
   for (let round = 0; round < maxRounds; round++) {
+    // Rebuilt each round (cached underneath) so tools loaded by find_app_tools
+    // in one round are callable in the next.
+    integrations = await integrationToolsForUser(user);
     const response = await claude.chatWithTools(convo, {
       system,
       tools: [

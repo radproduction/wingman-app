@@ -107,6 +107,8 @@ async function executeIntegrationTool(user, toolUse) {
           return listIntegrations(user);
         case 'connect_integration':
           return composio.connectLink(user, input.app);
+        case 'find_app_tools':
+          return composio.findTools(user, input.app, input.what);
         case 'disconnect_integration': {
           const slug = String(input.app || '').toLowerCase();
           const apps = await composio.listConnections(user, { fresh: true });
