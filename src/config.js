@@ -105,6 +105,22 @@ const config = {
     // template variable cannot carry newlines, so this button hop is the only
     // way a dormant user receives the complete version. Empty → old behavior.
     briefingReadyTemplate: process.env.BRIEFING_READY_TEMPLATE_NAME || '',
+    // The wrap can use its OWN ready-nudge template (or none). Meta judges each
+    // template's category separately — a bare "your X is ready, tap to view"
+    // nudge is often re-classified as MARKETING, while the data-rich structured
+    // templates (BRIEFING_/WRAP_TEMPLATE_NAME) stay UTILITY. Leave a *_READY_*
+    // name empty to skip the nudge and send the structured template directly
+    // when the user is outside the 24h window. Unset → same as the briefing's.
+    // Layout of BRIEFING_TEMPLATE_NAME's variables:
+    //   'full'     → 6 vars (greeting, weather, schedule, email, tasks, closing)
+    //   'reminder' → 3 vars (date, schedule, tasks due) — the UTILITY-safe
+    //                "Your schedule for {{1}}: {{2}}. Tasks due today: {{3}}."
+    //                Meta re-classifies daily digests (greeting/weather/closing)
+    //                as MARKETING; a plain schedule reminder stays UTILITY.
+    briefingTemplateStyle: (process.env.BRIEFING_TEMPLATE_STYLE || 'full').toLowerCase(),
+    wrapReadyTemplate: process.env.WRAP_READY_TEMPLATE_NAME !== undefined
+      ? process.env.WRAP_READY_TEMPLATE_NAME
+      : (process.env.BRIEFING_READY_TEMPLATE_NAME || ''),
     proactiveTemplate: process.env.PROACTIVE_TEMPLATE_NAME || '',
     proactiveTemplateLang: process.env.PROACTIVE_TEMPLATE_LANG || 'en_US',
     proactiveUseTemplate: process.env.PROACTIVE_USE_TEMPLATE !== '0',

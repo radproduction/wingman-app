@@ -222,6 +222,33 @@ function templateParams(user, agg) {
   ];
 }
 
+/**
+ * Variables for the UTILITY "schedule reminder" template:
+ *   "Your schedule for {{1}}: {{2}}. Tasks due today: {{3}}. Reply to this
+ *    message for your full briefing."
+ * One line each, never empty (a template variable can't be blank).
+ */
+function reminderParams(user, agg, now = new Date()) {
+  const tz = agg.tz;
+  let dateLabel;
+  try {
+    dateLabel = new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short', month: 'short', day: 'numeric' }).format(now);
+  } catch (_) {
+    dateLabel = 'today';
+  }
+  const list = (items, max) => {
+    const shown = items.slice(0, max).join(', ');
+    return items.length > max ? `${shown} (+${items.length - max} more)` : shown;
+  };
+  const events = agg.events.map((e) => `${t.timeLabel(e.start_time, tz)} ${e.title || 'Untitled'}`.trim());
+  const tasks = agg.tasksDue.map((x) => x.title).filter(Boolean);
+  return [
+    dateLabel,
+    events.length ? list(events, 5) : 'no meetings',
+    tasks.length ? list(tasks, 5) : 'none',
+  ];
+}
+
 function fmtAmount(n) {
   if (n == null) return '';
   return Number(n).toLocaleString('en-US');
@@ -270,15 +297,23 @@ async function sendForUser(userId, { now = new Date(), send = true, full = false
           // SCHEDULED send: only the concise "tap to view" nudge — never the full
           // free-form wall of text. The tap opens the window and the webhook calls
           // this again with full:true to deliver the rich version.
-          await wa().sendProactiveMessage(user, text, {
+          const waCfg = require('../config').whatsappCloud;
+          const res = await wa().sendProactiveMessage(user, text, {
             now,
             logLabel: 'briefing',
-            templateName: require('../config').whatsappCloud.briefingTemplate,
-            templateParams: templateParams(user, agg),
+            templateName: waCfg.briefingTemplate,
+            templateParams: waCfg.briefingTemplateStyle === 'reminder'
+              ? reminderParams(user, agg, now)
+              : templateParams(user, agg),
             nudgeOnly: true,
             readyPayload: 'SHOW_BRIEFING',
             readyParams: [user.name || 'there', 'morning briefing'],
           });
+          // Went out as a short template (user outside the 24h window): their
+          // next message re-opens the window and gets the full briefing.
+          if (res && res.viaTemplate) {
+            try { require('../db/pendingFullSends').mark(user.id, 'briefing'); } catch (_) { /* best-effort */ }
+          }
         }
         sent = true;
       } else console.log('[morningBriefing] (WA not ready) briefing for', user.phone);
@@ -338,4 +373,4 @@ async function runDueUsers({ hour = 7, now = new Date(), windowMin = 15 } = {}) 
   return results;
 }
 
-module.exports = { aggregate, format, templateParams, sendForUser, runDueUsers };
+module.exports = { aggregate, format, templateParams, reminderParams, sendForUser, runDueUsers };

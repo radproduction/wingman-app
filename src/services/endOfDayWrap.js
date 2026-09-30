@@ -149,15 +149,19 @@ async function sendForUser(userId, { now = new Date(), send = true, full = false
           await require('../whatsapp/client').sendMessage(user.phone, text, { skipDedupe: true });
         } else {
           // SCHEDULED send: concise "tap to view" nudge only, not the full wrap.
-          await wa().sendProactiveMessage(user, text, {
+          const res = await wa().sendProactiveMessage(user, text, {
             now,
             logLabel: 'wrap',
             templateName: require('../config').whatsappCloud.wrapTemplate,
             templateParams: templateParams(user, agg),
             nudgeOnly: true,
+            readyTemplate: require('../config').whatsappCloud.wrapReadyTemplate,
             readyPayload: 'SHOW_WRAP',
             readyParams: [user.name || 'there', "day's wrap"],
           });
+          if (res && res.viaTemplate) {
+            try { require('../db/pendingFullSends').mark(user.id, 'wrap'); } catch (_) { /* best-effort */ }
+          }
         }
         sent = true;
       }

@@ -510,7 +510,11 @@ async function sendProactiveMessage(user, text, {
   // free-form so a briefing is never silently lost.
   const canNudge = !!(readyTemplate && readyPayload);
   if (nudgeOnly && !canNudge) {
-    return sendMessage(digits, text);
+    // No nudge template for this message kind: behave like a normal proactive
+    // send — full free-form inside the 24h window, the caller's structured
+    // (UTILITY) template outside it. Never free-form outside the window: Meta
+    // accepts the request and then silently drops it (131047).
+    nudgeOnly = false;
   }
 
   // Inside the 24h window a free-form message delivers (and is richer), so use it —
@@ -552,6 +556,7 @@ async function sendProactiveMessage(user, text, {
         mediaType: 'template',
       });
       console.log(`[whatsapp:cloud] >> ${logLabel} ready-nudge (${readyTemplate}) to ${digits}`);
+      if (sent && typeof sent === 'object') sent.viaTemplate = readyTemplate;
       return sent;
     } catch (err) {
       console.warn(`[whatsapp:cloud] ready-nudge ${readyTemplate} failed (${err.message}); falling back to content template`);
@@ -612,6 +617,7 @@ async function sendProactiveMessage(user, text, {
   });
 
   console.log(`[whatsapp:cloud] >> ${logLabel} template (${usedName}) to ${digits}`);
+  if (sent && typeof sent === 'object') sent.viaTemplate = usedName;
   return sent;
 }
 
