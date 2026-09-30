@@ -69,12 +69,24 @@ async function sendSummary(user, meeting, summary) {
 
   const subject = `Notes: ${meeting.title || 'Meeting'}`;
   const body = formatBody(meeting, summary);
+  // Designed HTML version (Wingman layout); the plain text above stays as the
+  // fallback part. A render problem must never stop the notes going out.
+  let html = null;
+  try {
+    const firstName = String(user.name || '').trim().split(/\s+/)[0] || '';
+    html = require('./meetingNotesEmail').renderNotesEmail(meeting, summary, {
+      tz: user.timezone || 'Asia/Karachi',
+      ownerName: firstName,
+    }).html;
+  } catch (e) {
+    console.warn('[meetingMailer] HTML render failed, sending plain text:', e.message);
+  }
 
   const sent = [];
   const failed = [];
   for (const to of list) {
     try {
-      await gmail.sendMessage(user, { to, subject, body });
+      await gmail.sendMessage(user, { to, subject, body, html });
       sent.push(to);
     } catch (_) {
       failed.push(to);

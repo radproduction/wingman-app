@@ -169,6 +169,12 @@ const config = {
     },
   },
 
+  // Meeting-notes email look: 'dark' (default — the design the team picked)
+  // or 'light' (switches to dark automatically in clients that support it).
+  meetingEmail: {
+    theme: (process.env.MEETING_EMAIL_THEME || 'dark').toLowerCase(),
+  },
+
   // NOW HRMS — Aamir's company attendance system. First-class connector: the
   // endpoint URL + one shared secret live HERE (company-wide, set once), so an
   // employee connects by just entering their company email — no URL/secret/code

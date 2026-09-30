@@ -179,11 +179,46 @@ async function getMessage(user, messageId, account = null) {
 /**
  * Send a reply email (used for draft_reply send-through, optional).
  */
-async function sendMessage(user, { to, subject, body, threadId, account = null } = {}) {
+// RFC 2047: a Subject with non-ASCII (emoji, Urdu, "—") must be encoded or
+// some clients show mojibake.
+function encodeHeader(v) {
+  const str = String(v == null ? '' : v);
+  return /^[\x00-\x7F]*$/.test(str) ? str : `=?UTF-8?B?${Buffer.from(str, 'utf8').toString('base64')}?=`;
+}
+
+/**
+ * Send an email from the user's Gmail. `body` is the plain-text version; pass
+ * `html` too and it goes out as multipart/alternative (HTML shown, text as the
+ * fallback for clients that don't render HTML).
+ */
+async function sendMessage(user, { to, subject, body, html = null, threadId, account = null } = {}) {
   const gmail = gmailFor(user, account);
-  const raw = Buffer.from(
-    `To: ${to}\r\nSubject: ${subject}\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n${body}`
-  ).toString('base64').replace(/\+/g, '-').replace(/\//g, '_');
+  let mime;
+  if (html) {
+    const boundary = `wm_alt_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+    mime = [
+      `To: ${to}`,
+      `Subject: ${encodeHeader(subject)}`,
+      'MIME-Version: 1.0',
+      `Content-Type: multipart/alternative; boundary="${boundary}"`,
+      '',
+      `--${boundary}`,
+      'Content-Type: text/plain; charset=UTF-8',
+      'Content-Transfer-Encoding: base64',
+      '',
+      Buffer.from(String(body || ''), 'utf8').toString('base64').replace(/(.{76})/g, '$1\r\n'),
+      `--${boundary}`,
+      'Content-Type: text/html; charset=UTF-8',
+      'Content-Transfer-Encoding: base64',
+      '',
+      Buffer.from(String(html), 'utf8').toString('base64').replace(/(.{76})/g, '$1\r\n'),
+      `--${boundary}--`,
+      '',
+    ].join('\r\n');
+  } else {
+    mime = `To: ${to}\r\nSubject: ${encodeHeader(subject)}\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n${body}`;
+  }
+  const raw = Buffer.from(mime).toString('base64').replace(/\+/g, '-').replace(/\//g, '_');
   const res = await gmail.users.messages.send({
     userId: 'me',
     requestBody: { raw, threadId },
