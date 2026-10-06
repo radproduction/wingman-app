@@ -13,9 +13,12 @@
 const config = require('../config');
 
 const FONT = "'Google Sans Flex','Google Sans',-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
-// Two palettes. 'dark' is the default (the look the team picked); 'light' is
-// kept for anyone who sets MEETING_EMAIL_THEME=light. The light palette also
-// switches to dark automatically in clients that support prefers-color-scheme.
+// Two palettes. 'light' is the default: it follows the reader's own setting —
+// Apple Mail / iOS Mail switch it to the dark palette via prefers-color-scheme,
+// and the Gmail apps in dark mode auto-invert it into a dark version. A forced
+// 'dark' email does NOT survive the Gmail app: Gmail inverts it back to light
+// (seen on iOS, Oct 2026). Set MEETING_EMAIL_THEME=dark only for clients that
+// don't recolour mail.
 const THEMES = {
   light: {
     bg: '#ffffff', ink: '#1c1b1a', muted: '#6f6d68', accent: '#3a5cb8', btn: '#4a6fd4', btnInk: '#ffffff',
@@ -28,7 +31,7 @@ const THEMES = {
     line: 'rgba(255,255,255,0.10)', logo: 'logo-dark.png', pri: 'dark',
   },
 };
-let T = THEMES.dark; // set per render (render is synchronous)
+let T = THEMES.light; // set per render (render is synchronous)
 
 function esc(s) {
   return String(s == null ? '' : s)
@@ -113,6 +116,20 @@ function statCell(n, label) {
   </td>`;
 }
 
+
+// Logo = the colourful W mark (an image that reads on light AND dark) + the
+// word "Wingman" as live text. A single wordmark image breaks in Gmail's app
+// dark mode: Gmail inverts the email's colours but never the images, so a
+// white-text logo vanishes on the inverted light background (and vice versa).
+// Live text is inverted together with its background, so it always contrasts.
+function logoBlock(img, markH, textPx) {
+  const markW = Math.round(markH * 87 / 62);
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center"><tr>
+    <td valign="middle" style="padding:0 8px 0 0;"><img src="${img}logo-mark.png" width="${markW}" height="${markH}" alt="" style="display:block;width:${markW}px;height:${markH}px;"></td>
+    <td valign="middle" class="wm-font wm-ink" style="font-family:${FONT};font-size:${textPx}px;line-height:${markH}px;font-weight:500;letter-spacing:-0.01em;color:${T.ink};">Wingman</td>
+  </tr></table>`;
+}
+
 // ─── the email ──────────────────────────────────────────────────────
 
 /**
@@ -121,8 +138,8 @@ function statCell(n, label) {
  * @param {object} [opts]   { tz, ownerName }
  */
 function renderNotesEmail(meeting = {}, summary = {}, { tz, ownerName, theme } = {}) {
-  const themeName = String(theme || (config.meetingEmail && config.meetingEmail.theme) || 'dark').toLowerCase();
-  T = THEMES[themeName] || THEMES.dark;
+  const themeName = String(theme || (config.meetingEmail && config.meetingEmail.theme) || 'light').toLowerCase();
+  T = THEMES[themeName] || THEMES.light;
   const isDark = T === THEMES.dark;
   const img = assetBase();
   const title = (meeting.title || 'Meeting').trim();
@@ -248,10 +265,7 @@ function renderNotesEmail(meeting = {}, summary = {}, { tz, ownerName, theme } =
 
         <tr><td align="center" style="padding:8px 32px 24px;">
           <a href="https://imyourwingman.ai" style="text-decoration:none;">
-            ${isDark
-    ? `<img src="${img}logo-dark.png" width="140" height="33" alt="Wingman" style="display:block;width:140px;height:33px;">`
-    : `<img src="${img}logo.png" width="140" height="33" alt="Wingman" class="wm-logo-light" style="display:block;width:140px;height:33px;">
-            <!--[if !mso]><!--><img src="${img}logo-dark.png" width="140" height="33" alt="Wingman" class="wm-logo-dark" style="display:none;max-height:0;overflow:hidden;width:140px;height:33px;"><!--<![endif]-->`}
+            ${logoBlock(img, 30, 24)}
           </a>
         </td></tr>
 
@@ -271,10 +285,7 @@ function renderNotesEmail(meeting = {}, summary = {}, { tz, ownerName, theme } =
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
             <tr><td align="center" class="wm-line" style="border-top:1px solid ${T.line};padding-top:28px;">
               <a href="https://imyourwingman.ai" style="text-decoration:none;">
-                ${isDark
-    ? `<img src="${img}logo-dark.png" width="116" height="27" alt="Wingman" style="display:block;width:116px;height:27px;">`
-    : `<img src="${img}logo.png" width="116" height="28" alt="Wingman" class="wm-logo-light" style="display:block;width:116px;height:28px;">
-                <!--[if !mso]><!--><img src="${img}logo-dark.png" width="116" height="27" alt="Wingman" class="wm-logo-dark" style="display:none;max-height:0;overflow:hidden;width:116px;height:27px;"><!--<![endif]-->`}
+                ${logoBlock(img, 24, 19)}
               </a>
             </td></tr>
             <tr><td align="center" class="wm-font wm-muted" style="padding:14px 16px 32px;font-family:${FONT};font-size:12px;line-height:19px;color:${T.muted};">

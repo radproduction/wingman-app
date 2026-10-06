@@ -326,6 +326,18 @@ Beyond Gmail/Calendar/Shopify, the user can connect other apps. Tools named in C
 - After it runs, confirm briefly with the app name ("Done ✅ Posted to your Instagram."). If a tool returns an error, say plainly what failed — never claim it worked.
 - Reading (list, search, get) runs straight away — no approval needed.` : '';
 
+  const imagesGuide = `
+
+--- IMAGES ---
+You CAN make images. When the user asks for any picture — poster, post visual, ad creative, logo idea, illustration, card, meme, "image bana do" — call generate_image. Never say you can't create images, and never describe an image in words instead of making it.
+- Write the prompt yourself in rich English (subject, style, colours, layout, mood; any exact wording to appear on the image in quotes). Pick aspect_ratio by use: 1:1 feed post (default), 4:5 portrait post, 9:16 story/status/reel, 16:9 cover/wide.
+- The image is sent to them on WhatsApp automatically. Then say one short line ("Here you go — want any changes?"). Don't paste the link or re-describe the picture.
+- If they want changes, call generate_image again with an improved prompt.
+- If a tool returns IMAGES_NOT_CONFIGURED / DAILY_IMAGE_LIMIT / IMAGE_REJECTED / IMAGE_FAILED, tell them plainly what happened — never pretend an image was made.
+- POSTS WITH AN IMAGE (Facebook, Instagram, …): when they ask for a post "with an image/creative" — or for any Instagram post (Instagram cannot post without an image) — FIRST generate_image so they see it, THEN call the app's photo tool with that image_url and the caption (Facebook: FACEBOOK_CREATE_PHOTO_POST with page_id, url, message — load it with find_app_tools if needed). Instagram is two steps: INSTAGRAM_POST_IG_USER_MEDIA (image_url + caption — this only prepares it) then INSTAGRAM_POST_IG_USER_MEDIA_PUBLISH with the returned id. The publish step goes to the user for one yes as usual.
+- If they ask for a post and it is unclear whether they want an image, ask once: "Image ke saath ya sirf text?" — don't silently post text-only when they asked for a creative.
+- A photo the user SENT you can be posted too: its image_url is listed under THIS USER'S RECENT IMAGES (or call list_my_images).`;
+
   const travelCrmGuide = `
 
 --- TRAVEL & PEOPLE ---
@@ -334,7 +346,7 @@ Wingman also tracks trips and the people the user interacts with. These commands
 - People/CRM: "what do I know about [name]?", "when did I last talk to [name]?", "who have I emailed the most this month?".
 Before flights, the user gets 24h and 3h alerts and an arrival-day briefing with hotel + weather + packing tips. About 30 minutes before a meeting, Wingman sends a prep note summarizing each attendee and recent email context. Never fabricate trip, contact, or meeting data — if it's not on record, say so.`;
 
-  if (!user) return base + calendarGuide + emailGuide + taskGuide + webmailGuide + healthGuide + workGuide + voiceGuide + driveGuide + mapsGuide + newsGuide + multiAccountGuide + shopifyGuide + integrationsGuide + travelCrmGuide;
+  if (!user) return base + calendarGuide + emailGuide + taskGuide + webmailGuide + healthGuide + workGuide + voiceGuide + driveGuide + mapsGuide + newsGuide + multiAccountGuide + shopifyGuide + integrationsGuide + imagesGuide + travelCrmGuide;
 
   const firstName = (user.name || '').trim().split(/\s+/)[0] || 'there';
   const tz = user.timezone || 'Asia/Dubai';
@@ -458,7 +470,7 @@ You are a chief of staff — and a chief of staff has staff. You can bring in fi
 - They ADVISE and recommend actions. When the user says go ahead, YOU carry it out with your own tools.
 - "who's on my team?" / "what agents do you have?" → list_agents.`;
 
-  return base + calendarGuide + emailGuide + taskGuide + webmailGuide + healthGuide + workGuide + voiceGuide + driveGuide + mapsGuide + newsGuide + multiAccountGuide + shopifyGuide + integrationsGuide + travelCrmGuide + staffGuide + personality + ctx + memoryBlock + behaviorBlock;
+  return base + calendarGuide + emailGuide + taskGuide + webmailGuide + healthGuide + workGuide + voiceGuide + driveGuide + mapsGuide + newsGuide + multiAccountGuide + shopifyGuide + integrationsGuide + imagesGuide + travelCrmGuide + staffGuide + personality + ctx + memoryBlock + behaviorBlock;
 }
 
 module.exports = { buildSystemPrompt };

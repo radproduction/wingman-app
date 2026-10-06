@@ -23,6 +23,12 @@ const { managementToolNames } = require('./integrationTools');
 
 const DISCONNECT = '__DISCONNECT__';
 
+// Steps that change nothing anyone can see: they only PREPARE something that a
+// later, approval-gated call publishes. Instagram's "media container" is an
+// unpublished draft that expires by itself — asking for a yes here AND at the
+// publish step would mean two confirmations for one post. Keep this list tiny.
+const PREP_NO_APPROVAL = new Set(['INSTAGRAM_POST_IG_USER_MEDIA', 'INSTAGRAM_CREATE_MEDIA_CONTAINER']);
+
 function preview(toolkit, slug, args) {
   let a = '';
   try { a = JSON.stringify(args || {}); } catch (_) { a = '{}'; }
@@ -151,7 +157,7 @@ async function executeIntegrationTool(user, toolUse, ctx = {}) {
       return { error: 'APP_NOT_CONNECTED', app: meta.toolkit, detail: 'Offer the connect link (connect_integration).' };
     }
 
-    if (meta.readOnly) {
+    if (meta.readOnly || PREP_NO_APPROVAL.has(name)) {
       const res = await composio.execute(user, name, input, meta.version);
       return res.ok ? { app: composio.appName(meta.toolkit), result: res.data } : { error: 'ACTION_FAILED', detail: res.error };
     }

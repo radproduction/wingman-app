@@ -123,6 +123,18 @@ async function sendAudio(to, buffer, { mimeType = 'audio/ogg' } = {}) {
   });
 }
 
+/**
+ * Send an image (uploaded to WhatsApp first, so it never depends on our public
+ * URL being reachable). Caption is optional, max 1024 chars.
+ */
+async function sendImage(to, buffer, { mimeType = 'image/jpeg', caption = '' } = {}) {
+  const ext = mimeType === 'image/png' ? 'png' : 'jpg';
+  const mediaId = await uploadMedia(buffer, { mimeType, filename: `image.${ext}` });
+  const image = { id: mediaId };
+  if (caption) image.caption = String(caption).slice(0, 1024);
+  return post({ messaging_product: 'whatsapp', to: digitsOnly(to), type: 'image', image });
+}
+
 async function post(body) {
   if (!ready()) throw new Error('WhatsApp Cloud API not configured');
   const res = await fetch(endpoint(), {
@@ -223,4 +235,4 @@ function parseIncoming(body) {
   return out;
 }
 
-module.exports = { ready, sendText, sendTemplate, sendAudio, downloadMedia, uploadMedia, parseIncoming };
+module.exports = { ready, sendText, sendTemplate, sendAudio, sendImage, downloadMedia, uploadMedia, parseIncoming };

@@ -42,6 +42,8 @@ const { executeNewsTool } = require('./newsExecutor');
 const { executeShopifyTool } = require('./shopifyExecutor');
 const { integrationToolsForUser } = require('./integrationTools');
 const { executeIntegrationTool, pendingActionsBlock } = require('./integrationExecutor');
+const { imageToolNames, imageToolsAvailable } = require('./imageTools');
+const { executeImageTool, recentImagesBlock } = require('./imageExecutor');
 const googleAuth = require('../auth/googleAuth');
 const config = require('../config');
 const emailDigest = require('../services/emailDigest');
@@ -236,7 +238,7 @@ async function runConversation(user, text) {
     messages.push({ role: 'user', content: text });
   }
 
-  const system = buildSystemPrompt(user) + pendingActionsBlock(user);
+  const system = buildSystemPrompt(user) + pendingActionsBlock(user) + recentImagesBlock(user);
   const reply = await runToolLoop(user, messages, system);
 
   try {
@@ -265,7 +267,7 @@ async function runAutomatedInstruction(user, instruction) {
   return (reply || '').trim() || null;
 }
 
-async function runToolLoop(user, messages, system, maxRounds = 4, ctx = {}) {
+async function runToolLoop(user, messages, system, maxRounds = 5, ctx = {}) {
   const convo = [...messages];
   // Third-party app tools (Composio) for the apps THIS user has connected.
   // Built once per turn; never throws — an outage just means no app tools.
@@ -299,6 +301,7 @@ async function runToolLoop(user, messages, system, maxRounds = 4, ctx = {}) {
         ...workTools,
         ...automationTools,
         ...agentTools,
+        ...imageToolsAvailable(),
         ...integrations.tools,
       ],
       maxTokens: 2048,
@@ -318,6 +321,8 @@ async function runToolLoop(user, messages, system, maxRounds = 4, ctx = {}) {
           // Checked first: app tool names are Composio slugs, and anything not
           // matched below would otherwise fall through to the calendar executor.
           result = await executeIntegrationTool(user, { name: block.name, input: block.input }, ctx);
+        } else if (imageToolNames.has(block.name)) {
+          result = await executeImageTool(user, { name: block.name, input: block.input });
         } else if (taskToolNames.has(block.name)) {
           result = await executeTaskTool(user, { name: block.name, input: block.input });
         } else if (goalToolNames.has(block.name)) {

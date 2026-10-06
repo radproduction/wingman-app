@@ -64,7 +64,7 @@ Every LLM capability is a **pair** of files in `src/engine/`:
 
 Existing pairs: `gmail`, `calendar`, `drive`, `task`, `goal`, `health`, `maps`,
 `memory`, `news`, `shopify`, `vault`, `voice`, `webmail`, `work`, `browser`,
-`agent`, `audit`, `automation`, `integration`.
+`agent`, `audit`, `automation`, `integration`, `image`.
 
 **To add a capability, add both files and register them** — don't put tool logic
 in `services/`. `services/` is for integrations the executors call.
@@ -77,6 +77,17 @@ talks to Composio, and the `integration` engine pair exposes each user's
 connected apps to Claude. Adding an app = create an auth config in Composio and
 add it to `COMPOSIO_AUTH_CONFIGS` — no code. Gmail, Google Calendar, Shopify and
 WhatsApp stay on their existing direct integrations.
+
+### Images
+
+`engine/imageTools.js` + `imageExecutor.js` give Claude `generate_image`
+(Higgsfield, `services/higgsfield.js`) and `list_my_images`. Every image —
+generated, or a photo the user sent on WhatsApp — is saved by
+`services/mediaStore.js` on the data volume (`/app/data/media`) and served at
+`/media/<uuid>.jpg`. That public URL is what Facebook/Instagram photo tools
+take. Chat history is text-only, so the latest image URLs are appended to the
+system prompt each turn (`recentImagesBlock`). Images are converted to JPEG
+(`sharp`) because Instagram accepts nothing else.
 
 **Every write action is gated server-side** (`integration_actions` table): it is
 parked as pending and only runs after the user sends a NEW message and the model

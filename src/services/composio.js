@@ -27,6 +27,7 @@ const APP_NAMES = {
   woocommerce: 'WooCommerce',
   facebook: 'Facebook Pages',
   instagram: 'Instagram',
+  metaads: 'Meta Ads',
   one_drive: 'OneDrive',
   notion: 'Notion',
   trello: 'Trello',

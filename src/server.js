@@ -54,6 +54,15 @@ app.use('/email/v1', express.static(path.join(__dirname, 'assets', 'email', 'v1'
   fallthrough: true,
 }));
 
+// Images Wingman generated or users sent in — public (unguessable UUID names)
+// because Facebook/Instagram fetch a post's photo by URL.
+app.use('/media', express.static(config.media.dir, {
+  maxAge: '7d',
+  index: false,
+  dotfiles: 'deny',
+  fallthrough: false,
+}));
+
 // Browser-based WhatsApp pairing (/admin/qr, /admin/qr.json)
 app.use('/admin', adminQr);
 
@@ -583,6 +592,7 @@ app.post('/webhook', (req, res) => {
               : require('./services/morningBriefing');
             // The tap opens the 24h window — deliver the FULL rich version now.
             await rich.sendForUser(u.id, { now: new Date(), full: true });
+            try { require('./db/pendingFullSends').clear(u.id, /wrap/i.test(payload) ? 'wrap' : 'briefing'); } catch (_) { /* best-effort */ }
             console.log(`[webhook] ▶ (${phoneNumber}) button "${payload}" → rich send`);
           } catch (err) {
             console.warn('[webhook] button rich send failed:', err.message);
@@ -653,6 +663,21 @@ app.post('/webhook', (req, res) => {
               caption: m.image.caption || '',
             });
             console.log(`[webhook] 🖼️ (${phoneNumber}) image read (${(media.buffer && media.buffer.length) || 0} bytes)`);
+            // Keep the photo so "post this on Facebook/Instagram" works — the
+            // engine only ever sees text, so the saved URL rides along with it.
+            try {
+              const owner = require('./db/users').getByPhone(phoneNumber);
+              if (owner) {
+                const saved = await require('./services/mediaStore').save(owner.id, media.buffer, {
+                  kind: 'uploaded',
+                  mimeType: m.image.mimeType || media.mimeType,
+                  note: m.image.caption || '',
+                });
+                m.text = `${m.text}\n\n[The user sent this as a photo. It is saved — image_url: ${saved.url} — use that if they want it posted or shared.]`;
+              }
+            } catch (err) {
+              console.warn('[webhook] image save failed:', err.message);
+            }
           } catch (err) {
             console.warn('[webhook] image read failed:', err.message);
             const note = err.message === 'IMAGE_TOO_LARGE'
@@ -670,6 +695,33 @@ app.post('/webhook', (req, res) => {
         }
 
         console.log(`[webhook] << (${phoneNumber}): ${m.text}`);
+
+        // A briefing/wrap went out earlier as a short template (the user was
+        // outside the 24h window) and asked them to reply. This message has
+        // re-opened the window, so deliver the full version(s) now — once.
+        // A short reply ("ok", "show") is just the trigger; anything longer is
+        // also answered normally below.
+        try {
+          const usersRepo = require('./db/users');
+          const pu = usersRepo.getByPhone(phoneNumber);
+          if (pu && usersRepo.isOnboarded(pu)) {
+            const kinds = require('./db/pendingFullSends').takeAll(pu.id);
+            if (kinds.length) {
+              const triggerOnly = String(m.text).trim().length <= 20;
+              // Longer messages are logged by the engine below — don't double-log.
+              if (triggerOnly) conversations.logInbound({ userId: pu.id, content: m.text, phoneNumber, waMessageId: m.id });
+              for (const kind of kinds) {
+                const svc = kind === 'wrap' ? require('./services/endOfDayWrap') : require('./services/morningBriefing');
+                await svc.sendForUser(pu.id, { now: new Date(), full: true });
+                console.log(`[webhook] ▶ (${phoneNumber}) reply → full ${kind}`);
+              }
+              if (triggerOnly) continue;
+            }
+          }
+        } catch (err) {
+          console.warn('[webhook] pending full send failed:', err.message);
+        }
+
         const { reply, ignored } = await engine.handleMessage({
           text: m.text,
           phoneNumber,
@@ -909,6 +961,16 @@ function start() {
     require('./services/scheduler').init();
   } catch (e) {
     console.warn('[server] could not start scheduler:', e.message);
+  }
+
+  // Image store: make sure the folder exists, and clear out old images daily.
+  try {
+    const mediaStore = require('./services/mediaStore');
+    mediaStore.dir();
+    mediaStore.cleanup();
+    setInterval(() => mediaStore.cleanup(), 24 * 60 * 60 * 1000).unref();
+  } catch (e) {
+    console.warn('[server] media store init failed:', e.message);
   }
 
   // 3) Start HTTP server

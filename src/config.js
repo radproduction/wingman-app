@@ -169,10 +169,11 @@ const config = {
     },
   },
 
-  // Meeting-notes email look: 'dark' (default — the design the team picked)
-  // or 'light' (switches to dark automatically in clients that support it).
+  // Meeting-notes email look: 'light' (default — follows the reader's own
+  // light/dark setting; Gmail's app dark mode inverts it into a dark version)
+  // or 'dark' (forced dark — Gmail's app inverts THAT back to light, so avoid).
   meetingEmail: {
-    theme: (process.env.MEETING_EMAIL_THEME || 'dark').toLowerCase(),
+    theme: (process.env.MEETING_EMAIL_THEME || 'light').toLowerCase(),
   },
 
   // NOW HRMS — Aamir's company attendance system. First-class connector: the
@@ -225,6 +226,28 @@ const config = {
   maps: {
     apiKey: process.env.MAPS_API_KEY || process.env.GOOGLE_MAPS_API_KEY || '',
     get enabled() { return !!(process.env.MAPS_API_KEY || process.env.GOOGLE_MAPS_API_KEY); },
+  },
+
+  // Higgsfield — AI image generation ("make me a poster", images for posts).
+  // HIGGSFIELD_API_KEY is "KEY_ID:KEY_SECRET" exactly as the Higgsfield console
+  // shows it. Without it the image tools simply aren't offered.
+  higgsfield: {
+    apiKey: process.env.HIGGSFIELD_API_KEY || '',
+    baseUrl: (process.env.HIGGSFIELD_BASE_URL || 'https://api.higgsfield.ai').replace(/\/+$/, ''),
+    // Model path as listed in the Higgsfield console; swap it without a deploy.
+    imageModel: (process.env.HIGGSFIELD_IMAGE_MODEL || 'higgsfield-ai/soul/v2/standard').replace(/^\/+/, ''),
+    resolution: process.env.HIGGSFIELD_IMAGE_RESOLUTION || '',   // '' = model default
+    // Per-user cap so one chat can't burn the credit balance.
+    dailyLimit: parseInt(process.env.IMAGE_DAILY_LIMIT, 10) || 20,
+    get enabled() { return /^[^:\s]+:[^:\s]+$/.test(process.env.HIGGSFIELD_API_KEY || ''); },
+  },
+
+  // Images Wingman made or the user sent, kept on the data volume and served at
+  // /media/<id>.jpg — a public (unguessable) URL is what Facebook/Instagram need
+  // to fetch a photo for a post.
+  media: {
+    dir: path.resolve(__dirname, '..', process.env.MEDIA_DIR || path.join(path.dirname(process.env.DATABASE_PATH || './data/wingman.db'), 'media')),
+    keepDays: parseInt(process.env.MEDIA_KEEP_DAYS, 10) || 60,
   },
 
   // Brevo transactional email API, used for sending business-mailbox replies
