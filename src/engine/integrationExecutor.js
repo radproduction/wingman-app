@@ -29,10 +29,25 @@ const DISCONNECT = '__DISCONNECT__';
 // publish step would mean two confirmations for one post. Keep this list tiny.
 const PREP_NO_APPROVAL = new Set(['INSTAGRAM_POST_IG_USER_MEDIA', 'INSTAGRAM_CREATE_MEDIA_CONTAINER']);
 
+// A user can tell Wingman "don't ask me for this" (an auto_approve rule) — but
+// never for these. Money, deletion and anything that spends an ad budget always
+// wait for a yes, whatever rule exists.
+const RULE = '__RULE__';
+const NEVER_AUTO = /(DELETE|REMOVE|DESTROY|PURGE|PAY|REFUND|CHARGE|TRANSFER|PURCHASE|CHECKOUT|CANCEL|REVOKE|BLOCK|BAN|UNINSTALL)/;
+const NEVER_AUTO_APPS = new Set(['metaads', 'googleads', 'stripe', 'paypal']);
+
+function canEverAutoApprove(toolkit, slug, meta) {
+  if (!slug || slug === DISCONNECT || slug === RULE) return false;
+  if (NEVER_AUTO_APPS.has(String(toolkit || '').toLowerCase())) return false;
+  if (meta && meta.destructive) return false;
+  return !NEVER_AUTO.test(String(slug).toUpperCase());
+}
+
 function preview(toolkit, slug, args) {
   let a = '';
   try { a = JSON.stringify(args || {}); } catch (_) { a = '{}'; }
   if (a.length > 400) a = a.slice(0, 400) + '…';
+  if (slug === RULE) return `New rule — do this without asking from now on: ${(args && args.about) || ''} (${composio.appName(toolkit)})`;
   const what = slug === DISCONNECT ? 'Disconnect' : slug.replace(/_/g, ' ').toLowerCase();
   return `${composio.appName(toolkit)} — ${what} ${a === '{}' ? '' : a}`.trim();
 }
@@ -68,6 +83,15 @@ async function propose(user, { toolkit, slug, version, args }, ctx = {}) {
 }
 
 async function runApproved(user, row) {
+  if (row.tool_slug === RULE) {
+    const a = row.arguments || {};
+    const r = require('../db/userRules').add(user.id, {
+      kind: 'auto_approve', text: a.about, toolkit: row.toolkit, toolSlug: a.tool,
+    });
+    return r.added || r.reason === 'duplicate'
+      ? { ok: true, data: { rule_saved: true, note: 'From now on this action runs without asking. Tell the user in one line, and that they can take it back any time.' } }
+      : { ok: false, error: r.reason || 'could not save the rule' };
+  }
   if (row.tool_slug === DISCONNECT) {
     try {
       const r = await composio.disconnect(user, row.toolkit);
@@ -161,11 +185,44 @@ async function executeIntegrationTool(user, toolUse, ctx = {}) {
       const res = await composio.execute(user, name, input, meta.version);
       return res.ok ? { app: composio.appName(meta.toolkit), result: res.data } : { error: 'ACTION_FAILED', detail: res.error };
     }
+    // The user has said "don't ask me for this one" — run it, record it, and say so.
+    // Chat turns only: an automated run (where the text could come from an email
+    // or a web page) never gets to skip the yes.
+    if (!ctx.automated && canEverAutoApprove(meta.toolkit, name, meta) &&
+        require('../db/userRules').hasAutoApprove(user.id, name)) {
+      const res = await composio.execute(user, name, input, meta.version);
+      if (!res.ok) return { error: 'ACTION_FAILED', app: composio.appName(meta.toolkit), detail: res.error };
+      agentActions.log(user.id, { kind: `integration.${name}`, summary: `(standing rule) ${preview(meta.toolkit, name, input)}`, source: 'auto' });
+      return {
+        done: true, auto_approved: true, app: composio.appName(meta.toolkit), result: res.data,
+        note: 'Ran without asking because of the user\'s standing rule. Tell them briefly what you did.',
+      };
+    }
     return propose(user, { toolkit: meta.toolkit, slug: name, version: meta.version, args: input }, ctx);
   } catch (e) {
     console.warn(`[integrations] ${name} failed:`, e.message);
     return { error: 'INTEGRATION_ERROR', detail: e.message };
   }
+}
+
+/**
+ * "Don't ask me for this" → park a rule for the user's yes. The rule only ever
+ * covers one exact tool of one connected app, and never a risky one.
+ */
+async function proposeAutoApproveRule(user, { app, tool, about }, ctx = {}) {
+  if (!config.composio.enabled) return { error: 'INTEGRATIONS_NOT_CONFIGURED' };
+  const slug = String(tool || '').trim().toUpperCase();
+  const meta = composio.toolMeta(slug);
+  if (!slug || !meta) {
+    return { error: 'UNKNOWN_TOOL', detail: 'Give the exact CAPITALS tool name of a connected app (load it with find_app_tools first). Built-in actions like Gmail sending cannot have this rule.' };
+  }
+  if (app && String(app).toLowerCase() !== meta.toolkit) return { error: 'TOOL_APP_MISMATCH', detail: `${slug} belongs to ${meta.toolkit}.` };
+  if (meta.readOnly) return { error: 'NOT_NEEDED', detail: 'That action only reads — it never asks anyway.' };
+  if (!canEverAutoApprove(meta.toolkit, slug, meta)) {
+    return { error: 'ALWAYS_NEEDS_YES', detail: 'Actions that delete things, move money or spend an ad budget always need the user\'s yes — tell them that plainly; no rule can change it.' };
+  }
+  const text = String(about || '').trim() || slug.replace(/_/g, ' ').toLowerCase();
+  return propose(user, { toolkit: meta.toolkit, slug: RULE, version: null, args: { tool: slug, about: text } }, ctx);
 }
 
 /**
@@ -193,4 +250,4 @@ function pendingActionsBlock(user) {
   }
 }
 
-module.exports = { executeIntegrationTool, pendingActionsBlock };
+module.exports = { executeIntegrationTool, pendingActionsBlock, proposeAutoApproveRule };

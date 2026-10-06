@@ -107,6 +107,13 @@ async function listConnections(user, { fresh = false } = {}) {
     apps.push({ toolkit, id: acc.id, status: acc.status });
   }
   connectionsCache.set(uid, { at: Date.now(), apps });
+  // A freshly-read connection list is the moment we learn a user has connected
+  // (or dropped) an app — hand it to the study service, which starts learning
+  // any new app in the background. Never blocks or breaks the caller.
+  setImmediate(() => {
+    try { require('./appStudy').noticeConnections(user, apps.map((a) => a.toolkit), { source: 'composio' }); }
+    catch (e) { console.warn('[composio] connection notice failed:', e.message); }
+  });
   return apps;
 }
 
@@ -171,7 +178,7 @@ async function schemasFor(toolkit) {
   const tools = (raw || []).filter((t) => t && t.slug && t.slug.length <= MAX_TOOL_NAME && !t.isDeprecated);
 
   for (const t of tools) {
-    slugIndex.set(t.slug, { toolkit, version: t.version || null, readOnly: isReadOnly(t) });
+    slugIndex.set(t.slug, { toolkit, version: t.version || null, readOnly: isReadOnly(t), destructive: (t.tags || []).map(String).includes('destructiveHint') });
   }
   schemaCache.set(toolkit, { at: Date.now(), tools });
   return tools;
@@ -281,7 +288,7 @@ async function findTools(user, toolkit, what, pick) {
     t.__toolkit = slug;
     extras.delete(t.slug);
     extras.set(t.slug, t);
-    slugIndex.set(t.slug, { toolkit: slug, version: t.version || null, readOnly: isReadOnly(t) });
+    slugIndex.set(t.slug, { toolkit: slug, version: t.version || null, readOnly: isReadOnly(t), destructive: (t.tags || []).map(String).includes('destructiveHint') });
   }
   while (extras.size > MAX_EXTRAS_PER_USER) extras.delete(extras.keys().next().value);
   userExtras.set(key, extras);
@@ -300,6 +307,27 @@ async function findTools(user, toolkit, what, pick) {
       'all_tools and call find_app_tools again with them in "tools". Only if nothing in all_tools fits, tell the user this app cannot do it.';
   }
   return out;
+}
+
+/**
+ * The read-only tools of one app, best ones first — what the study service uses
+ * to LOOK at an app without being able to change anything in it.
+ */
+async function readTools(toolkit, limit = 22) {
+  const slug = String(toolkit || '').toLowerCase();
+  const [catalog, important] = await Promise.all([catalogFor(slug), schemasFor(slug).catch(() => [])]);
+  const top = new Set(important.map((t) => t.slug));
+  const rank = (t) => (top.has(t.slug) ? 0 : 2) + (/(_LIST_|_GET_|_SEARCH_|_FETCH_|_FIND_)/.test(`_${t.slug}_`) ? 0 : 1);
+  const tools = catalog.filter(isReadOnly).sort((a, b) => rank(a) - rank(b)).slice(0, limit);
+  for (const t of tools) slugIndex.set(t.slug, { toolkit: slug, version: t.version || null, readOnly: true });
+  return tools.map((t) => toAnthropicTool(t, slug));
+}
+
+/** Run a tool ONLY if Composio marks it read-only. Used by background study. */
+async function executeReadOnly(user, slug, args) {
+  const meta = slugIndex.get(slug);
+  if (!meta || !meta.readOnly) return { ok: false, error: 'NOT_A_READ_ONLY_TOOL' };
+  return execute(user, slug, args, meta.version);
 }
 
 /** Metadata for a slug we've handed to Claude (null if we never offered it). */
@@ -338,6 +366,8 @@ module.exports = {
   disconnect,
   toolsForUser,
   findTools,
+  readTools,
+  executeReadOnly,
   toolMeta,
   // test hook: inject a fake Composio client
   _setClientForTests: (c) => { clientPromise = Promise.resolve(c); },

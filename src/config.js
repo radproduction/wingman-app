@@ -228,6 +228,13 @@ const config = {
     get enabled() { return !!(process.env.MAPS_API_KEY || process.env.GOOGLE_MAPS_API_KEY); },
   },
 
+  // App study — Wingman reads each connected app (read-only) and keeps its own
+  // summary so it understands the user's world. Each pass is a handful of model
+  // calls per app; APP_STUDY=0 turns it off entirely.
+  study: {
+    enabled: process.env.APP_STUDY !== '0',
+  },
+
   // Higgsfield — AI image generation ("make me a poster", images for posts).
   // HIGGSFIELD_API_KEY is "KEY_ID:KEY_SECRET" exactly as the Higgsfield console
   // shows it. Without it the image tools simply aren't offered.

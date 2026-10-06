@@ -118,7 +118,10 @@ async function scanUser(userId, { maxResults = 50 } = {}) {
   // Wingman which people/topics/situations matter. When set, the AI decides per
   // email whether to proactively ping, and writes that ping itself.
   const emailCtx = (user.preferences && user.preferences.emailContext) || {};
-  const ctxText = String(emailCtx.instructions || '').trim();
+  // Plus the standing "tell me / don't tell me about …" rules they gave in chat.
+  let ruleText = '';
+  try { ruleText = require('../engine/brainExecutor').notifyRulesText(userId); } catch (_) { /* optional */ }
+  const ctxText = [String(emailCtx.instructions || '').trim(), ruleText].filter(Boolean).join('\n');
   const notifyOn = !!ctxText && emailCtx.notify !== false;
 
   let newItems = 0;

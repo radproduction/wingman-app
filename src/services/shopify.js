@@ -201,7 +201,37 @@ async function recentOrders(user, { period = 'today', limit = 10, now = new Date
   return { period: label, count: orders.length, orders: list };
 }
 
+/**
+ * Read-only Admin GraphQL — lets the assistant look at ANYTHING in the store the
+ * granted scopes allow (products, collections, inventory, customers…), instead
+ * of only the few fixed reports above. Mutations are refused here: changing the
+ * store must go through an approval-gated path.
+ */
+async function graphql(user, query, variables = {}) {
+  const { domain, token } = connectedOrThrow(user);
+  const q = String(query || '').trim();
+  if (!q) throw new Error('EMPTY_QUERY');
+  // Strip comments/strings before looking for an operation keyword.
+  const bare = q.replace(/#[^\n]*/g, ' ').replace(/"""[\s\S]*?"""/g, ' ').replace(/"(?:[^"\\]|\\.)*"/g, ' ');
+  if (/\b(mutation|subscription)\b/i.test(bare)) throw new Error('SHOPIFY_READ_ONLY');
+  const res = await fetch(`https://${normalizeDomain(domain)}/admin/api/${API_VERSION}/graphql.json`, {
+    method: 'POST',
+    headers: { 'X-Shopify-Access-Token': token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query: q, variables: variables || {} }),
+    signal: AbortSignal.timeout(30000),
+  });
+  if (res.status === 401 || res.status === 403) throw new Error('SHOPIFY_AUTH_FAILED');
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(`Shopify API ${res.status}`);
+  if (data.errors && !data.data) {
+    const msg = Array.isArray(data.errors) ? data.errors.map((e) => e.message).join('; ') : String(data.errors);
+    throw new Error(`SHOPIFY_QUERY_ERROR: ${msg.slice(0, 300)}`);
+  }
+  return { data: data.data, errors: data.errors ? data.errors.map((e) => e.message).slice(0, 3) : undefined };
+}
+
 module.exports = {
+  graphql,
   normalizeDomain, testConnection, summary, topProducts, recentOrders,
   computeMetrics, resolvePeriod, fetchOrders,
 };

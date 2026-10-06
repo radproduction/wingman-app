@@ -64,7 +64,7 @@ Every LLM capability is a **pair** of files in `src/engine/`:
 
 Existing pairs: `gmail`, `calendar`, `drive`, `task`, `goal`, `health`, `maps`,
 `memory`, `news`, `shopify`, `vault`, `voice`, `webmail`, `work`, `browser`,
-`agent`, `audit`, `automation`, `integration`, `image`.
+`agent`, `audit`, `automation`, `integration`, `image`, `brain`.
 
 **To add a capability, add both files and register them** — don't put tool logic
 in `services/`. `services/` is for integrations the executors call.
@@ -89,9 +89,31 @@ take. Chat history is text-only, so the latest image URLs are appended to the
 system prompt each turn (`recentImagesBlock`). Images are converted to JPEG
 (`sharp`) because Instagram accepts nothing else.
 
+### Understanding the user (app study + standing rules)
+
+`services/appStudy.js` is how Wingman *understands* what a user connects. One
+generic routine for every app: the model gets that app's READ-ONLY tools, looks
+around, and writes a note to itself (`app_knowledge` table). First look runs
+minutes after connecting, deepens on day 1 / 3 / 7, then refreshes weekly
+(`scheduler` → `appStudy.runDue`). New Composio connections are noticed in
+`composio.listConnections`; Shopify in its OAuth callback. The user is told the
+timeline up front, in their own language. Notes are injected into every chat
+(`knowledgeBlock`). Gmail/Calendar/Tasks are learned by the older
+`onboardingAnalyzer` (7-day window, then weekly refresh). **Do not add per-app
+study code** — improve the generic prompt instead. `APP_STUDY=0` disables it.
+
+`engine/brainTools.js` + `brainExecutor.js` hold the user's standing rules
+(`user_rules`): `auto_approve`, `always_ask`, `notify_mute`, `notify_always`.
+An `auto_approve` rule lets ONE exact Composio tool skip the yes — it is itself
+created through the approval gate, works in chat turns only, and is refused for
+anything that deletes, moves money or spends an ad budget
+(`canEverAutoApprove` in `integrationExecutor.js`). The general "act / ask /
+tell / stay quiet" policy lives in `judgementGuide` in `systemPrompt.js`.
+
 **Every write action is gated server-side** (`integration_actions` table): it is
 parked as pending and only runs after the user sends a NEW message and the model
-calls `approve_integration_action`. Do not add a bypass.
+calls `approve_integration_action`. Do not add a bypass. (The one sanctioned exception is a user's own
+`auto_approve` rule, described above.)
 
 ---
 

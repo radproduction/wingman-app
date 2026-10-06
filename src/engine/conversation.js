@@ -44,6 +44,9 @@ const { integrationToolsForUser } = require('./integrationTools');
 const { executeIntegrationTool, pendingActionsBlock } = require('./integrationExecutor');
 const { imageToolNames, imageToolsAvailable } = require('./imageTools');
 const { executeImageTool, recentImagesBlock } = require('./imageExecutor');
+const { brainTools, brainToolNames } = require('./brainTools');
+const { executeBrainTool, rulesBlock } = require('./brainExecutor');
+const appStudy = require('../services/appStudy');
 const googleAuth = require('../auth/googleAuth');
 const config = require('../config');
 const emailDigest = require('../services/emailDigest');
@@ -238,7 +241,10 @@ async function runConversation(user, text) {
     messages.push({ role: 'user', content: text });
   }
 
-  const system = buildSystemPrompt(user) + pendingActionsBlock(user) + recentImagesBlock(user);
+  // Start learning Shopify if it was connected before the study feature existed.
+  try { appStudy.noticeBuiltins(user); } catch (_) { /* best-effort */ }
+  const system = buildSystemPrompt(user) + appStudy.knowledgeBlock(user) + rulesBlock(user)
+    + pendingActionsBlock(user) + recentImagesBlock(user);
   const reply = await runToolLoop(user, messages, system);
 
   try {
@@ -302,6 +308,7 @@ async function runToolLoop(user, messages, system, maxRounds = 5, ctx = {}) {
         ...automationTools,
         ...agentTools,
         ...imageToolsAvailable(),
+        ...brainTools,
         ...integrations.tools,
       ],
       maxTokens: 2048,
@@ -323,6 +330,8 @@ async function runToolLoop(user, messages, system, maxRounds = 5, ctx = {}) {
           result = await executeIntegrationTool(user, { name: block.name, input: block.input }, ctx);
         } else if (imageToolNames.has(block.name)) {
           result = await executeImageTool(user, { name: block.name, input: block.input });
+        } else if (brainToolNames.has(block.name)) {
+          result = await executeBrainTool(user, { name: block.name, input: block.input }, ctx);
         } else if (taskToolNames.has(block.name)) {
           result = await executeTaskTool(user, { name: block.name, input: block.input });
         } else if (goalToolNames.has(block.name)) {

@@ -535,3 +535,38 @@ CREATE TABLE IF NOT EXISTS user_media (
   created_at TEXT DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_user_media_user ON user_media(user_id, created_at);
+
+-- ─── What Wingman understands about each connected app ──────────────
+-- One row per (user, app). `note` is Wingman's own summary of what it found in
+-- the app (never raw data). Studied right after connecting, deepened over the
+-- first week (runs 1..4), then refreshed weekly. Injected into every chat.
+CREATE TABLE IF NOT EXISTS app_knowledge (
+  user_id TEXT NOT NULL,
+  app TEXT NOT NULL,                     -- 'shopify', 'slack', 'facebook', …
+  note TEXT,
+  status TEXT NOT NULL DEFAULT 'new',    -- new | learning | ready | failed
+  runs INTEGER NOT NULL DEFAULT 0,
+  connected_at TEXT DEFAULT (datetime('now')),
+  studied_at TEXT,
+  next_study_at TEXT,
+  last_error TEXT,
+  PRIMARY KEY (user_id, app)
+);
+
+-- ─── The user's standing rules for how Wingman should behave ────────
+--   auto_approve  — "don't ask me for this": a specific app tool may run
+--                   without the usual yes (server-enforced, never for risky tools)
+--   always_ask    — "always check with me before …"
+--   notify_mute   — "don't tell me about …"
+--   notify_always — "always tell me about …"
+CREATE TABLE IF NOT EXISTS user_rules (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  toolkit TEXT,
+  tool_slug TEXT,
+  text TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_user_rules_user ON user_rules(user_id, kind);
+

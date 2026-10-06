@@ -239,8 +239,11 @@ async function send(user, text, logLabel) {
 
 function welcomeText(user) {
   return `Hey${firstName(user)} — I'm getting set up for you. 🙌\n\n`
-    + `Over the next few days I'll quietly go through your inbox, calendar and tasks so I actually understand your world — who matters, what's on, and what's pending — instead of asking you obvious things.\n\n`
-    + `I'll check in now and then as I learn. You can start using me right away.`;
+    + `I'm going to study your inbox, calendar and tasks so I actually understand your world — who matters, what's on, and what's pending — instead of asking you obvious things. Here's how it goes:\n\n`
+    + `• Next few minutes — a first look.\n`
+    + `• Each day this week — I go a bit deeper, and may ask you one quick question to confirm what I'm seeing.\n`
+    + `• In 7 days — I'll send you a short "here's what I've learned about you", and after that I keep it fresh every week.\n\n`
+    + `You can start using me right away; I just get sharper as I learn.`;
 }
 
 // Ask the next unasked confirming question, if any. Returns true if one was sent.
@@ -299,9 +302,25 @@ async function runDueUsers({ now = new Date() } = {}) {
   let users = [];
   try { users = usersRepo.listAll(); } catch (_) { return { processed: 0 }; }
   let processed = 0;
+  let refreshed = 0; // weekly refreshes this tick (kept small — each is an LLM pass)
 
   for (const u of users) {
     const st = getState(u);
+    // After the first week, keep the picture fresh: one quiet deep pass a week
+    // (no message), so the profile and learned facts don't go stale.
+    if (st && st.status === 'done') {
+      try {
+        const last = Date.parse(st.refreshedAt || st.summarySentAt || 0) || 0;
+        if (now.getTime() - last > 7 * 86400 * 1000 && refreshed < 2) {
+          refreshed += 1;
+          const { profile } = await analyzeUser(u, { depth: 'deep', seedFollow: false });
+          setState(u.id, { refreshedAt: now.toISOString(), profile: profile || st.profile || '' });
+        }
+      } catch (err) {
+        console.warn(`[onboarding] weekly refresh failed for ${u.id}:`, err.message);
+      }
+      continue;
+    }
     if (!st || st.status !== 'calibrating') continue;
 
     const tz = u.timezone || 'Asia/Karachi';

@@ -280,6 +280,11 @@ router.get('/auth/shopify/callback', async (req, res) => {
     if (!user) return res.status(400).send('No Wingman account found for that number.');
     usersRepo.update(user.id, { shopify_domain: shop, shopify_token: accessToken });
 
+    // Start studying the store right away (first look in minutes, full picture
+    // within a week) — the study service tells the user the timeline itself.
+    try { require('../services/appStudy').noticeBuiltins(usersRepo.getById(user.id)); }
+    catch (e) { console.warn('[auth] could not start Shopify study:', e.message); }
+
     try {
       if (wa.ready() && phone) {
         await wa.sendMessage(phone, `Shopify connected ✅ (${shop})\n\nTry asking me: "how are sales today?"`);

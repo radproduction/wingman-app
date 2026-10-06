@@ -49,6 +49,14 @@ async function executeShopifyTool(user, toolUse) {
         return { store: user.shopify_domain, ...data };
       }
 
+      case 'shopify_query': {
+        const out = await shopify.graphql(user, input.query, input.variables);
+        let text = JSON.stringify(out);
+        // Keep a runaway query from flooding the conversation.
+        if (text.length > 9000) return { store: user.shopify_domain, truncated: true, preview: text.slice(0, 9000), note: 'Result was cut — ask for fewer items/fields.' };
+        return { store: user.shopify_domain, ...out };
+      }
+
       default:
         return { error: `Unknown tool: ${name}` };
     }
@@ -57,6 +65,9 @@ async function executeShopifyTool(user, toolUse) {
     if (msg === 'SHOPIFY_NOT_CONNECTED') return { error: 'SHOPIFY_NOT_CONNECTED' };
     if (msg === 'SHOPIFY_AUTH_FAILED') {
       return { error: 'SHOPIFY_AUTH_FAILED', detail: 'The stored Shopify token is invalid or expired — the user should reconnect their store in Settings.' };
+    }
+    if (msg === 'SHOPIFY_READ_ONLY') {
+      return { error: 'SHOPIFY_READ_ONLY', detail: 'This tool can only read the store. Changing it (discounts, products, prices) is not available yet — say so plainly.' };
     }
     return { error: msg };
   }

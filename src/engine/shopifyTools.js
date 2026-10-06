@@ -72,6 +72,25 @@ const shopifyTools = [
       required: [],
     },
   },
+  {
+    name: 'shopify_query',
+    description:
+      'Look at ANYTHING in the user\'s Shopify store with a read-only Admin GraphQL query — use it for ' +
+      'whatever the reports above do not cover: products and their images/prices/variants, collections ' +
+      '(categories) and what is in them, inventory/stock, customers, shop details. Write a normal Shopify ' +
+      'Admin GraphQL query (queries only — it cannot change the store). Keep it small: ask for `first: 10–25` ' +
+      'and only the fields you need. Examples: collections → `{ collections(first: 25) { nodes { id title handle productsCount { count } } } }`; ' +
+      'products in a collection → `{ collectionByHandle(handle: "summer") { title products(first: 20) { nodes { title handle status totalInventory featuredImage { url } priceRangeV2 { minVariantPrice { amount currencyCode } } } } } }`; ' +
+      'search products → `{ products(first: 10, query: "title:*shirt*") { nodes { title handle totalInventory featuredImage { url } } } }`.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'A read-only Shopify Admin GraphQL query.' },
+        variables: { type: 'object', description: 'Optional GraphQL variables.' },
+      },
+      required: ['query'],
+    },
+  },
 ];
 
 const shopifyToolNames = new Set(shopifyTools.map((t) => t.name));

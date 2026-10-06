@@ -48,6 +48,10 @@ async function runHourlyTick(now = new Date()) {
     // "Always working on your goals" — surface each active goal's next step once
     // a day (goalCoach gates itself to daytime + once/goal/day).
     await require('./goalCoach').runAllUsers({ now });
+    // Deepen / refresh Wingman's understanding of each user's connected apps
+    // (day 1, 3, 7 after connecting, then weekly). A few per tick, one at a time.
+    try { await require('./appStudy').runDue({ now }); }
+    catch (e) { console.warn('[scheduler] app study error:', e.message); }
   } catch (err) {
     console.warn('[scheduler] hourly tick error:', err.message);
   }
