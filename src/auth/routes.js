@@ -282,11 +282,13 @@ router.get('/auth/shopify/callback', async (req, res) => {
 
     // Start studying the store right away (first look in minutes, full picture
     // within a week) — the study service tells the user the timeline itself.
-    try { require('../services/appStudy').noticeBuiltins(usersRepo.getById(user.id)); }
+    try { require('../services/appStudy').noticeBuiltins(usersRepo.getById(user.id), { justConnected: true }); }
     catch (e) { console.warn('[auth] could not start Shopify study:', e.message); }
 
     try {
-      if (wa.ready() && phone) {
+      // When app study is on, its own "connected ✅ — here's how I'll learn it"
+      // message covers this; don't send two confirmations.
+      if (wa.ready() && phone && !require('../services/appStudy').enabled()) {
         await wa.sendMessage(phone, `Shopify connected ✅ (${shop})\n\nTry asking me: "how are sales today?"`);
       }
     } catch (waErr) {

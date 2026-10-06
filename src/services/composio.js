@@ -104,14 +104,14 @@ async function listConnections(user, { fresh = false } = {}) {
     const toolkit = String((acc.toolkit && acc.toolkit.slug) || '').toLowerCase();
     if (!toolkit || !offered.has(toolkit) || seen.has(toolkit)) continue;
     seen.add(toolkit);
-    apps.push({ toolkit, id: acc.id, status: acc.status });
+    apps.push({ toolkit, id: acc.id, status: acc.status, createdAt: acc.createdAt || acc.created_at || null });
   }
   connectionsCache.set(uid, { at: Date.now(), apps });
   // A freshly-read connection list is the moment we learn a user has connected
   // (or dropped) an app — hand it to the study service, which starts learning
   // any new app in the background. Never blocks or breaks the caller.
   setImmediate(() => {
-    try { require('./appStudy').noticeConnections(user, apps.map((a) => a.toolkit), { source: 'composio' }); }
+    try { require('./appStudy').noticeConnections(user, apps.map((a) => ({ app: a.toolkit, connectedAt: a.createdAt }))); }
     catch (e) { console.warn('[composio] connection notice failed:', e.message); }
   });
   return apps;

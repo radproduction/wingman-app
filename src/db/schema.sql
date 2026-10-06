@@ -546,6 +546,7 @@ CREATE TABLE IF NOT EXISTS app_knowledge (
   note TEXT,
   status TEXT NOT NULL DEFAULT 'new',    -- new | learning | ready | failed
   runs INTEGER NOT NULL DEFAULT 0,
+  announced INTEGER DEFAULT 0,           -- 1 = user was told we're studying it (a fresh connect)
   connected_at TEXT DEFAULT (datetime('now')),
   studied_at TEXT,
   next_study_at TEXT,

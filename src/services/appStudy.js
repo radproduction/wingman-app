@@ -266,8 +266,13 @@ async function localize(user, text) {
       .map((m) => `- ${String(m.content).slice(0, 160)}`);
     if (history.length < 2) return text;
     const out = await claude.complete(
-      `Here are recent messages this person wrote:\n${history.join('\n')}\n\nRewrite the message below in the SAME language and tone they write in (for example Roman Urdu stays Roman Urdu in Latin script; English stays English). Keep every fact, number and name exactly, keep it the same length, keep line breaks and bullets. Output only the rewritten message.\n\nMESSAGE:\n${text}`,
-      { model: config.anthropic.modelCheap, maxTokens: 700 },
+      `Recent messages this person wrote:\n${history.join('\n')}\n\n`
+      + 'Translate the MESSAGE below into the language they write in (e.g. Roman Urdu in Latin script stays Roman Urdu; English stays English). '
+      + 'Translate the MEANING faithfully, sentence by sentence — do not add, drop or change any claim, and never turn "I am starting to…" into "I have done…". '
+      + 'Use simple, natural, polite wording (in Urdu use "aap"/"tum", not "tu"). Keep names, numbers, bullets and line breaks. '
+      + 'If they write in English, return the message unchanged. Output only the message.\n\n'
+      + `MESSAGE:\n${text}`,
+      { model: config.anthropic.model, maxTokens: 700 },
     );
     const cleaned = String(out || '').trim();
     return cleaned.length > 20 ? cleaned : text;
@@ -292,12 +297,12 @@ function list(names) {
 
 function timelineText(user, apps) {
   const names = list(apps.map(appName));
-  const hi = firstName(user) ? `${firstName(user)}, ` : '';
-  return `${hi}I've started studying your ${names} — so I actually understand ${apps.length > 1 ? 'them' : 'it'}, not just connect to ${apps.length > 1 ? 'them' : 'it'}. Here's how it goes:\n\n`
-    + `• Next few minutes — a first look: what's there and what matters.\n`
-    + `• Within 24 hours — the patterns: who and what is important to you.\n`
-    + `• Within 7 days — the full picture. After that I refresh it every week.\n\n`
-    + `You can use me right away; I just get sharper as I learn. I only keep my own summary, never a copy of your data.`;
+  const it = apps.length > 1 ? 'them' : 'it';
+  return `Your ${names} ${apps.length > 1 ? 'are' : 'is'} connected ✅ I am now starting to study ${it}, so that I really understand ${it}.\n\n`
+    + `• In a few minutes: a first look — what is there and what matters.\n`
+    + `• Within 24 hours: the patterns — who and what is important to you.\n`
+    + `• Within 7 days: the full picture. After that I update it every week.\n\n`
+    + `You can keep using me as normal. I only keep my own short summary, not a copy of your data.`;
 }
 
 function firstLookText(results) {
@@ -318,43 +323,72 @@ function enqueue(fn) {
   return chain;
 }
 
-/** Study a set of newly-connected apps: timeline message → studies → one summary. */
-function startBatch(user, apps) {
+/**
+ * Study a set of apps we have not studied before.
+ * `announce` lists the ones the user connected THEMSELVES just now — only those
+ * get the timeline message and the "first look" summary. Apps that were already
+ * connected before (or that we merely discovered) are studied quietly: a message
+ * about an app the user did not just touch is noise.
+ */
+function startBatch(user, apps, announce = []) {
   if (!apps.length) return;
+  const loud = apps.filter((a) => announce.includes(a));
   enqueue(async () => {
     const fresh = usersRepo.getById(user.id);
     if (!fresh) return;
-    await tell(fresh, timelineText(fresh, apps), 'study-timeline');
+    if (loud.length) await tell(fresh, timelineText(fresh, loud), 'study-timeline');
     const results = [];
     for (const app of apps) {
       const r = await studyApp(fresh.id, app);
-      if (r.ok) results.push(r);
+      if (r.ok && loud.includes(app)) results.push(r);
     }
     if (results.length) await tell(usersRepo.getById(user.id) || fresh, firstLookText(results), 'study-first-look');
   });
 }
 
-/**
- * Called whenever we learn which Composio apps a user currently has connected.
- * New apps get studied; apps that are gone are forgotten.
- */
-function noticeConnections(user, toolkits, { source = 'composio' } = {}) {
-  if (!enabled() || !user || !user.id) return;
-  const now = new Set((toolkits || []).map((x) => String(x).toLowerCase()));
-  if (source === 'composio') {
-    for (const row of knowledge.listForUser(user.id)) {
-      if (!BUILTIN.has(row.app) && !now.has(row.app)) knowledge.remove(user.id, row.app);
-    }
-  }
-  const fresh = [...now].filter((app) => knowledge.ensure(user.id, app));
-  if (fresh.length) startBatch(user, fresh);
+// A connection this recent means the user just did it (and is expecting a reply).
+const JUST_CONNECTED_MS = 20 * 60 * 1000;
+
+function isJustConnected(connectedAt) {
+  const ms = Date.parse(connectedAt || '');
+  return !!ms && Date.now() - ms < JUST_CONNECTED_MS && Date.now() - ms > -60000;
 }
 
-/** Built-in sources (Shopify): start studying if connected and not yet known. */
-function noticeBuiltins(user) {
+/**
+ * Called whenever we learn which Composio apps a user currently has connected:
+ * [{ app, connectedAt }]. New apps get studied; apps that are gone are forgotten.
+ */
+function noticeConnections(user, connections) {
+  if (!enabled() || !user || !user.id) return;
+  const conns = (connections || []).map((c) => (typeof c === 'string' ? { app: c } : c))
+    .map((c) => ({ app: String(c.app || '').toLowerCase(), connectedAt: c.connectedAt || null }))
+    .filter((c) => c.app);
+  const now = new Set(conns.map((c) => c.app));
+  for (const row of knowledge.listForUser(user.id)) {
+    if (!BUILTIN.has(row.app) && !now.has(row.app)) knowledge.remove(user.id, row.app);
+  }
+  const fresh = [];
+  const announce = [];
+  for (const c of conns) {
+    const loud = isJustConnected(c.connectedAt);
+    if (knowledge.ensure(user.id, c.app, { announced: loud })) {
+      fresh.push(c.app);
+      if (loud) announce.push(c.app);
+    }
+  }
+  if (fresh.length) startBatch(user, fresh, announce);
+}
+
+/**
+ * Built-in sources (Shopify): start studying if connected and not yet known.
+ * `justConnected` is true only from the OAuth callback — i.e. the user did it now.
+ */
+function noticeBuiltins(user, { justConnected = false } = {}) {
   if (!enabled() || !user || !user.id) return;
   if (user.shopify_domain && user.shopify_token) {
-    if (knowledge.ensure(user.id, 'shopify')) startBatch(user, ['shopify']);
+    if (knowledge.ensure(user.id, 'shopify', { announced: justConnected })) {
+      startBatch(user, ['shopify'], justConnected ? ['shopify'] : []);
+    }
   } else if (knowledge.get(user.id, 'shopify')) {
     knowledge.remove(user.id, 'shopify');
   }
@@ -374,8 +408,9 @@ async function runDue({ now = new Date(), limit = 4 } = {}) {
       const r = await studyApp(user.id, row.app);
       if (!r.ok) return;
       studied += 1;
-      // Announce only the moment the picture becomes full, and only in waking hours.
-      if (r.full && r.runs === FULL_AFTER_RUNS) {
+      // Say so only the moment the picture becomes full, only in waking hours, and
+      // only for an app the user connected themselves (never for a quiet study).
+      if (r.full && r.runs === FULL_AFTER_RUNS && row.announced) {
         const hour = t.hourInTz(user.timezone || 'Asia/Karachi', now);
         if (hour >= ACTIVE_FROM && hour < ACTIVE_TO) await tell(user, fullPictureText(r), 'study-full');
       }

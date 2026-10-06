@@ -55,6 +55,11 @@ function initSchema() {
  */
 function applyMigrations() {
   const additions = {
+    // 1 = the user connected this app themselves just now and was told Wingman is
+    // studying it; 0 = studied quietly (it was already connected), so stay quiet.
+    app_knowledge: [
+      ['announced', 'INTEGER DEFAULT 0'],
+    ],
     calendar_events: [
       ['account_id', 'TEXT'],
       ['account_email', 'TEXT'],

@@ -20,11 +20,11 @@ function listForUser(userId) {
  * The caller studies a new app straight away; next_study_at (+30 min) is only the
  * scheduler's safety net in case that first study never ran (e.g. a restart).
  */
-function ensure(userId, app) {
+function ensure(userId, app, { announced = false } = {}) {
   const r = db.prepare(`
-    INSERT OR IGNORE INTO app_knowledge (user_id, app, status, next_study_at)
-    VALUES (?, ?, 'new', datetime('now', '+30 minutes'))
-  `).run(userId, app);
+    INSERT OR IGNORE INTO app_knowledge (user_id, app, status, next_study_at, announced)
+    VALUES (?, ?, 'new', datetime('now', '+30 minutes'), ?)
+  `).run(userId, app, announced ? 1 : 0);
   return r.changes === 1;
 }
 
