@@ -64,7 +64,12 @@ Every LLM capability is a **pair** of files in `src/engine/`:
 
 Existing pairs: `gmail`, `calendar`, `drive`, `task`, `goal`, `health`, `maps`,
 `memory`, `news`, `shopify`, `vault`, `voice`, `webmail`, `work`, `browser`,
-`agent`, `audit`, `automation`, `integration`, `image`, `brain`.
+`agent`, `audit`, `automation`, `integration`, `image`, `brain`, `records`.
+
+**No keyword shortcuts.** Every inbound message goes to the assistant
+(`handleMessage` → `runConversation`). Do not add regex "intents" that answer
+before the model sees the message — they hijack real requests and only match
+English. Expose the data as a tool instead (see `recordsTools.js`).
 
 **To add a capability, add both files and register them** — don't put tool logic
 in `services/`. `services/` is for integrations the executors call.

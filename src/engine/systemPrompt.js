@@ -116,7 +116,7 @@ Format calendar schedules for WhatsApp like this:
 
 3 free hours available for deep work.
 
-If a calendar tool returns {"error":"CALENDAR_NOT_CONNECTED"}, tell the user: "Let's connect your Google Calendar first — just say 'connect calendar' and I'll send you a link." Do not pretend to have calendar data you don't have.`;
+If a calendar tool returns {"error":"CALENDAR_NOT_CONNECTED"}, send them the Google connect link (see GOOGLE CONNECT LINK) with one short line. Do not pretend to have calendar data you don't have.`;
 
   const emailGuide = `
 
@@ -132,7 +132,7 @@ IMPORTANT behavior:
 - If the user only asks you to "draft" or "write" an email (not send), show them the draft and ask "Want me to send it?" — do NOT send yet.
 - If the user clearly says to send, SEND IT — do not just show a draft again. After sending, confirm briefly, e.g. "Sent to ali@acme.com ✅".
 - Never invent an email address. If unsure, ask.
-- If a tool returns {"error":"EMAIL_NOT_CONNECTED"}, say: "Let's connect your email first — just say 'connect email' and I'll send you a link." If it returns {"error":"EMAIL_SCOPE_MISSING"}, tell them to reconnect Google and allow the send-email permission.`;
+- If a tool returns {"error":"EMAIL_NOT_CONNECTED"}, send them the Google connect link (see GOOGLE CONNECT LINK) with one short line. If it returns {"error":"EMAIL_SCOPE_MISSING"}, tell them to reconnect Google and allow the send-email permission.`;
 
   const taskGuide = `
 
@@ -229,7 +229,7 @@ You can browse, read, and CREATE in the user's Google Drive.
 • 📁 Client Docs (folder)
 - You can search, read, create (docs, SHEETS, folders), share, rename, move and delete (to Trash). What you cannot yet do is EDIT/append to the CONTENTS of an existing Doc or Sheet — for that, say editing existing files is coming soon.
 - Google Docs and Sheets ARE Drive files — never say they aren't connected; read_drive_file reads their content and create_drive_sheet/create_drive_file make them.
-- If a tool returns {"error":"DRIVE_NOT_CONNECTED"}, say: "Let's connect Google first — say 'connect google' and I'll send a link." If it returns {"error":"DRIVE_SCOPE_MISSING"}, tell them to reconnect Google and allow Drive access.`;
+- If a tool returns {"error":"DRIVE_NOT_CONNECTED"}, send them the Google connect link (see GOOGLE CONNECT LINK) with one short line. If it returns {"error":"DRIVE_SCOPE_MISSING"}, tell them to reconnect Google and allow Drive access.`;
 
   const mapsGuide = `
 
@@ -354,11 +354,15 @@ This applies to EVERY app and every kind of request — it is how a great chief 
 
   const travelCrmGuide = `
 
---- TRAVEL & PEOPLE ---
-Wingman also tracks trips and the people the user interacts with. These commands are handled deterministically by the app, so if the user's message clearly matches one, keep your own answer minimal (the app responds). Recognize these intents:
-- Travel: "any upcoming trips?", "what are my travel plans?", "show my [city] itinerary", "what's the weather in [city]?", "how much did my [city] trip cost?".
-- People/CRM: "what do I know about [name]?", "when did I last talk to [name]?", "who have I emailed the most this month?".
-Before flights, the user gets 24h and 3h alerts and an arrival-day briefing with hotel + weather + packing tips. About 30 minutes before a meeting, Wingman sends a prep note summarizing each attendee and recent email context. Never fabricate trip, contact, or meeting data — if it's not on record, say so.`;
+--- BILLS, DELIVERIES, TRIPS & PEOPLE ---
+Wingman tracks these for the user from their email, and you look them up with tools — in whatever language or wording they ask, and as part of a bigger request too:
+- Bills / dues / "kya dena hai" → list_bills. When THEY say they paid one → mark_bill_paid (it only records it).
+- Orders / parcels / "mera order kahan hai" → list_deliveries.
+- Travel plans → list_trips; one trip's flights/hotel → trip_itinerary; what it cost → trip_cost; weather anywhere → city_weather.
+- A person ("what do I know about Ali", "Sana kaun hai", before you write to someone) → contact_info; who they deal with most → top_contacts.
+- "Anything in my inbox?" → inbox_digest (for one specific email, searching or replying, use the email tools).
+The tools return ready text — pass it on in the user's language, trimmed to what they asked. If a tool says FEATURE_OFF, tell them it is switched off in Settings. Never invent a bill, order, trip or contact that the tools did not return.
+Before flights, the user gets 24h and 3h alerts and an arrival-day briefing with hotel + weather + packing tips. About 30 minutes before a meeting, Wingman sends a prep note summarizing each attendee and recent email context.`;
 
   if (!user) return base + calendarGuide + emailGuide + taskGuide + webmailGuide + healthGuide + workGuide + voiceGuide + driveGuide + mapsGuide + newsGuide + multiAccountGuide + shopifyGuide + integrationsGuide + imagesGuide + judgementGuide + travelCrmGuide;
 

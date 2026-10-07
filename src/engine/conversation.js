@@ -45,15 +45,11 @@ const { executeIntegrationTool, pendingActionsBlock } = require('./integrationEx
 const { imageToolNames, imageToolsAvailable } = require('./imageTools');
 const { executeImageTool, recentImagesBlock } = require('./imageExecutor');
 const { brainTools, brainToolNames } = require('./brainTools');
+const { recordsTools, recordsToolNames } = require('./recordsTools');
+const { executeRecordsTool } = require('./recordsExecutor');
 const { executeBrainTool, rulesBlock } = require('./brainExecutor');
 const appStudy = require('../services/appStudy');
-const googleAuth = require('../auth/googleAuth');
 const config = require('../config');
-const emailDigest = require('../services/emailDigest');
-const billAlerts = require('../services/billAlerts');
-const deliveryAlerts = require('../services/deliveryAlerts');
-const travelAssistant = require('../services/travelAssistant');
-const peopleCRM = require('../services/peopleCRM');
 
 /**
  * Handle an inbound WhatsApp message end-to-end.
@@ -84,40 +80,13 @@ async function handleMessage({ text, phoneNumber, meta = {} }) {
     metadata: { direction: 'inbound', phoneNumber, ...meta },
   });
 
-  let reply;
-  const has = (skill) => usersRepo.hasSkill(user, skill);
-
-  if (isConnectGoogleIntent(text)) {
-    reply = buildConnectGoogleReply(phoneNumber);
-  } else if (isConnectCalendarIntent(text)) {
-    reply = buildConnectCalendarReply(user, phoneNumber);
-  } else if (isConnectEmailIntent(text)) {
-    reply = buildConnectEmailReply(user, phoneNumber);
-  } else if (isCheckEmailIntent(text)) {
-    reply = buildCheckEmailReply(user);
-  } else if (has('bill_tracker') && billAlerts.detectMarkPaid(text)) {
-    reply = billAlerts.handleMarkPaid(user, billAlerts.detectMarkPaid(text));
-  } else if (has('bill_tracker') && billAlerts.isBillQuery(text)) {
-    reply = billAlerts.buildBillsReply(user);
-  } else if (has('delivery_tracker') && deliveryAlerts.isDeliveryQuery(text)) {
-    reply = deliveryAlerts.buildDeliveriesReply(user);
-  } else if (has('travel_assistant') && travelAssistant.detectItineraryQuery(text)) {
-    reply = await travelAssistant.buildItineraryReply(user, travelAssistant.detectItineraryQuery(text));
-  } else if (has('travel_assistant') && travelAssistant.detectTripCost(text)) {
-    reply = travelAssistant.buildTripCostReply(user, travelAssistant.detectTripCost(text));
-  } else if (has('travel_assistant') && travelAssistant.detectWeatherQuery(text)) {
-    reply = await travelAssistant.buildWeatherReply(travelAssistant.detectWeatherQuery(text));
-  } else if (has('travel_assistant') && travelAssistant.isTripsQuery(text)) {
-    reply = travelAssistant.buildTripsReply(user);
-  } else if (has('people_crm') && peopleCRM.detectWhatDoIKnow(text)) {
-    reply = peopleCRM.buildContactReply(user, peopleCRM.detectWhatDoIKnow(text));
-  } else if (has('people_crm') && peopleCRM.detectLastTalked(text)) {
-    reply = peopleCRM.buildLastTalkedReply(user, peopleCRM.detectLastTalked(text));
-  } else if (has('people_crm') && peopleCRM.isTopContactsQuery(text)) {
-    reply = peopleCRM.buildTopContactsReply(user);
-  } else {
-    reply = await runConversation(user, text);
-  }
+  // Every message goes to the assistant. There are deliberately NO keyword
+  // shortcuts here any more: matching words like "link"+"drive" or "bills"+"any"
+  // hijacked real requests ("…add it in the drive and send me the link") and
+  // never worked in Roman Urdu. Bills, deliveries, trips, contacts, the inbox
+  // digest and the Google connect link are all tools/context the assistant
+  // chooses to use (engine/recordsTools.js, connectLinkBlock).
+  const reply = await runConversation(user, text);
 
   conversationsRepo.logMessage({
     userId: user.id,
@@ -127,56 +96,6 @@ async function handleMessage({ text, phoneNumber, meta = {} }) {
   });
 
   return { reply, user };
-}
-
-function isConnectGoogleIntent(text) {
-  const t = (text || '').toLowerCase().trim();
-  return /\b(connect|reconnect|link)\b/.test(t) && /\b(google|drive)\b/.test(t);
-}
-
-function buildConnectGoogleReply(phoneNumber) {
-  const url = `${config.publicBaseUrl}/auth/google?phone=${encodeURIComponent(phoneNumber)}`;
-  return `Tap this to connect Google - Calendar, Gmail, Drive & Tasks: ${url}`;
-}
-
-function isConnectCalendarIntent(text) {
-  const t = (text || '').toLowerCase().trim();
-  return /\bconnect\b/.test(t) && /\bcalendar\b/.test(t);
-}
-
-function buildConnectCalendarReply(user, phoneNumber) {
-  if (googleAuth.isConnected(user)) {
-    return `Your Google Calendar is already connected ✅\n\nTry: "what's my schedule tomorrow?"`;
-  }
-  const url = `${config.publicBaseUrl}/auth/google?phone=${encodeURIComponent(phoneNumber)}`;
-  return `Tap this to connect your Google Calendar: ${url}`;
-}
-
-function isConnectEmailIntent(text) {
-  const t = (text || '').toLowerCase().trim();
-  return /\bconnect\b/.test(t) && /\b(email|gmail|inbox)\b/.test(t);
-}
-
-function buildConnectEmailReply(user, phoneNumber) {
-  if (googleAuth.isEmailConnected(user)) {
-    return `Your email is already connected ✅\n\nTry: "check my email"`;
-  }
-  const url = `${config.publicBaseUrl}/auth/google?phone=${encodeURIComponent(phoneNumber)}`;
-  return `Tap this to connect your email: ${url}`;
-}
-
-function isCheckEmailIntent(text) {
-  const t = (text || '').toLowerCase().trim();
-  return /\bcheck\b.*\b(email|inbox|mail)\b/.test(t)
-    || /\b(email|inbox)\b.*\bupdate\b/.test(t)
-    || /\bany (new )?(emails|mail)\b/.test(t);
-}
-
-function buildCheckEmailReply(user) {
-  if (!googleAuth.isEmailConnected(user)) {
-    return `Let's connect your email first - just say 'connect email' and I'll send you a link. 📧`;
-  }
-  return emailDigest.buildDigest(user.id);
 }
 
 async function runOnboarding(user, text, isNew) {
@@ -230,6 +149,18 @@ async function runOnboarding(user, text, isNew) {
   }
 }
 
+/**
+ * Give the assistant the user's real Google connect link, so it can hand it
+ * over however they ask ("google connect karo", "mera drive jor do") or when a
+ * Google tool says it isn't connected — instead of telling them to type a magic
+ * phrase.
+ */
+function connectLinkBlock(user) {
+  if (!user || !user.phone) return '';
+  const url = `${config.publicBaseUrl}/auth/google?phone=${encodeURIComponent(user.phone)}`;
+  return `\n\n--- GOOGLE CONNECT LINK ---\nOne link connects Gmail, Calendar, Drive and Tasks together: ${url}\nSend it (just the link with one short line) when they ask to connect or reconnect any of those in any wording, or when a Google tool returns a NOT_CONNECTED / SCOPE_MISSING error. Never tell them to type a special phrase to get it. After they connect, carry on with what they originally asked.`;
+}
+
 async function runConversation(user, text) {
   const history = conversationsRepo.historyForUser(user.id, 20);
   const messages = history.map((row) => ({
@@ -243,7 +174,7 @@ async function runConversation(user, text) {
 
   // Start learning Shopify if it was connected before the study feature existed.
   try { appStudy.noticeBuiltins(user); } catch (_) { /* best-effort */ }
-  const system = buildSystemPrompt(user) + appStudy.knowledgeBlock(user) + rulesBlock(user)
+  const system = buildSystemPrompt(user) + connectLinkBlock(user) + appStudy.knowledgeBlock(user) + rulesBlock(user)
     + pendingActionsBlock(user) + recentImagesBlock(user);
   const reply = await runToolLoop(user, messages, system);
 
@@ -309,6 +240,7 @@ async function runToolLoop(user, messages, system, maxRounds = 5, ctx = {}) {
         ...agentTools,
         ...imageToolsAvailable(),
         ...brainTools,
+        ...recordsTools,
         ...integrations.tools,
       ],
       maxTokens: 2048,
@@ -332,6 +264,8 @@ async function runToolLoop(user, messages, system, maxRounds = 5, ctx = {}) {
           result = await executeImageTool(user, { name: block.name, input: block.input });
         } else if (brainToolNames.has(block.name)) {
           result = await executeBrainTool(user, { name: block.name, input: block.input }, ctx);
+        } else if (recordsToolNames.has(block.name)) {
+          result = await executeRecordsTool(user, { name: block.name, input: block.input });
         } else if (taskToolNames.has(block.name)) {
           result = await executeTaskTool(user, { name: block.name, input: block.input });
         } else if (goalToolNames.has(block.name)) {
@@ -423,10 +357,4 @@ module.exports = {
   handleMessage,
   runConversation,
   runAutomatedInstruction,
-  isConnectCalendarIntent,
-  buildConnectCalendarReply,
-  isConnectEmailIntent,
-  buildConnectEmailReply,
-  isCheckEmailIntent,
-  buildCheckEmailReply,
 };
