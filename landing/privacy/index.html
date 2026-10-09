@@ -10,6 +10,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&display=swap" rel="stylesheet" />
+<!-- The site's own stylesheet, so the header and footer match the home page exactly. -->
+<link rel="stylesheet" href="/assets/home-v1-wm20261009.css" />
 <style>
   @font-face {
     font-family: "Freigeist XWide";
@@ -34,15 +36,8 @@
     font: 400 1.0625rem/1.7 "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
   }
   a { color: var(--accent); text-underline-offset: 3px; }
-  .top {
-    max-width: 1100px; margin: 0 auto; padding: 20px 20px 0;
-    display: flex; align-items: center; justify-content: space-between; gap: 16px;
-  }
-  .brand { display: inline-flex; align-items: center; gap: 10px; color: var(--ink); text-decoration: none; font-weight: 600; letter-spacing: .02em; }
-  .brand img { width: 28px; height: 28px; }
-  .top nav a { color: var(--ink-2); text-decoration: none; font-size: .9375rem; }
-  .top nav a:hover { color: var(--ink); }
-  main { max-width: 760px; margin: 0 auto; padding: 48px 20px 96px; }
+  main { max-width: 760px; margin: 0 auto; padding: 56px 20px 48px; }
+  main h1 { text-align: left; }
   h1 {
     font-family: "Freigeist XWide", "Arial Black", system-ui, sans-serif; font-weight: 900;
     font-size: clamp(2rem, 3.4vw + .5rem, 3.25rem); line-height: 1.05; letter-spacing: -.015em;
@@ -67,16 +62,11 @@
   code { font-size: .9em; background: var(--paper-2); padding: 1px 5px; border-radius: 5px; }
   .toc { columns: 2; column-gap: 32px; padding-left: 20px; font-size: .9375rem; }
   .toc li { break-inside: avoid; }
-  footer { border-top: 1px solid var(--rule); max-width: 760px; margin: 0 auto; padding: 20px 20px 40px; color: var(--muted); font-size: .9375rem; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
-  footer a { color: var(--muted); }
   @media (max-width: 560px) { .toc { columns: 1; } main { padding-top: 32px; } }
 </style>
 </head>
 <body>
-<header class="top">
-  <a class="brand" href="/"><img src="/icon.svg" alt="" />Wingman</a>
-  <nav><a href="/">Home</a></nav>
-</header>
+<header class="w1-nav"><div class="w1-nav__inner"><a class="w1-nav__brand" href="/" aria-label="Wingman, home"><svg class="w1-nav__lockup" viewBox="0 0 2125 526" role="img" aria-label="Wingman"><defs><linearGradient id="wmh-w" x1="94.6659" y1="-87.9091" x2="702.186" y2="521.28" gradientUnits="userSpaceOnUse"><stop stop-color="var(--w1-color-brand-from)"></stop><stop offset="1" stop-color="var(--w1-color-brand-to)"></stop></linearGradient><linearGradient id="wmh-star" x1="176.974" y1="-260.166" x2="869.579" y2="434.342" gradientUnits="userSpaceOnUse"><stop stop-color="var(--w1-color-brand-from)"></stop><stop offset="1" stop-color="var(--w1-color-brand-to)"></stop></linearGradient></defs><path d="M502.889 4.36906C490.096 9.83676 483.395 23.8098 484.614 39.6053L504.717 223.685L502.28 228.545L498.016 226.722L355.465 44.4655C344.5 31.1 329.27 24.4173 312.212 28.0624C289.063 31.7075 274.443 51.1483 275.661 75.4492L305.511 276.539L303.075 281.399L298.81 278.362L147.122 79.7018C115.444 43.2505 60.0073 41.4279 25.8926 73.0191C-8.8313 106.433 -8.83131 161.11 27.111 194.524L350.592 511.043C368.867 526.838 393.844 529.876 414.557 517.725C433.442 507.397 445.625 485.527 441.97 462.441L406.637 288.689L408.465 284.437L412.729 286.259L534.567 475.806C550.406 501.322 579.038 511.65 607.67 502.537C641.176 493.424 660.061 458.796 651.532 424.774L582.084 141.669L582.693 137.416L586.958 138.024L643.613 183.588C651.532 187.841 661.279 185.411 665.543 178.728C671.026 172.045 670.417 162.932 663.716 156.25L544.314 10.4443C537.004 3.154 528.475 -0.49112 519.338 0.116402C513.855 -0.49112 508.372 1.33144 502.889 4.36906Z" fill="url(#wmh-w)"></path><path d="M681.88 228.125C682.575 245.44 675.63 260.678 663.128 271.759L650.627 282.841L666.601 282.148C683.269 280.763 699.937 287.689 711.05 300.156L720.773 312.623L720.078 296.693C719.384 279.378 725.634 263.448 738.83 253.059L751.331 241.977L735.358 242.67C718.689 244.055 702.021 237.129 690.909 224.662L680.491 211.502L681.88 228.125Z" fill="url(#wmh-star)"></path><path d="M735.172 339.206H677.367V516.994H735.172V339.206Z" fill="var(--w1-color-ink)"></path><path d="M949.911 291.564H1007.72V516.994H914.713L831.721 345.022V516.994H773.916V291.564H866.274L949.911 461.606V291.564Z" fill="var(--w1-color-ink)"></path><path d="M1128.16 397.836H1271.54V516.994H1235.05L1220.52 447.753C1212.77 491.876 1180.8 520.211 1139.14 520.211C1081.98 520.211 1038.06 471.585 1038.06 407.82C1038.06 334.715 1083.91 288.339 1155.29 288.339C1209.21 288.339 1250.87 312.494 1267.34 353.714L1210.51 383.669C1202.43 349.53 1181.12 336.006 1154.96 336.006C1118.15 336.006 1095.22 363.054 1095.22 404.922C1095.22 445.819 1118.47 472.552 1155.93 472.552C1183.06 472.552 1204.37 460.634 1212.44 441.311H1128.16V397.836Z" fill="var(--w1-color-ink)"></path><path d="M1510.5 291.564H1614.48V516.994H1557V328.6L1502.75 516.994H1419.11L1365.18 329.887V516.994H1307.7V291.564H1411.68L1461.09 472.876L1510.5 291.564Z" fill="var(--w1-color-ink)"></path><path d="M1717.81 427.787H1783.04L1750.42 328.596L1717.81 427.787ZM1812.42 516.994L1797.25 471.261H1703.6L1688.74 516.994H1630.29L1708.12 291.56H1796.92L1874.75 516.994H1812.42Z" fill="var(--w1-color-ink)"></path><path d="M2066.88 291.564H2124.69V516.994H2031.68L1948.69 345.022V516.994H1890.89V291.564H1983.25L2066.88 461.606V291.564Z" fill="var(--w1-color-ink)"></path></svg></a><nav class="w1-nav__links" aria-label="Sections"><a class="w1-nav__link" href="/#watches">What it watches</a><a class="w1-nav__link" href="/#briefing">The briefing</a><a class="w1-nav__link" href="/#trust">Trust</a><a class="w1-nav__link" href="/#how">How it works</a></nav><a class="w1-btn w1-btn--accent w1-nav__cta" href="/#waitlist">Join the waitlist</a></div></header>
 
 <main>
   <h1>Privacy Policy</h1>
@@ -239,10 +229,7 @@
   Heard Agency, Karachi, Pakistan</p>
 </main>
 
-<footer>
-  <span>© 2026 Wingman</span>
-  <span><a href="/">imyourwingman.ai</a> · <a href="/privacy/">Privacy Policy</a> · <a href="#cookie-settings" data-cookie-settings>Cookie settings</a></span>
-</footer>
+<footer class="w1-foot"><p class="w1-foot__line">You should not have to remember all of it. That is my job.</p><div class="w1-foot__meta"><svg class="w1-foot__lockup" viewBox="0 0 2125 526" role="img" aria-label="Wingman"><defs><linearGradient id="wmf-w" x1="94.6659" y1="-87.9091" x2="702.186" y2="521.28" gradientUnits="userSpaceOnUse"><stop stop-color="var(--w1-color-brand-from)"></stop><stop offset="1" stop-color="var(--w1-color-brand-to)"></stop></linearGradient><linearGradient id="wmf-star" x1="176.974" y1="-260.166" x2="869.579" y2="434.342" gradientUnits="userSpaceOnUse"><stop stop-color="var(--w1-color-brand-from)"></stop><stop offset="1" stop-color="var(--w1-color-brand-to)"></stop></linearGradient></defs><path d="M502.889 4.36906C490.096 9.83676 483.395 23.8098 484.614 39.6053L504.717 223.685L502.28 228.545L498.016 226.722L355.465 44.4655C344.5 31.1 329.27 24.4173 312.212 28.0624C289.063 31.7075 274.443 51.1483 275.661 75.4492L305.511 276.539L303.075 281.399L298.81 278.362L147.122 79.7018C115.444 43.2505 60.0073 41.4279 25.8926 73.0191C-8.8313 106.433 -8.83131 161.11 27.111 194.524L350.592 511.043C368.867 526.838 393.844 529.876 414.557 517.725C433.442 507.397 445.625 485.527 441.97 462.441L406.637 288.689L408.465 284.437L412.729 286.259L534.567 475.806C550.406 501.322 579.038 511.65 607.67 502.537C641.176 493.424 660.061 458.796 651.532 424.774L582.084 141.669L582.693 137.416L586.958 138.024L643.613 183.588C651.532 187.841 661.279 185.411 665.543 178.728C671.026 172.045 670.417 162.932 663.716 156.25L544.314 10.4443C537.004 3.154 528.475 -0.49112 519.338 0.116402C513.855 -0.49112 508.372 1.33144 502.889 4.36906Z" fill="url(#wmf-w)"></path><path d="M681.88 228.125C682.575 245.44 675.63 260.678 663.128 271.759L650.627 282.841L666.601 282.148C683.269 280.763 699.937 287.689 711.05 300.156L720.773 312.623L720.078 296.693C719.384 279.378 725.634 263.448 738.83 253.059L751.331 241.977L735.358 242.67C718.689 244.055 702.021 237.129 690.909 224.662L680.491 211.502L681.88 228.125Z" fill="url(#wmf-star)"></path><path d="M735.172 339.206H677.367V516.994H735.172V339.206Z" fill="var(--w1-color-ink)"></path><path d="M949.911 291.564H1007.72V516.994H914.713L831.721 345.022V516.994H773.916V291.564H866.274L949.911 461.606V291.564Z" fill="var(--w1-color-ink)"></path><path d="M1128.16 397.836H1271.54V516.994H1235.05L1220.52 447.753C1212.77 491.876 1180.8 520.211 1139.14 520.211C1081.98 520.211 1038.06 471.585 1038.06 407.82C1038.06 334.715 1083.91 288.339 1155.29 288.339C1209.21 288.339 1250.87 312.494 1267.34 353.714L1210.51 383.669C1202.43 349.53 1181.12 336.006 1154.96 336.006C1118.15 336.006 1095.22 363.054 1095.22 404.922C1095.22 445.819 1118.47 472.552 1155.93 472.552C1183.06 472.552 1204.37 460.634 1212.44 441.311H1128.16V397.836Z" fill="var(--w1-color-ink)"></path><path d="M1510.5 291.564H1614.48V516.994H1557V328.6L1502.75 516.994H1419.11L1365.18 329.887V516.994H1307.7V291.564H1411.68L1461.09 472.876L1510.5 291.564Z" fill="var(--w1-color-ink)"></path><path d="M1717.81 427.787H1783.04L1750.42 328.596L1717.81 427.787ZM1812.42 516.994L1797.25 471.261H1703.6L1688.74 516.994H1630.29L1708.12 291.56H1796.92L1874.75 516.994H1812.42Z" fill="var(--w1-color-ink)"></path><path d="M2066.88 291.564H2124.69V516.994H2031.68L1948.69 345.022V516.994H1890.89V291.564H1983.25L2066.88 461.606V291.564Z" fill="var(--w1-color-ink)"></path></svg><nav class="w1-foot__links" aria-label="Legal"><a href="/privacy/">Privacy Policy</a><a href="#cookie-settings" data-cookie-settings="true">Cookie settings</a></nav></div></footer>
 <script src="/consent.js" defer></script>
 </body>
 </html>
