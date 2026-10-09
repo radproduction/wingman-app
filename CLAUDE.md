@@ -149,6 +149,25 @@ there is no "message us to get your code" flow in the app. Users are stored
 with their full international number (`users.create`; old 10-digit rows
 self-heal from the webhook via `upgradePhone`).
 
+### Voice briefings (ElevenLabs)
+
+`services/briefingCall.js` + `services/elevenlabs.js`. A user turns on "Voice
+briefing" (app Profile screen, or the `set_briefing_call` brain tool; stored in
+`preferences.briefingCall`). Then:
+- every FULL briefing/wrap (after "View Briefing") also goes out as a voice note
+  (ElevenLabs TTS, Ogg/Opus) — works on any number today;
+- when `ELEVENLABS_CALLS=1` and an agent exists, `runDueUsers` places a WhatsApp
+  call instead of sending text. The agent gets the briefing as dynamic variables
+  and asks Wingman's brain mid-call via `POST /voice/tools/ask` (per-call token +
+  shared secret; `answerForCall` runs as an *automated* turn, so nothing can be
+  approved from a call). The scheduler's minute tick polls the call: answered →
+  a note in chat history; missed → normal text briefing (+ voice note). Calls
+  pause after 2 misses in a row (Meta revokes permission after 4).
+WhatsApp only allows business-initiated calls from NON-US/Canada business
+numbers with a 2K+ messaging limit — the +1 number cannot place calls.
+`scripts/setup-voice-agent.js` creates/updates the agent; `scripts/test-voice.js`
+checks the key live.
+
 ### Security rules
 
 - Admin/debug routes use `utils/adminAuth.js` (`requireAdmin`) — fails closed.
@@ -164,6 +183,7 @@ self-heal from the webhook via `upgradePhone`).
 ```bash
 node scripts/test-whatsapp-window.js   # 24h window, held messages, sign-in by reply (offline)
 node scripts/test-engine-offline.js    # approval gate, loop end, tool memory, caching (scripted model)
+node scripts/test-briefing-call.js     # voice briefings: calls, fallbacks, voice notes (fake ElevenLabs)
 docker exec wingman node scripts/eval-live.js   # real model, fake data, temp DB (~cents)
 ```
 

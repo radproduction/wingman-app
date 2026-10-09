@@ -293,6 +293,8 @@ async function sendForUser(userId, { now = new Date(), send = true, full = false
           // window is open and it isn't proactive spam. skipDedupe so a re-tap is
           // never swallowed by the once-a-day near-duplicate guard.
           await require('../whatsapp/client').sendMessage(user.phone, text, { skipDedupe: true });
+          // The same, read aloud — for users who turned on voice briefings.
+          try { await require('./briefingCall').sendVoiceNote(user, text); } catch (_) { /* best-effort */ }
         } else {
           // SCHEDULED send: only the concise "tap to view" nudge — never the full
           // free-form wall of text. The tap opens the window and the webhook calls
@@ -359,8 +361,17 @@ async function runDueUsers({ hour = 7, now = new Date(), windowMin = 15 } = {}) 
     if ((u.preferences || {}).lastBriefingDate === dayKey) continue;
 
     let result;
-    try { result = await sendForUser(u.id, { now }); }
-    catch (e) { console.warn('[morningBriefing] failed for', u.id, e.message); continue; }  // one user's failure never stops the rest
+    try {
+      // Users who turned on briefing calls get a WhatsApp call instead; if the
+      // call can't be placed, the text goes out as usual (and a missed call
+      // falls back to text + voice note later — see briefingCall.runPoll).
+      const call = require('./briefingCall');
+      if (call.shouldCall(u)) {
+        const c = await call.start(u, 'briefing', { now });
+        if (c.started) result = { sent: true, viaCall: true };
+      }
+      if (!result) result = await sendForUser(u.id, { now });
+    } catch (e) { console.warn('[morningBriefing] failed for', u.id, e.message); continue; }  // one user's failure never stops the rest
     results.push({ phone: u.phone, at: target, ...result });
 
     if (result.sent) {

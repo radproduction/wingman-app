@@ -114,7 +114,8 @@ async function uploadMedia(buffer, { mimeType = 'audio/ogg', filename = 'reply.o
 
 /** Send an audio reply as a WhatsApp voice note. */
 async function sendAudio(to, buffer, { mimeType = 'audio/ogg' } = {}) {
-  const mediaId = await uploadMedia(buffer, { mimeType });
+  const filename = mimeType === 'audio/mpeg' ? 'voice.mp3' : 'reply.ogg';
+  const mediaId = await uploadMedia(buffer, { mimeType, filename });
   return post({
     messaging_product: 'whatsapp',
     to: digitsOnly(to),

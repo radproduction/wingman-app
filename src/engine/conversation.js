@@ -292,6 +292,21 @@ async function runBuiltinTool(user, name, input) {
 }
 setBuiltinRunner(runBuiltinTool);
 
+/**
+ * Answer a question the user asked during a briefing CALL (the ElevenLabs
+ * agent forwards it here). Same brain, same tools, but an automated context:
+ * nothing that sends/deletes/spends can be approved from a call — it is parked
+ * and the user confirms on WhatsApp. The answer is meant to be spoken.
+ */
+async function answerForCall(user, question, { context = '' } = {}) {
+  const system = buildSystemPrompt(user) + appStudy.knowledgeBlock(user) + rulesBlock(user) + recentToolContextBlock(user)
+    + `\n\n--- LIVE VOICE CALL ---\nThe user is on a WhatsApp voice call with you right now (your briefing call) and asked the question below out loud. Use your tools to get the real answer. Reply with ONLY what should be SPOKEN: one to three short, natural sentences, in the language they used (Roman Urdu/Urdu → speak Urdu-English mix; English → English). No lists, no markdown, no emoji, no links, no ids. If they asked you to DO something that needs their yes (send, post, delete, cancel), call the tool so it is ready, then say it's ready and they can say yes on WhatsApp — you cannot approve it from the call.`
+    + (context ? `\n\nWhat has been said on the call so far (for reference): ${String(context).slice(0, 1500)}` : '');
+  const messages = [{ role: 'user', content: String(question || '').slice(0, 1000) }];
+  const reply = await runToolLoop(user, messages, system, 5, { automated: true, toolLog: [] });
+  return String(reply || '').replace(/[*_#`]/g, '').trim();
+}
+
 const CHAT_MAX_ROUNDS = 8;
 
 /** Built-in tools, always in the same order (so they can be prompt-cached). */
@@ -487,6 +502,7 @@ function parseWorkHours(text) {
 }
 
 module.exports = {
+  answerForCall,
   handleMessage,
   runConversation,
   runAutomatedInstruction,

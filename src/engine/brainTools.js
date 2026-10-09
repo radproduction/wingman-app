@@ -54,6 +54,18 @@ const brainTools = [
       required: ['app'],
     },
   },
+  {
+    name: 'set_briefing_call',
+    description:
+      'Turn the user\'s voice briefings on or off: at their briefing and wrap times Wingman calls them on WhatsApp ' +
+      'and talks it through (and sends the briefing as a voice note too when a call is missed). Use when they ask to ' +
+      'be called / not called for their briefing, to "call me again", or for voice briefings in any wording.',
+    input_schema: {
+      type: 'object',
+      properties: { on: { type: 'boolean', description: 'true to turn voice briefings on, false to turn them off.' } },
+      required: ['on'],
+    },
+  },
 ];
 
 const brainToolNames = new Set(brainTools.map((t) => t.name));

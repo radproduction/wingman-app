@@ -144,6 +144,8 @@ function init() {
     // Processing a finished meeting can take minutes; exclusive() keeps the
     // next minute's poll from picking up the same meeting in parallel.
     await step('recall poll', () => require('./recallPoll').runOnce());
+    // Briefing calls: answered → note in history; missed → text + voice note.
+    await step('briefing calls', () => require('./briefingCall').runPoll());
   }));
   jobs.push(botTick);
 

@@ -157,6 +157,11 @@ router.get('/me', async (req, res) => {
     wingman_number: config.wingmanNumber || null,
     // Lets the app open signed connect links (/auth/google?phone=…&sig=…).
     connect_sig: require('../utils/linkSig').connectSig(u.phone),
+    // "Call me for my briefing & wrap" (also turns voice notes on), and whether
+    // WhatsApp calling is live on this server yet (else: voice notes only).
+    briefing_call: require('../services/briefingCall').isOn(u),
+    briefing_calls_available: require('../config').elevenlabs.callsReady,
+    voice_notes_available: require('../config').elevenlabs.enabled,
     whatsapp_connected: whatsappConnected,
     created_at: u.created_at || null,
     mock: false,
@@ -865,6 +870,12 @@ router.post('/account/delete', async (req, res) => {
 router.patch(['/me', '/settings'], (req, res) => {
   if (!req.user) return res.status(401).json({ error: 'Authentication required.' });
   const body = req.body || {};
+  // Briefing calls + voice notes live in preferences, not a column.
+  if (body.briefing_call !== undefined) {
+    const out = require('../services/briefingCall').setEnabled(req.user.id, !!body.briefing_call);
+    const rest = Object.keys(body).filter((k) => k !== 'briefing_call' && SETTINGS_FIELDS.includes(k));
+    if (!rest.length) return res.json({ user: usersRepo.toPublic(usersRepo.getById(req.user.id)), ...out });
+  }
   const patch = {};
   for (const k of SETTINGS_FIELDS) {
     if (body[k] !== undefined) patch[k] = body[k];

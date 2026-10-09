@@ -139,7 +139,7 @@ function parseSqliteUtc(value) {
 // matched by phone number.
 const WA_INBOUND_SQL = `
   role = 'user'
-  AND COALESCE(CASE WHEN json_valid(metadata) THEN json_extract(metadata, '$.source') END, '') <> 'app'
+  AND COALESCE(CASE WHEN json_valid(metadata) THEN json_extract(metadata, '$.source') END, '') NOT IN ('app', 'call')
   AND COALESCE(CASE WHEN json_valid(metadata) THEN json_extract(metadata, '$.direction') END, 'inbound') = 'inbound'
 `;
 

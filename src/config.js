@@ -231,6 +231,37 @@ const config = {
     get enabled() { return !!process.env.OPENAI_API_KEY; },
   },
 
+  // ElevenLabs — Wingman's voice.
+  //   - Voice notes: the briefing/wrap read aloud (TTS) and sent on WhatsApp
+  //     next to the text, for users who turned on briefing calls.
+  //   - Briefing calls: at the user's briefing/wrap time an ElevenLabs agent
+  //     calls them ON WHATSAPP, talks them through it and answers questions
+  //     (it asks Wingman through /voice/tools/ask). Missed call → text + voice note.
+  //   WhatsApp only allows business-initiated calls from NON-US/Canada business
+  //   numbers with a 2,000+/day messaging limit, and each user must grant call
+  //   permission once (via ELEVENLABS_CALL_PERMISSION_TEMPLATE). Calls stay off
+  //   until ELEVENLABS_CALLS=1.
+  elevenlabs: {
+    apiKey: process.env.ELEVENLABS_API_KEY || '',
+    baseUrl: process.env.ELEVENLABS_BASE_URL || 'https://api.elevenlabs.io',
+    // "George" — warm British male, the closest stock voice to a JARVIS feel.
+    voiceId: process.env.ELEVENLABS_VOICE_ID || 'JBFqnCBsd6RMkjVDRZzb',
+    ttsModel: process.env.ELEVENLABS_TTS_MODEL || 'eleven_multilingual_v2',
+    agentId: process.env.ELEVENLABS_AGENT_ID || '',
+    callsEnabled: process.env.ELEVENLABS_CALLS === '1',
+    // The WhatsApp number calls are placed from (must be non-US/Canada).
+    // Defaults to Wingman's messaging number.
+    callPhoneNumberId: process.env.ELEVENLABS_CALL_PHONE_NUMBER_ID || process.env.WHATSAPP_PHONE_NUMBER_ID || '',
+    callPermissionTemplate: process.env.ELEVENLABS_CALL_PERMISSION_TEMPLATE || 'wingman_call_permission',
+    callPermissionTemplateLang: process.env.ELEVENLABS_CALL_PERMISSION_TEMPLATE_LANG || 'en_US',
+    // How long to wait for a call's outcome before falling back to text + voice.
+    callTimeoutMinutes: parseInt(process.env.ELEVENLABS_CALL_TIMEOUT_MINUTES, 10) || 40,
+    get enabled() { return !!process.env.ELEVENLABS_API_KEY; },
+    get callsReady() {
+      return !!(process.env.ELEVENLABS_API_KEY && process.env.ELEVENLABS_AGENT_ID && process.env.ELEVENLABS_CALLS === '1');
+    },
+  },
+
   // Gemini (Google): multimodal audio → text. Handles mixed Roman Urdu + English
   // well, so it's the primary meeting transcriber (Whisper stays as a fallback).
   gemini: {

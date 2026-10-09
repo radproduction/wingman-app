@@ -147,6 +147,8 @@ async function sendForUser(userId, { now = new Date(), send = true, full = false
           // On-demand full version (user tapped "View") — direct rich text.
           // skipDedupe so a re-tap is never swallowed by the once-a-day guard.
           await require('../whatsapp/client').sendMessage(user.phone, text, { skipDedupe: true });
+          // The same, read aloud — for users who turned on voice briefings.
+          try { await require('./briefingCall').sendVoiceNote(user, text); } catch (_) { /* best-effort */ }
         } else {
           // SCHEDULED send: concise "tap to view" nudge only, not the full wrap.
           const res = await wa().sendProactiveMessage(user, text, {
@@ -203,8 +205,17 @@ async function runDueUsers({ hour = 20, now = new Date(), windowMin = 15 } = {})
     if ((u.preferences || {}).lastDebriefDate === dayKey) continue;
 
     let result;
-    try { result = await sendForUser(u.id, { now }); }
-    catch (e) { console.warn('[endOfDayWrap] failed for', u.id, e.message); continue; }  // one user's failure never stops the rest
+    try {
+      // Users who turned on briefing calls get a WhatsApp call instead; if the
+      // call can't be placed, the text goes out as usual (and a missed call
+      // falls back to text + voice note later — see briefingCall.runPoll).
+      const call = require('./briefingCall');
+      if (call.shouldCall(u)) {
+        const c = await call.start(u, 'wrap', { now });
+        if (c.started) result = { sent: true, viaCall: true };
+      }
+      if (!result) result = await sendForUser(u.id, { now });
+    } catch (e) { console.warn('[endOfDayWrap] failed for', u.id, e.message); continue; }  // one user's failure never stops the rest
     results.push({ phone: u.phone, at: target, ...result });
 
     if (result.sent) {

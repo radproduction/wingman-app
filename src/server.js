@@ -565,6 +565,30 @@ async function handleSignInReply(m, phoneNumber) {
   catch (e) { console.warn('[webhook] sign-in reply send failed:', e.message); }
 }
 
+// ─── Briefing calls: the ElevenLabs agent asks Wingman mid-call ─────
+//   POST /voice/tools/ask  { question, call_token, context? }
+//   header X-Wingman-Tool-Secret: briefingCall.toolSecret()
+//   The call token is a per-call secret passed to the agent as a dynamic
+//   variable, so the answer always comes from THAT caller's own data.
+app.post('/voice/tools/ask', async (req, res) => {
+  const briefingCall = require('./services/briefingCall');
+  const given = String(req.get('x-wingman-tool-secret') || '');
+  if (!require('./utils/linkSig').safeEqual(given, briefingCall.toolSecret())) {
+    return res.status(401).json({ error: 'unauthorized' });
+  }
+  const body = req.body || {};
+  const question = String(body.question || '').trim();
+  if (!question) return res.status(400).json({ error: 'question required' });
+  try {
+    const out = await briefingCall.answer(String(body.call_token || ''), question, String(body.context || ''));
+    if (out.error) return res.status(404).json(out);
+    res.json(out);
+  } catch (e) {
+    console.warn('[voice/ask] failed:', e.message);
+    res.json({ answer: "I couldn't check that right now. I'll message you the answer on WhatsApp." });
+  }
+});
+
 // ─── WhatsApp Cloud API webhook ─────────────────────────────────────
 //   GET  → Meta verification handshake (hub.challenge)
 //   POST → incoming messages: parse, run the engine, reply via Cloud API.

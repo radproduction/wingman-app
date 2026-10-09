@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { SetRow, SubScreen } from './SubScreen'
 import { Icon, IconCheckCircle, IconSpark } from './icons'
 import { Avatar } from './Avatar'
@@ -5,7 +6,58 @@ import { useAgent } from '../data/agentSettings'
 import { useProfile } from '../data/store'
 import { t } from '../i18n'
 import { confirmSignOut } from './SignIn'
+import { api } from '../data/api'
+import { Switch } from '../shell/Switch'
+import { tapQuiet } from '../shell/feedback'
+import { toast } from '../shell/toast'
 import './app.css'
+
+// "Voice briefing": Wingman calls on WhatsApp at the briefing/wrap times (when
+// calling is live on the server) and sends the briefing as a voice note too.
+const VoiceBriefing = () => {
+  const [on, setOn] = useState<boolean | null>(null)
+  const [calls, setCalls] = useState(false)
+  useEffect(() => {
+    api
+      .me()
+      .then((me) => {
+        setOn(me.briefing_call === true)
+        setCalls(me.briefing_calls_available === true)
+      })
+      .catch(() => setOn(false))
+  }, [])
+  const toggle = async () => {
+    if (on === null) return
+    tapQuiet()
+    const next = !on
+    setOn(next)
+    try {
+      await api.updateMe({ briefing_call: next })
+      toast(next ? t(calls ? "I'll call you for your briefing and wrap." : 'Voice notes on for your briefing and wrap.') : t('Voice briefing off.'))
+    } catch {
+      setOn(!next)
+      toast(t('Could not save. Try again.'))
+    }
+  }
+  return (
+    <div className="wg-options">
+      <button className={`wg-option wg-card-line wg-option--switch ${on ? 'on' : ''}`} onClick={toggle} disabled={on === null}>
+        <span className="ic peach">
+          <Icon name="phone" size={20} variant="duotone" />
+        </span>
+        <span className="tx">
+          <strong>{t('Voice briefing')}</strong>
+          <span>
+            {calls
+              ? t("I'll call you on WhatsApp at your briefing and wrap times. Miss it and you get it as a message and a voice note.")
+              : t('Your briefing and wrap come with a voice note too. WhatsApp calls are coming soon.')}
+          </span>
+        </span>
+        <Switch on={!!on} />
+      </button>
+    </div>
+  )
+}
 
 export const Profile = () => {
   const profile = useProfile()
@@ -41,6 +93,8 @@ export const Profile = () => {
       <SetRow icon="sun" tone="peach" name="Morning briefing" value={profile.briefing} to="profile/briefing" />
       <SetRow icon="moon" tone="lavender" name="Evening wrap-up" value={profile.wrap} to="profile/wrap" />
     </div>
+
+    <VoiceBriefing />
 
     <div className="wg-panel-head">
       <h2>{t('How I work with you')}</h2>

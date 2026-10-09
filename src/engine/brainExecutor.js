@@ -48,6 +48,15 @@ async function executeBrainTool(user, toolUse, ctx = {}) {
       return n ? { removed: n } : { error: 'NO_MATCHING_RULE' };
     }
 
+    if (name === 'set_briefing_call') {
+      const out = require('../services/briefingCall').setEnabled(user.id, !!input.on);
+      return {
+        ...out,
+        note: out.briefing_call && !out.calls_available
+          ? 'Saved. WhatsApp calls are not switched on for Wingman yet, so for now the briefing and wrap come with a voice note; calls start automatically once they are live.'
+          : 'Saved.',
+      };
+    }
     if (name === 'restudy_app') {
       return require('../services/appStudy').restudy(user, input.app);
     }
