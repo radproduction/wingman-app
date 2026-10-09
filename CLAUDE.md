@@ -107,6 +107,15 @@ timeline up front, in their own language. Notes are injected into every chat
 `onboardingAnalyzer` (7-day window, then weekly refresh). **Do not add per-app
 study code** — improve the generic prompt instead. `APP_STUDY=0` disables it.
 
+**Three layers of "knowing the user":** (1) live tools for fresh data/actions;
+(2) memory in the prompt — `user_memory` facts, the distilled **profile card**
+(`services/userProfile.js`, rebuilt when inputs change, ≤ daily) and the app notes
+above; (3) **search over synced data** — `services/userIndex.js` keeps an SQLite
+FTS5 index (`search_docs` / `search_fts`) over emails, meetings, events, tasks,
+contacts, follow-ups and chats, synced every 15 min (backfilled at boot), exposed
+as `search_user_data` / `open_user_record` (records tools). New synced tables
+should be added to `SOURCES` in `userIndex.js`, not given their own search tool.
+
 `engine/brainTools.js` + `brainExecutor.js` hold the user's standing rules
 (`user_rules`): `auto_approve`, `always_ask`, `notify_mute`, `notify_always`.
 An `auto_approve` rule lets ONE exact Composio tool skip the yes — it is itself
@@ -119,6 +128,45 @@ tell / stay quiet" policy lives in `judgementGuide` in `systemPrompt.js`.
 parked as pending and only runs after the user sends a NEW message and the model
 calls `approve_integration_action`. Do not add a bypass. (The one sanctioned exception is a user's own
 `auto_approve` rule, described above.)
+
+### WhatsApp's 24h window (read before sending anything)
+
+Outside 24h since the user's last WhatsApp message, Meta silently drops
+free-form text. `whatsapp/client.js` handles this in ONE place:
+`sendMessage` checks the window (only real WhatsApp inbound counts — in-app chat
+rows carry `source: 'app'` and don't) and, outside it, sends the generic
+`PROACTIVE_TEMPLATE_NAME` template; if that would lose content, or a template
+is already waiting unanswered, the full text goes to `held_messages` and is
+delivered the moment the user next messages (`deliverHeld`, called from the
+webhook). Pass `{ urgent: true }` only for time-critical pings. Never call
+`cloudApi.sendText` for proactive messages — use `sendMessage` /
+`sendProactiveMessage`.
+
+**Sign-in without an AUTHENTICATION template:** `/api/auth/request-otp` returns
+`delivered:false` + `wa_link` + `poll_secret` when the code can't be pushed. The
+app's "Get my code on WhatsApp" button opens a chat pre-filled `WM-<ref>`; the
+webhook matches it (exact protocol token, `SIGNIN_REF_RE`), replies with the
+code, and the app's `/api/auth/otp-status` poll signs in. Users are stored with
+their full international number (`users.create`; old 10-digit rows self-heal
+from the webhook via `upgradePhone`).
+
+### Security rules
+
+- Admin/debug routes use `utils/adminAuth.js` (`requireAdmin`) — fails closed.
+- Connect links must be built with `utils/linkSig.js` `connectQuery(phone)`;
+  OAuth `state` with `signState` / `verifyState`. Unsigned links get a 403.
+- Webhook POSTs are HMAC-checked when `WHATSAPP_APP_SECRET` is set.
+- Gmail / business-mail sends, `delete_event`, `delete_drive_file` and
+  `share_drive_file` go through the same server-side approval gate as app tools
+  (`BUILTIN_GATED` in `integrationExecutor.js`).
+
+### Tests (run before every deploy)
+
+```bash
+node scripts/test-whatsapp-window.js   # 24h window, held messages, sign-in by reply (offline)
+node scripts/test-engine-offline.js    # approval gate, loop end, tool memory, caching (scripted model)
+docker exec wingman node scripts/eval-live.js   # real model, fake data, temp DB (~cents)
+```
 
 ---
 
@@ -215,8 +263,8 @@ right now.
 - **Large files** — `api/dashboard.js` (~52KB), `engine/systemPrompt.js` (~44KB),
   `src/server.js` (~43KB), `whatsapp/client.js` (~28KB), `db/schema.sql` (~23KB).
   Search within them; don't read them whole without reason.
-- **No test suite.** `scripts/test-*.js` are ad-hoc scripts run by hand, not CI.
-  Don't assume `npm test` exists.
+- **No CI.** `scripts/test-*.js` are run by hand (see "Tests" above). Don't
+  assume `npm test` exists.
 - **DB access is synchronous.** Don't `await` better-sqlite3 calls or wrap them
   in promises.
 - **Schema changes** go in `src/db/schema.sql`; `npm run initdb` applies it.

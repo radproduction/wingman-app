@@ -12,6 +12,45 @@
 
 const recordsTools = [
   {
+    name: 'search_user_data',
+    description:
+      'Search EVERYTHING Wingman has on this user in one go — their emails (subject, sender, AI summary), meetings ' +
+      '(notes, transcripts, summaries, decisions, action items), calendar events, tasks, contacts, follow-ups/promises, ' +
+      'and your own past chats with them. Use it FIRST for anything about the past or "what do we know about…": ' +
+      '"what did the client say last month", "Ali ke saath kya tay hua tha", "when did we discuss pricing", "find the ' +
+      'invoice email", "what did I tell you about my trip". Write the query in English keywords + names (the data is ' +
+      'mostly English), e.g. "Ali pricing proposal". Use since/until (YYYY-MM-DD) for time ranges like "last month". ' +
+      'Results give source + ref_id; open one fully with open_user_record. For live/new data (today\'s inbox, a ' +
+      'just-arrived email) use the live tools instead.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Keywords and names to look for. Can be empty when only a date range matters.' },
+        sources: {
+          type: 'array',
+          items: { type: 'string', enum: ['email', 'meeting', 'event', 'task', 'contact', 'followup', 'chat'] },
+          description: 'Limit to these kinds of data (omit to search all).',
+        },
+        since: { type: 'string', description: 'Only items on/after this date, YYYY-MM-DD.' },
+        until: { type: 'string', description: 'Only items on/before this date, YYYY-MM-DD.' },
+        limit: { type: 'number', description: 'How many results (default 8, max 20).' },
+      },
+      required: ['query'],
+    },
+  },
+  {
+    name: 'open_user_record',
+    description: 'Open one result from search_user_data in full (the whole meeting summary/notes, the email summary, the chat message…). For an email it also returns gmail_id, so read_email can fetch the original if needed.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        source: { type: 'string', enum: ['email', 'meeting', 'event', 'task', 'contact', 'followup', 'chat'] },
+        ref_id: { type: 'string' },
+      },
+      required: ['source', 'ref_id'],
+    },
+  },
+  {
     name: 'list_bills',
     description: 'The user\'s pending bills with amounts and due dates. Use for any question about bills, dues, what they owe, what is coming up to pay.',
     input_schema: { type: 'object', properties: {} },

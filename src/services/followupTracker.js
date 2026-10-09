@@ -143,7 +143,8 @@ async function runDueUsers({ hour = 9, now = new Date() } = {}) {
     if (!gate.allows(u, 'followups')) continue;
     const tz = u.timezone || 'Asia/Karachi';
     if (t.hourInTz(tz, now) === hour) {
-      results.push({ phone: u.phone, ...(await checkOverdue(u.id, { now })) });
+      try { results.push({ phone: u.phone, ...(await checkOverdue(u.id, { now })) }); }
+      catch (e) { console.warn('[followupTracker] failed for', u.id, e.message); }
     }
   }
   return results;

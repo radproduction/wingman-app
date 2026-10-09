@@ -60,9 +60,11 @@ function applyMigrations() {
     app_knowledge: [
       ['announced', 'INTEGER DEFAULT 0'],
     ],
-    calendar_events: [
-      ['account_id', 'TEXT'],
-      ['account_email', 'TEXT'],
+    otp_codes: [
+      ['ref', 'TEXT'],
+      ['poll_secret', 'TEXT'],
+      ['confirmed', 'INTEGER DEFAULT 0'],
+      ['ip', 'TEXT'],
     ],
     travel: [
       ['return_time', 'TEXT'],
@@ -144,6 +146,11 @@ function applyMigrations() {
       ['tasks_created', 'INTEGER DEFAULT 0'],
     ],
     calendar_events: [
+      // (This key used to appear twice in this object, so the second copy
+      // silently replaced the first and account_id/account_email were never
+      // added to older databases. One entry now.)
+      ['account_id', 'TEXT'],
+      ['account_email', 'TEXT'],
       // The Meet/Zoom/Teams join link (+ which provider), so the notetaker bot
       // knows where to go. Older caches predate these columns.
       ['meeting_url', 'TEXT'],

@@ -89,7 +89,7 @@ function getAuthUrl(phone, scopes = SCOPES) {
     // DIFFERENT second account; 'consent' still forces refresh_token issuance.
     prompt: 'select_account consent',
     scope: scopes,
-    state: phone || '',
+    state: require('../utils/linkSig').signState(phone || ''),
     include_granted_scopes: true,
   });
 }
@@ -271,7 +271,7 @@ function getHealthAuthUrl(phone) {
     access_type: 'offline',
     prompt: 'consent',
     scope: HEALTH_SCOPES,
-    state: `${phone || ''}|health`,
+    state: require('../utils/linkSig').signState(`${phone || ''}|health`),
     include_granted_scopes: true,
   });
 }

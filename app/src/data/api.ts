@@ -30,6 +30,37 @@ export const setToken = (token: string | null) => {
 
 export const isSignedIn = (): boolean => !!getToken()
 
+// Connect links (/auth/google?phone=…) must carry a signature the server
+// issued to THIS user, so nobody can attach their account to someone else's
+// number. The server hands it out at sign-in and on /me.
+const SIG_KEY = 'wingman.connectSig'
+const setConnectSig = (sig: unknown) => {
+  if (typeof sig !== 'string' || !sig) return
+  try {
+    localStorage.setItem(SIG_KEY, sig)
+  } catch {
+    /* ignore */
+  }
+}
+const getConnectSig = (): string => {
+  try {
+    return localStorage.getItem(SIG_KEY) || ''
+  } catch {
+    return ''
+  }
+}
+
+export type OtpRequest = {
+  sent?: boolean
+  delivered: boolean
+  channel?: 'text' | 'template' | 'reply'
+  ref?: string
+  poll_secret?: string
+  wa_link?: string | null
+  expires_in?: number
+  dev_code?: string
+}
+
 // ── Meetings shapes (backend /api/meetings) ──
 export type ServerMeetingSummary = {
   overview?: string
@@ -131,10 +162,22 @@ export const api = {
   base: BASE,
 
   // ── Auth (real OTP over WhatsApp, from the backend) ──
-  requestOtp: (phone: string) => req<{ ok: boolean; devCode?: string }>('POST', '/auth/request-otp', { phone }),
+  // delivered=false → the code couldn't be pushed (new number / outside
+  // WhatsApp's 24h window). The user then messages Wingman via wa_link and the
+  // app polls otpStatus with poll_secret to sign in.
+  requestOtp: (phone: string) => req<OtpRequest>('POST', '/auth/request-otp', { phone }),
+  otpStatus: async (phone: string, pollSecret: string) => {
+    const res = await req<{ status: 'pending' | 'confirmed' | 'expired' | 'unknown'; token?: string; user?: unknown }>(
+      'POST', '/auth/otp-status', { phone, poll_secret: pollSecret },
+    )
+    if (res.status === 'confirmed' && res.token) setToken(res.token)
+    setConnectSig((res as { connect_sig?: string }).connect_sig)
+    return res
+  },
   verifyOtp: async (phone: string, code: string) => {
-    const res = await req<{ token: string; user: unknown }>('POST', '/auth/verify-otp', { phone, code })
+    const res = await req<{ token: string; user: unknown; connect_sig?: string }>('POST', '/auth/verify-otp', { phone, code })
     if (res.token) setToken(res.token)
+    setConnectSig(res.connect_sig)
     return res
   },
   authMe: () => get<{ user: unknown }>('/auth/me'),
@@ -147,7 +190,11 @@ export const api = {
   },
 
   // ── Profile / settings ──
-  me: () => get<Record<string, unknown>>('/me'),
+  me: async () => {
+    const res = await get<Record<string, unknown>>('/me')
+    setConnectSig(res.connect_sig)
+    return res
+  },
   updateMe: (patch: Record<string, unknown>) => req<{ user: unknown }>('PATCH', '/me', patch),
   completeOnboarding: (patch: Record<string, unknown>) => req<{ user: unknown }>('POST', '/onboarding/complete', patch),
 
@@ -220,7 +267,7 @@ export const api = {
   // One Google consent connects Calendar + Gmail + Tasks + Drive together
   // (the backend's combined scopes). The flow is keyed by phone.
   googleConnectUrl: (phone: string) =>
-    `${BASE}/auth/google?phone=${encodeURIComponent(phone.replace(/\D/g, ''))}`,
+    `${BASE}/auth/google?phone=${encodeURIComponent(phone.replace(/\D/g, ''))}&sig=${encodeURIComponent(getConnectSig())}`,
   // Multiple Google accounts: list, set which sends/creates, unlink one.
   googleAccounts: () => get<{ accounts: GoogleAccount[] }>('/google/accounts'),
   setPrimaryGoogleAccount: (id: string) =>

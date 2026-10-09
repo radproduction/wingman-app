@@ -67,12 +67,28 @@ async function chat(messages, { system, maxTokens = 2048, model } = {}) {
  * @param {number} [opts.maxTokens=1024]
  * @returns {Promise<Object>} the Anthropic message response
  */
-async function chatWithTools(messages, { system, tools, maxTokens = 2048, model } = {}) {
+/**
+ * Prompt caching: the built-in tool definitions are large and identical on
+ * every call, so mark the last of the first `n` as a cache breakpoint.
+ * Everything up to it is then read from cache (~10% of the price, faster)
+ * instead of being processed again.
+ */
+function markToolCache(tools, n) {
+  if (!tools || !tools.length) return undefined;
+  if (!(n > 0 && n <= tools.length)) return tools;
+  const out = tools.slice();
+  out[n - 1] = { ...out[n - 1], cache_control: { type: 'ephemeral' } };
+  return out;
+}
+
+async function chatWithTools(messages, { system, tools, maxTokens = 2048, model, toolChoice, cacheTools = 0 } = {}) {
+  const toolList = markToolCache(tools, cacheTools);
   return getClient().messages.create({
     model: model || config.anthropic.model,
     max_tokens: maxTokens,
     system: system || undefined,
-    tools: tools && tools.length ? tools : undefined,
+    tools: toolList,
+    tool_choice: toolList && toolChoice ? toolChoice : undefined,
     messages,
   });
 }
@@ -86,4 +102,4 @@ function textOf(response) {
     .join('\n');
 }
 
-module.exports = { getClient, complete, chat, chatWithTools, textOf };
+module.exports = { getClient, complete, chat, chatWithTools, textOf, markToolCache };

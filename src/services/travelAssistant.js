@@ -139,7 +139,8 @@ async function runDueUsers({ now = new Date() } = {}) {
   const results = [];
   for (const u of users) {
     if (!gate.allows(u, 'travel')) continue;
-    results.push({ phone: u.phone, ...(await alertForUser(u.id, { now })) });
+    try { results.push({ phone: u.phone, ...(await alertForUser(u.id, { now })) }); }
+    catch (e) { console.warn('[travelAssistant] failed for', u.id, e.message); }
   }
   return results;
 }

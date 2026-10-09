@@ -58,7 +58,8 @@ async function runAllUsers({ now = new Date() } = {}) {
   const results = [];
   for (const u of users) {
     if (!gate.allows(u, 'meetingcomplete')) continue;
-    results.push({ phone: u.phone, ...(await completeForUser(u.id, { now })) });
+    try { results.push({ phone: u.phone, ...(await completeForUser(u.id, { now })) }); }
+    catch (e) { console.warn('[meetingComplete] failed for', u.id, e.message); }
   }
   return results;
 }

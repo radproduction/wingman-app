@@ -133,6 +133,7 @@ async function pingKnocking(user, title) {
       user.phone,
       `🔔 Wingman is knocking to join *${title}* — please tap *Admit* in the meeting so it can record and take notes.\n\n`
       + `If it isn't admitted it waits about 30 minutes, then leaves, and there'll be no recording.`,
+      { urgent: true },
     );
   } catch (_) { /* best-effort */ }
 }

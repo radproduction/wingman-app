@@ -46,8 +46,22 @@ const config = {
 
   publicBaseUrl: process.env.PUBLIC_BASE_URL || 'http://localhost:3000',
 
-  // Password protecting the browser-based WhatsApp pairing page (/admin/qr)
-  adminPassword: process.env.ADMIN_PASSWORD || 'wingman',
+  // Password for every admin/debug route (/admin/qr, /_diag/*, /send,
+  // /trigger, /conversations…). NO default: when it is unset those routes are
+  // closed (they used to fall back to 'wingman', or to "open").
+  adminPassword: process.env.ADMIN_PASSWORD || '',
+
+  security: {
+    // Signs connect links (/auth/google?phone=…&sig=…) and OAuth `state`, so
+    // nobody can attach their own Google/Shopify account to someone else's
+    // number. Falls back to SECRET_KEY / SESSION_SECRET.
+    linkSecret: process.env.LINK_SECRET || process.env.SECRET_KEY || process.env.SESSION_SECRET || '',
+    // Fallback material when no secret is set at all, so links stay valid
+    // across restarts (a warning is logged). Set SECRET_KEY instead.
+    linkSecretFallback: `${process.env.GOOGLE_CLIENT_SECRET || ''}|${process.env.ANTHROPIC_API_KEY || ''}`,
+    // Set SIGNED_CONNECT_LINKS=0 only to debug; unsigned connect links are refused.
+    signedConnectLinks: process.env.SIGNED_CONNECT_LINKS !== '0',
+  },
 
   // Built dashboard (Vite) output served by Express in production
   clientDist: uiDist,
@@ -71,7 +85,9 @@ const config = {
 
   // Wingman's OWN WhatsApp number (the assistant's number users message).
   // Purely informational (shown in the UI); pairing is done via /admin/qr.
-  wingmanNumber: process.env.WINGMAN_NUMBER || '',
+  // Also used for the sign-in "message Wingman" link (wa.me), so it defaults to
+  // the live number.
+  wingmanNumber: process.env.WINGMAN_NUMBER || '+1 646 862 7900',
 
   // Contact email shown on the public Privacy Policy page (/privacy).
   privacyContactEmail: process.env.PRIVACY_CONTACT_EMAIL || 'wehearyou.studio@gmail.com',
@@ -81,6 +97,9 @@ const config = {
   // phone numbers in webhooks, reliable on cloud hosts like Railway).
   whatsappCloud: {
     token: process.env.WHATSAPP_TOKEN || '',
+    // Meta App Secret — used to verify X-Hub-Signature-256 on every webhook
+    // POST. Unset → webhooks are accepted unverified (a warning is logged).
+    appSecret: process.env.WHATSAPP_APP_SECRET || process.env.META_APP_SECRET || '',
     phoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID || '',
     // Shared secret we choose; must match the value entered in the Meta
     // webhook config so Meta's verification GET succeeds.

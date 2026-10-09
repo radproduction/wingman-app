@@ -358,7 +358,9 @@ async function runDueUsers({ hour = 7, now = new Date(), windowMin = 15 } = {}) 
     const dayKey = t.dateKeyInTz(tz, now);
     if ((u.preferences || {}).lastBriefingDate === dayKey) continue;
 
-    const result = await sendForUser(u.id, { now });
+    let result;
+    try { result = await sendForUser(u.id, { now }); }
+    catch (e) { console.warn('[morningBriefing] failed for', u.id, e.message); continue; }  // one user's failure never stops the rest
     results.push({ phone: u.phone, at: target, ...result });
 
     if (result.sent) {

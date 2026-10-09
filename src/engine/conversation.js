@@ -3,7 +3,7 @@
 const usersRepo = require('../db/users');
 const conversationsRepo = require('../db/conversations');
 const claude = require('../llm/claude');
-const { buildSystemPrompt } = require('./systemPrompt');
+const { buildSystemPrompt, buildSystemPromptParts } = require('./systemPrompt');
 const { calendarTools } = require('./calendarTools');
 const { executeCalendarTool } = require('./calendarExecutor');
 const { taskTools, taskToolNames } = require('./taskTools');
@@ -41,7 +41,9 @@ const { executeMemoryTool } = require('./memoryExecutor');
 const { executeNewsTool } = require('./newsExecutor');
 const { executeShopifyTool } = require('./shopifyExecutor');
 const { integrationToolsForUser } = require('./integrationTools');
-const { executeIntegrationTool, pendingActionsBlock } = require('./integrationExecutor');
+const {
+  executeIntegrationTool, pendingActionsBlock, gateBuiltin, setBuiltinRunner, BUILTIN_GATED,
+} = require('./integrationExecutor');
 const { imageToolNames, imageToolsAvailable } = require('./imageTools');
 const { executeImageTool, recentImagesBlock } = require('./imageExecutor');
 const { brainTools, brainToolNames } = require('./brainTools');
@@ -86,13 +88,19 @@ async function handleMessage({ text, phoneNumber, meta = {} }) {
   // never worked in Roman Urdu. Bills, deliveries, trips, contacts, the inbox
   // digest and the Google connect link are all tools/context the assistant
   // chooses to use (engine/recordsTools.js, connectLinkBlock).
-  const reply = await runConversation(user, text);
+  const out = {};
+  const reply = await runConversation(user, text, out);
 
   conversationsRepo.logMessage({
     userId: user.id,
     role: 'assistant',
     content: reply,
-    metadata: { direction: 'outbound', phoneNumber },
+    metadata: {
+      direction: 'outbound',
+      phoneNumber,
+      ...(meta && meta.source === 'app' ? { source: 'app' } : {}),
+      ...(out.toolLog && out.toolLog.length ? { toolLog: out.toolLog } : {}),
+    },
   });
 
   return { reply, user };
@@ -157,11 +165,51 @@ async function runOnboarding(user, text, isNew) {
  */
 function connectLinkBlock(user) {
   if (!user || !user.phone) return '';
-  const url = `${config.publicBaseUrl}/auth/google?phone=${encodeURIComponent(user.phone)}`;
+  const url = `${config.publicBaseUrl}/auth/google?${require('../utils/linkSig').connectQuery(user.phone)}`;
   return `\n\n--- GOOGLE CONNECT LINK ---\nOne link connects Gmail, Calendar, Drive and Tasks together: ${url}\nSend it (just the link with one short line) when they ask to connect or reconnect any of those in any wording, or when a Google tool returns a NOT_CONNECTED / SCOPE_MISSING error. Never tell them to type a special phrase to get it. After they connect, carry on with what they originally asked.`;
 }
 
-async function runConversation(user, text) {
+// ─── What the assistant did in recent turns ─────────────────────────
+// Chat history is stored as plain text, so the ids, numbers and results the
+// tools returned last turn were lost by the next one ("which email? which
+// event?"). Each turn now keeps a compact log of its tool calls, and the last
+// few logs ride along in the system prompt.
+const TOOL_LOG_MAX_ITEMS = 12;
+const TOOL_LOG_ITEM_CHARS = 420;
+
+function compactJson(v, n) {
+  let t;
+  try { t = JSON.stringify(v); } catch (_) { t = String(v); }
+  t = String(t || '').replace(/\s+/g, ' ');
+  return t.length > n ? `${t.slice(0, n)}…` : t;
+}
+
+function toolLogEntry(name, input, result) {
+  if (name === 'find_app_tools') return `find_app_tools(${compactJson(input && input.app, 40)})`;
+  return `${name}(${compactJson(input || {}, 160)}) → ${compactJson(result, TOOL_LOG_ITEM_CHARS)}`;
+}
+
+function recentToolContextBlock(user) {
+  try {
+    const rows = conversationsRepo.historyForUser(user.id, 12)
+      .filter((r) => r.role === 'assistant')
+      .slice(-3);
+    const parts = [];
+    for (const r of rows) {
+      let meta = r.metadata;
+      if (typeof meta === 'string') { try { meta = JSON.parse(meta); } catch (_) { meta = null; } }
+      const log = meta && Array.isArray(meta.toolLog) ? meta.toolLog : null;
+      if (!log || !log.length) continue;
+      parts.push(`[${r.created_at} UTC]\n${log.map((l) => `- ${l}`).join('\n')}`);
+    }
+    if (!parts.length) return '';
+    return `\n\n--- WHAT YOUR TOOLS RETURNED IN RECENT TURNS (for ids, numbers and results you already looked up; re-check with a tool if it may have changed) ---\n${parts.join('\n')}`;
+  } catch (_) {
+    return '';
+  }
+}
+
+async function runConversation(user, text, out = {}) {
   const history = conversationsRepo.historyForUser(user.id, 20);
   const messages = history.map((row) => ({
     role: row.role === 'assistant' ? 'assistant' : 'user',
@@ -174,9 +222,20 @@ async function runConversation(user, text) {
 
   // Start learning Shopify if it was connected before the study feature existed.
   try { appStudy.noticeBuiltins(user); } catch (_) { /* best-effort */ }
-  const system = buildSystemPrompt(user) + connectLinkBlock(user) + appStudy.knowledgeBlock(user) + rulesBlock(user)
-    + pendingActionsBlock(user) + recentImagesBlock(user);
-  const reply = await runToolLoop(user, messages, system);
+  // Two blocks: the big, unchanging guides are prompt-cached; everything that
+  // changes from turn to turn comes after the cache breakpoint.
+  const parts = buildSystemPromptParts(user);
+  const system = [
+    { type: 'text', text: parts.stable, cache_control: { type: 'ephemeral' } },
+    {
+      type: 'text',
+      text: parts.dynamic + connectLinkBlock(user) + appStudy.knowledgeBlock(user) + rulesBlock(user)
+        + pendingActionsBlock(user) + recentImagesBlock(user) + recentToolContextBlock(user),
+    },
+  ];
+  const ctx = { toolLog: [] };
+  const reply = await runToolLoop(user, messages, system, CHAT_MAX_ROUNDS, ctx);
+  out.toolLog = ctx.toolLog;
 
   try {
     require('../services/behaviorLearner')
@@ -204,6 +263,64 @@ async function runAutomatedInstruction(user, instruction) {
   return (reply || '').trim() || null;
 }
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** Cheap checks so an action that can't work isn't parked for a yes first. */
+function precheckBuiltin(user, name, input = {}) {
+  if (['send_email', 'reply_to_email', 'forward_email'].includes(name)
+      && !require('../auth/googleAuth').isEmailConnected(user)) return { error: 'EMAIL_NOT_CONNECTED' };
+  if (['send_business_email', 'reply_business_email'].includes(name) && !user.webmail_address) {
+    return { error: 'BUSINESS_EMAIL_NOT_CONNECTED' };
+  }
+  if (['send_email', 'forward_email', 'send_business_email'].includes(name)) {
+    const to = String(input.to || '').trim();
+    if (!EMAIL_RE.test(to)) {
+      return { error: 'INVALID_RECIPIENT', detail: `"${to}" is not a valid email address. Use find_contact or ask the user for the address.` };
+    }
+  }
+  return null;
+}
+
+/** Run a built-in tool for real (after the user's yes, or when it isn't gated). */
+async function runBuiltinTool(user, name, input) {
+  const fresh = usersRepo.getById(user.id) || user;
+  const toolUse = { name, input: input || {} };
+  if (gmailToolNames.has(name)) return executeGmailTool(fresh, toolUse);
+  if (webmailToolNames.has(name)) return executeWebmailTool(fresh, toolUse);
+  if (driveToolNames.has(name)) return executeDriveTool(fresh, toolUse);
+  return executeCalendarTool(fresh, toolUse);
+}
+setBuiltinRunner(runBuiltinTool);
+
+const CHAT_MAX_ROUNDS = 8;
+
+/** Built-in tools, always in the same order (so they can be prompt-cached). */
+function builtinToolList() {
+  return [
+    ...calendarTools,
+    ...taskTools,
+    ...goalTools,
+    ...auditTools,
+    ...vaultTools,
+    ...browserTools,
+    ...gmailTools,
+    ...driveTools,
+    ...shopifyTools,
+    ...newsTools,
+    ...memoryTools,
+    ...mapsTools,
+    ...webmailTools,
+    ...voiceTools,
+    ...healthTools,
+    ...workTools,
+    ...automationTools,
+    ...agentTools,
+    ...imageToolsAvailable(),
+    ...brainTools,
+    ...recordsTools,
+  ];
+}
+
 async function runToolLoop(user, messages, system, maxRounds = 5, ctx = {}) {
   const convo = [...messages];
   // Third-party app tools (Composio) for the apps THIS user has connected.
@@ -217,32 +334,11 @@ async function runToolLoop(user, messages, system, maxRounds = 5, ctx = {}) {
     // Rebuilt each round (cached underneath) so tools loaded by find_app_tools
     // in one round are callable in the next.
     integrations = await integrationToolsForUser(user);
+    const builtin = builtinToolList();
     const response = await claude.chatWithTools(convo, {
       system,
-      tools: [
-        ...calendarTools,
-        ...taskTools,
-        ...goalTools,
-        ...auditTools,
-        ...vaultTools,
-        ...browserTools,
-        ...gmailTools,
-        ...driveTools,
-        ...shopifyTools,
-        ...newsTools,
-        ...memoryTools,
-        ...mapsTools,
-        ...webmailTools,
-        ...voiceTools,
-        ...healthTools,
-        ...workTools,
-        ...automationTools,
-        ...agentTools,
-        ...imageToolsAvailable(),
-        ...brainTools,
-        ...recordsTools,
-        ...integrations.tools,
-      ],
+      cacheTools: builtin.length,
+      tools: [...builtin, ...integrations.tools],
       maxTokens: 2048,
     });
 
@@ -260,6 +356,11 @@ async function runToolLoop(user, messages, system, maxRounds = 5, ctx = {}) {
           // Checked first: app tool names are Composio slugs, and anything not
           // matched below would otherwise fall through to the calendar executor.
           result = await executeIntegrationTool(user, { name: block.name, input: block.input }, ctx);
+        } else if (BUILTIN_GATED.has(block.name)) {
+          // Outward-facing / hard-to-undo built-ins wait for the user's yes on
+          // the server, exactly like app tools.
+          result = precheckBuiltin(user, block.name, block.input)
+            || await gateBuiltin(user, block.name, block.input, ctx, () => runBuiltinTool(user, block.name, block.input));
         } else if (imageToolNames.has(block.name)) {
           result = await executeImageTool(user, { name: block.name, input: block.input });
         } else if (brainToolNames.has(block.name)) {
@@ -306,6 +407,10 @@ async function runToolLoop(user, messages, system, maxRounds = 5, ctx = {}) {
 
         // Audit trail: record any action that actually changed something (best-effort).
         try { require('../db/agentActions').logToolAction(user.id, block.name, result); } catch (_) { /* never break the reply */ }
+        if (Array.isArray(ctx.toolLog) && ctx.toolLog.length < TOOL_LOG_MAX_ITEMS) {
+          ctx.toolLog.push(toolLogEntry(block.name, block.input, result));
+        }
+        if (result && result.error) ctx.hadErrors = true;
 
         toolResults.push({
           type: 'tool_result',
@@ -320,10 +425,38 @@ async function runToolLoop(user, messages, system, maxRounds = 5, ctx = {}) {
 
     const text = claude.textOf(response);
     if (text && text.trim()) return text;
-    return 'Done ✅';
+    // A turn that ended with no words after tools: never claim success blindly.
+    return ctx.hadErrors ? "I couldn't finish that — something failed on the way. Want me to try again?" : 'Done ✅';
   }
 
-  return `I've handled that ✅`;
+  // Out of rounds. This used to reply "I've handled that ✅" no matter what had
+  // (or hadn't) happened. Now the model gets one last, tool-free turn to say
+  // honestly what it finished and what is left.
+  return finalWords(convo, system, integrations ? integrations.tools : []);
+}
+
+async function finalWords(convo, system, extraTools = []) {
+  try {
+    const last = convo[convo.length - 1];
+    const note = {
+      type: 'text',
+      text: '[System: the tool budget for this message is used up — no more tools can run now. Reply to the user: say plainly what you actually completed (only what the tool results confirm) and what is still left, and offer to continue. Do not claim anything you did not do.]',
+    };
+    if (last && last.role === 'user' && Array.isArray(last.content)) last.content.push(note);
+    else convo.push({ role: 'user', content: [note] });
+    const response = await claude.chatWithTools(convo, {
+      system,
+      tools: [...builtinToolList(), ...extraTools],
+      cacheTools: builtinToolList().length,
+      toolChoice: { type: 'none' },
+      maxTokens: 700,
+    });
+    const text = claude.textOf(response);
+    if (text && text.trim()) return text;
+  } catch (e) {
+    console.warn('[conversation] final summary failed:', e.message);
+  }
+  return "I ran out of steps before finishing this one. Tell me to continue and I'll pick up where I left off.";
 }
 
 function cleanName(text) {

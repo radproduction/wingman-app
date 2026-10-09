@@ -6,6 +6,7 @@ const config = require('./config');
 const { initSchema } = require('./db');
 const conversations = require('./db/conversations');
 const wa = require('./whatsapp/client');
+const { isAdmin, requireAdmin } = require('./utils/adminAuth');
 const cloudApi = require('./whatsapp/cloudApi');
 const engine = require('./engine/conversation');
 const authRoutes = require('./auth/routes');
@@ -23,7 +24,12 @@ const documentReader = require('./services/documentReader');
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+// Keep the raw bytes: the WhatsApp webhook signature (X-Hub-Signature-256) is
+// computed over the exact body Meta sent.
+app.use(express.json({
+  limit: '2mb',
+  verify: (req, _res, buf) => { if (req.originalUrl && req.originalUrl.startsWith('/webhook')) req.rawBody = buf; },
+}));
 
 // Google OAuth routes (/auth/google, /auth/google/callback)
 app.use('/', authRoutes);
@@ -87,8 +93,7 @@ app.get('/health', (req, res) => {
 //   parameter counts the code uses, so a mismatch between the approved template
 //   and the code shows up as Meta's own error BEFORE we rely on it.
 app.get('/_diag/template', async (req, res) => {
-  const admin = process.env.ADMIN_PASSWORD;
-  if (admin && req.query.key !== admin) return res.status(403).json({ error: 'forbidden' });
+  if (!isAdmin(req)) return res.status(403).json({ error: 'forbidden' });
 
   const digits = String(req.query.phone || '').replace(/[^0-9]/g, '');
   if (!digits) return res.status(400).json({ error: 'pass ?phone=<digits>&which=notify|briefing|wrap' });
@@ -130,8 +135,7 @@ app.get('/_diag/template', async (req, res) => {
 //   dormant 24h. Tap the button on the phone → the real /webhook fires → it
 //   sends the full rich free-form briefing/wrap. Gated by ADMIN_PASSWORD.
 app.get('/_diag/ready-nudge', async (req, res) => {
-  const admin = process.env.ADMIN_PASSWORD;
-  if (admin && req.query.key !== admin) return res.status(403).json({ error: 'forbidden' });
+  if (!isAdmin(req)) return res.status(403).json({ error: 'forbidden' });
 
   const digits = String(req.query.phone || '').replace(/[^0-9]/g, '');
   if (!digits) return res.status(400).json({ error: 'pass ?phone=<digits>&which=briefing|wrap' });
@@ -167,8 +171,7 @@ app.get('/_diag/ready-nudge', async (req, res) => {
 //   shared hosting. Guarded by ADMIN_PASSWORD and refuses private targets so
 //   it can't be used as an internal port scanner. Remove once webmail works.
 app.get('/_diag/net', async (req, res) => {
-  const admin = process.env.ADMIN_PASSWORD;
-  if (admin && req.query.key !== admin) return res.status(403).json({ error: 'forbidden' });
+  if (!isAdmin(req)) return res.status(403).json({ error: 'forbidden' });
 
   const net = require('net');
   const dns = require('dns').promises;
@@ -207,8 +210,7 @@ app.get('/_diag/net', async (req, res) => {
 //   24h window, and the ACTUAL result of sending a briefing right now (incl. the
 //   real Meta error). Gated by ADMIN_PASSWORD. Remove once briefings are fixed.
 app.get('/_diag/briefing', async (req, res) => {
-  const admin = process.env.ADMIN_PASSWORD;
-  if (admin && req.query.key !== admin) return res.status(403).json({ error: 'forbidden' });
+  if (!isAdmin(req)) return res.status(403).json({ error: 'forbidden' });
 
   const phone = String(req.query.phone || '').replace(/[^0-9]/g, '');
   if (!phone) return res.status(400).json({ error: 'pass ?phone=<number, digits only>' });
@@ -278,8 +280,7 @@ app.get('/_diag/briefing', async (req, res) => {
 //   Add &test=1 to push a REAL task into the user's Google Tasks and report the
 //   actual result — the definitive proof that WhatsApp → Google sync works.
 app.get('/_diag/tasks', async (req, res) => {
-  const admin = process.env.ADMIN_PASSWORD;
-  if (admin && req.query.key !== admin) return res.status(403).json({ error: 'forbidden' });
+  if (!isAdmin(req)) return res.status(403).json({ error: 'forbidden' });
 
   const usersRepo = require('./db/users');
   const digits = String(req.query.phone || '').replace(/[^0-9]/g, '');
@@ -335,8 +336,7 @@ app.get('/_diag/tasks', async (req, res) => {
 //   user row the webhook would resolve and exactly what the health tool sees
 //   for them. Remove once this is settled.
 app.get('/_diag/health', (req, res) => {
-  const admin = process.env.ADMIN_PASSWORD;
-  if (admin && req.query.key !== admin) return res.status(403).json({ error: 'forbidden' });
+  if (!isAdmin(req)) return res.status(403).json({ error: 'forbidden' });
 
   const usersRepo = require('./db/users');
   const { db } = require('./db');
@@ -374,8 +374,7 @@ app.get('/_diag/health', (req, res) => {
 
 // ─── TEMPORARY diagnostic: is the Maps key actually working? ─────────
 app.get('/_diag/maps', async (req, res) => {
-  const admin = process.env.ADMIN_PASSWORD;
-  if (admin && req.query.key !== admin) return res.status(403).json({ error: 'forbidden' });
+  if (!isAdmin(req)) return res.status(403).json({ error: 'forbidden' });
 
   const config = require('./config');
   const out = {
@@ -524,6 +523,48 @@ app.post('/work/company-notify', (req, res) => {
   res.json({ ok: true, linked: true });
 });
 
+// ─── Webhook helpers ────────────────────────────────────────────────
+const SIGNIN_REF_RE = /\bWM-([A-HJ-NP-Z2-9]{6})\b/i;
+
+/** Record an inbound WhatsApp message id; false if it was already processed. */
+function markInboundSeen(waMessageId) {
+  try {
+    const { db } = require('./db');
+    const r = db.prepare('INSERT OR IGNORE INTO inbound_seen (wa_message_id) VALUES (?)').run(String(waMessageId));
+    if (Math.random() < 0.01) db.prepare("DELETE FROM inbound_seen WHERE seen_at < datetime('now', '-3 days')").run();
+    return r.changes > 0;
+  } catch (_) {
+    return true; // never drop a message because the dedupe table misbehaved
+  }
+}
+
+async function handleSignInReply(m, phoneNumber) {
+  const ref = String(m.text).match(SIGNIN_REF_RE)[1].toUpperCase();
+  const usersRepo = require('./db/users');
+  const existing = usersRepo.getByPhone(phoneNumber);
+  // Log it as a real WhatsApp inbound (user_id may still be null for a brand-new
+  // number) — it opens the 24h window, so the welcome can go out free-form.
+  try {
+    conversations.logInbound({ userId: existing ? existing.id : null, content: m.text, phoneNumber, waMessageId: m.id });
+  } catch (_) { /* non-fatal */ }
+  const r = require('./db/auth').confirmByRef(phoneNumber, ref);
+  let reply;
+  if (r.ok) {
+    reply = `*${r.code}* is your Wingman code.\n\nGo back to the app — you'll be signed in automatically (or type the code there). Don't share it with anyone.`;
+  } else if (r.reason === 'other_number') {
+    const tail = String(r.phone || '').slice(-4);
+    reply = `That sign-in request was for a different number (ending ${tail}). Enter the number you're messaging from, then try again.`;
+  } else if (r.reason === 'expired') {
+    reply = 'That sign-in request has expired. Tap "Send my code" in the app again and send the new message.';
+  } else {
+    reply = "I couldn't find that sign-in request. Start again from the app and send the message it opens.";
+  }
+  console.log(`[webhook] sign-in reply (${phoneNumber}) ref ${ref}: ${r.ok ? 'confirmed' : r.reason}`);
+  // The app signs in by polling either way; a failed reply must not stop the batch.
+  try { await cloudApi.sendText(phoneNumber, reply); }
+  catch (e) { console.warn('[webhook] sign-in reply send failed:', e.message); }
+}
+
 // ─── WhatsApp Cloud API webhook ─────────────────────────────────────
 //   GET  → Meta verification handshake (hub.challenge)
 //   POST → incoming messages: parse, run the engine, reply via Cloud API.
@@ -539,7 +580,26 @@ app.get('/webhook', (req, res) => {
   return res.sendStatus(403);
 });
 
+function validWebhookSignature(req) {
+  const secret = config.whatsappCloud.appSecret;
+  if (!secret) {
+    if (!validWebhookSignature.warned) {
+      validWebhookSignature.warned = true;
+      console.warn('[webhook] WHATSAPP_APP_SECRET is not set — webhook signatures are NOT verified.');
+    }
+    return true;
+  }
+  const header = String(req.get('x-hub-signature-256') || '');
+  if (!header.startsWith('sha256=') || !req.rawBody) return false;
+  const expected = 'sha256=' + require('crypto').createHmac('sha256', secret).update(req.rawBody).digest('hex');
+  return require('./utils/linkSig').safeEqual(header, expected);
+}
+
 app.post('/webhook', (req, res) => {
+  if (!validWebhookSignature(req)) {
+    console.warn('[webhook] rejected a POST with a bad/missing signature');
+    return res.sendStatus(401);
+  }
   res.sendStatus(200); // ack immediately (Meta retries on non-200)
   (async () => {
     try {
@@ -564,9 +624,34 @@ app.post('/webhook', (req, res) => {
         const phoneNumber = String(m.from || '').replace(/[^0-9]/g, '');
         if (!phoneNumber) continue;
 
+        // Meta retries a webhook it thinks failed; never process one message twice.
+        if (m.id && !markInboundSeen(m.id)) {
+          console.log(`[webhook] duplicate delivery of ${m.id} ignored`);
+          continue;
+        }
+
+        // Users who signed up in the app may be stored without a country code;
+        // the webhook carries the full number, so remember it for sending.
+        try {
+          const usersRepo = require('./db/users');
+          const known = usersRepo.getByPhone(phoneNumber);
+          if (known && usersRepo.upgradePhone(known, phoneNumber)) {
+            console.log(`[webhook] stored full number for user ${known.id}`);
+          }
+        } catch (_) { /* never block a message on this */ }
+
         // Diagnostic: log every inbound message's type up-front, so it's obvious
         // in the logs whether images (and other media) actually reach the webhook.
         console.log(`[webhook] recv type=${m.type} from ${phoneNumber}${m.image ? ` image_id=${m.image.id || 'none'}` : ''}`);
+
+        // Sign-in by reply: the app showed a "WM-XXXXXX" reference and the user
+        // sent it from their WhatsApp. That proves they own this number — reply
+        // with the code and let the app (polling /api/auth/otp-status) sign in.
+        // This is an exact protocol token, not intent matching.
+        if (m.type === 'text' && SIGNIN_REF_RE.test(String(m.text || ''))) {
+          await handleSignInReply(m, phoneNumber);
+          continue;
+        }
 
         // Quick-reply button on a TEMPLATE (e.g. dormant user tapping "Show my
         // briefing"). The tap itself opens the 24h window, so we log it as an
@@ -586,6 +671,7 @@ app.post('/webhook', (req, res) => {
           try {
             conversations.logInbound({ userId: u.id, content: payload || '[button tap]', phoneNumber, waMessageId: m.id });
           } catch (_) { /* non-fatal */ }
+          try { await wa.deliverHeld(u); } catch (err) { console.warn('[webhook] held delivery failed:', err.message); }
           try {
             const rich = /wrap/i.test(payload)
               ? require('./services/endOfDayWrap')
@@ -705,7 +791,15 @@ app.post('/webhook', (req, res) => {
           const usersRepo = require('./db/users');
           const pu = usersRepo.getByPhone(phoneNumber);
           if (pu && usersRepo.isOnboarded(pu)) {
+            // Messages held while they were outside the 24h window go first.
+            let heldCount = 0;
+            try { heldCount = await wa.deliverHeld(pu); } catch (err) { console.warn('[webhook] held delivery failed:', err.message); }
             const kinds = require('./db/pendingFullSends').takeAll(pu.id);
+            if (heldCount && !kinds.length && String(m.text).trim().length <= 20) {
+              // "ok" / "show" was just the reply that let us send it.
+              conversations.logInbound({ userId: pu.id, content: m.text, phoneNumber, waMessageId: m.id });
+              continue;
+            }
             if (kinds.length) {
               const triggerOnly = String(m.text).trim().length <= 20;
               // Longer messages are logged by the engine below — don't double-log.
@@ -775,14 +869,14 @@ if (hasClientBuild) {
 }
 
 // ─── Recent conversation log (debug) ────────────────────────────────
-app.get('/conversations', (req, res) => {
+app.get('/conversations', requireAdmin, (req, res) => {
   const limit = parseInt(req.query.limit, 10) || 50;
   res.json(conversations.recent(limit));
 });
 
 // ─── Send a WhatsApp message via API (utility) ──────────────────────
 //   POST /send  { "to": "9715xxxxxxx", "text": "Hello from Wingman" }
-app.post('/send', async (req, res) => {
+app.post('/send', requireAdmin, async (req, res) => {
   const { to, text } = req.body || {};
   if (!to || !text) {
     return res.status(400).json({ error: 'Both "to" and "text" are required' });
@@ -797,7 +891,7 @@ app.post('/send', async (req, res) => {
 
 // ─── Manual proactive triggers (testing) ──────────────────────────
 //   POST /trigger/:job/:userId  where job = morning|wrap|bills|deliveries|followups|taskreminder|taskdue|travel|meetingprep
-app.post('/trigger/:job/:userId', async (req, res) => {
+app.post('/trigger/:job/:userId', requireAdmin, async (req, res) => {
   const { job, userId } = req.params;
   try {
     let out;
@@ -820,7 +914,7 @@ app.post('/trigger/:job/:userId', async (req, res) => {
 });
 
 // Recent briefings for a user (debug)
-app.get('/briefings/:userId', (req, res) => {
+app.get('/briefings/:userId', requireAdmin, (req, res) => {
   res.json(require('./db/briefings').listForUser(req.params.userId));
 });
 
@@ -962,6 +1056,14 @@ function start() {
   } catch (e) {
     console.warn('[server] could not start scheduler:', e.message);
   }
+
+  // Search index: catch up on everything already in the database (first run
+  // after deploy indexes the backlog), off the boot path.
+  setTimeout(() => {
+    require('./services/userIndex').backfill()
+      .then(() => console.log('[index] search index up to date'))
+      .catch((e) => console.warn('[index] backfill failed:', e.message));
+  }, 20 * 1000).unref();
 
   // Image store: make sure the folder exists, and clear out old images daily.
   try {

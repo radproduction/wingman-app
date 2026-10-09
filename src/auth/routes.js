@@ -3,8 +3,15 @@
 const express = require('express');
 const googleAuth = require('./googleAuth');
 const wa = require('../whatsapp/client');
+const linkSig = require('../utils/linkSig');
 
 const router = express.Router();
+
+const STALE_LINK_HTML = `
+  <html><body style="font-family:sans-serif;text-align:center;padding:60px;">
+    <h2>This link has expired</h2>
+    <p>Ask Wingman on WhatsApp for a fresh connect link (or connect from the app).</p>
+  </body></html>`;
 
 /**
  * GET /auth/google?phone=9715XXXXXXX
@@ -15,6 +22,7 @@ router.get('/auth/google', (req, res) => {
   if (!phone) {
     return res.status(400).send('Missing phone parameter.');
   }
+  if (!linkSig.canStartConnect(req, phone)) return res.status(403).send(STALE_LINK_HTML);
   const url = googleAuth.getAuthUrl(phone);
   res.redirect(url);
 });
@@ -27,6 +35,7 @@ router.get('/auth/google', (req, res) => {
 router.get('/auth/google/health', (req, res) => {
   const phone = (req.query.phone || '').toString();
   if (!phone) return res.status(400).send('Missing phone parameter.');
+  if (!linkSig.canStartConnect(req, phone)) return res.status(403).send(STALE_LINK_HTML);
   res.redirect(googleAuth.getHealthAuthUrl(phone));
 });
 
@@ -45,7 +54,10 @@ router.get('/auth/google/callback', async (req, res) => {
     return res.status(400).send('Missing authorization code.');
   }
 
-  const rawState = (state || '').toString();
+  // The state is signed when the flow starts; a forged or replayed one (e.g.
+  // someone else's phone with the attacker's own Google code) is refused.
+  const rawState = linkSig.verifyState((state || '').toString());
+  if (rawState === null) return res.status(400).send(STALE_LINK_HTML);
   const isHealthFlow = rawState.endsWith('|health');
   const phone = isHealthFlow ? rawState.slice(0, -'|health'.length) : rawState;
 
@@ -168,7 +180,9 @@ router.get('/auth/wearable/callback', async (req, res) => {
   if (!code) return res.status(400).send('Missing authorization code.');
 
   try {
-    const { user, provider } = await wearables.handleCallback(code.toString(), state);
+    const verified = linkSig.verifyState((state || '').toString());
+    if (verified === null) return res.status(400).send(STALE_LINK_HTML);
+    const { user, provider } = await wearables.handleCallback(code.toString(), verified);
 
     // Pull straight away so the user sees data now, not after the next tick.
     let saved = 0;
@@ -219,6 +233,7 @@ router.get('/auth/wearable/:provider', (req, res) => {
 
   const phone = (req.query.phone || '').toString();
   if (!phone) return res.status(400).send('Missing phone parameter.');
+  if (!linkSig.canStartConnect(req, phone)) return res.status(403).send(STALE_LINK_HTML);
 
   try {
     res.redirect(wearables.connectUrl(req.params.provider, phone));
@@ -247,10 +262,11 @@ router.get('/auth/shopify', (req, res) => {
     return res.status(400).send('Please provide a valid store domain, e.g. mystore.myshopify.com');
   }
   if (!phone) return res.status(400).send('Missing phone parameter.');
+  if (!linkSig.canStartConnect(req, phone)) return res.status(403).send(STALE_LINK_HTML);
 
-  // The phone rides in `state` so the callback can attach the store to the
-  // right user (same pattern as the Google flow).
-  res.redirect(shopifyAuth.buildAuthUrl(shop, phone));
+  // The phone rides in a SIGNED `state` so the callback can attach the store to
+  // the right user (same pattern as the Google flow).
+  res.redirect(shopifyAuth.buildAuthUrl(shop, linkSig.signState(phone)));
 });
 
 /**
@@ -263,7 +279,8 @@ router.get('/auth/shopify/callback', async (req, res) => {
 
   const { code, shop: rawShop, state } = req.query;
   const shop = shopifyAuth.normalizeShop(rawShop);
-  const phone = (state || '').toString();
+  const phone = linkSig.verifyState((state || '').toString());
+  if (phone === null) return res.status(400).send(STALE_LINK_HTML);
 
   if (!code || !shopifyAuth.isValidShop(shop)) {
     return res.status(400).send('Invalid Shopify callback.');

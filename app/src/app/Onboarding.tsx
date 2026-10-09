@@ -14,6 +14,7 @@ import {
   useResendTimer,
   useSplashAdvance,
   useToast,
+  useWhatsAppSignIn,
   type Screen,
 } from '../onboarding/shared'
 import {
@@ -132,6 +133,7 @@ export const Onboarding = ({ onDone }: { onDone: () => void }) => {
   const {
     state, set, go, toggleSkill, toggleInterest, connect, fullPhone, phoneValid, codeComplete, nameValid, preview,
     busy, sendCode, verifyCode, finish, openConnect, refreshConnections, locateMe,
+    otpReq, phoneE164, applySignedIn,
   } = ob
   const { msg, show, toast } = useToast()
   const [locating, setLocating] = useState<'home' | 'office' | null>(null)
@@ -142,6 +144,10 @@ export const Onboarding = ({ onDone }: { onDone: () => void }) => {
     toast(err ?? t('Location added'))
   }
   const resend = useResendTimer(state.screen === 'verify')
+  const waSignIn = useWhatsAppSignIn(otpReq, phoneE164(), (user) => {
+    applySignedIn(user)
+    go('name')
+  })
   const code = useCodeBoxes(state.code, (c) => set('code', c))
   const [pane, setPane] = useState(0)
   const panesRef = useRef<HTMLDivElement>(null)
@@ -258,8 +264,12 @@ export const Onboarding = ({ onDone }: { onDone: () => void }) => {
       {state.screen === 'verify' && (
         <Step
           screen="verify"
-          title="Enter your code"
-          body={t('Sent on WhatsApp to {phone}.', { phone: fullPhone })}
+          title={waSignIn.needed ? 'Get your code on WhatsApp' : 'Enter your code'}
+          body={
+            waSignIn.needed
+              ? t('Tap the button and send the message that opens to Wingman from {phone}. I\'ll sign you in as soon as it arrives.', { phone: fullPhone })
+              : t('Sent on WhatsApp to {phone}.', { phone: fullPhone })
+          }
           back={() => go('phone')}
           next={async () => {
             const err = await verifyCode()
@@ -268,6 +278,14 @@ export const Onboarding = ({ onDone }: { onDone: () => void }) => {
           }}
           nextDisabled={!codeComplete || busy}
         >
+          {waSignIn.needed && waSignIn.available && (
+            <button className="wg-btn full wa" onClick={waSignIn.open}>
+              {waSignIn.opened ? t('Open WhatsApp again') : t('Get my code on WhatsApp')}
+            </button>
+          )}
+          {waSignIn.needed && waSignIn.opened && (
+            <p className="wg-note">{t('Waiting for your message… or type the code Wingman sends you.')}</p>
+          )}
           <div className="wg-code" onPaste={code.onPaste}>
             {state.code.map((d, i) => (
               <input
@@ -298,6 +316,13 @@ export const Onboarding = ({ onDone }: { onDone: () => void }) => {
               <>{t('Resend available in {seconds}s', { seconds: resend.left })}</>
             )}
           </p>
+          {!waSignIn.needed && waSignIn.available && (
+            <p className="wg-note">
+              <button className="wg-btn-text" onClick={waSignIn.open}>
+                {t("Didn't get it? Get it on WhatsApp")}
+              </button>
+            </p>
+          )}
         </Step>
       )}
 

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { IconName } from '../app/icons'
 import { api, ApiError } from '../data/api'
+import type { OtpRequest } from '../data/api'
 import { signIn } from '../data/session'
 
 export type Screen =
@@ -224,11 +225,15 @@ export function useOnboarding() {
     return cc + num
   }
 
+  // What the backend said about the last code request (was it delivered, or
+  // must the user message Wingman to get it?).
+  const [otpReq, setOtpReq] = useState<OtpRequest | null>(null)
+
   // Ask the backend to send the WhatsApp OTP. Returns an error message or null.
   const sendCode = async (): Promise<string | null> => {
     setBusy(true)
     try {
-      await api.requestOtp(phoneE164())
+      setOtpReq(await api.requestOtp(phoneE164()))
       return null
     } catch (e) {
       return e instanceof ApiError ? e.message : 'Could not send the code. Check the number.'
@@ -240,15 +245,12 @@ export function useOnboarding() {
   const cap = (v: unknown): string =>
     typeof v === 'string' && v ? v.charAt(0).toUpperCase() + v.slice(1) : ''
 
-  // Verify the code (stores the token) and PREFILL the flow with whatever the
-  // backend already knows, so onboarding always runs but is never a blank form
-  // for someone who has been here before. Returns an error message or null.
-  const verifyCode = async (): Promise<string | null> => {
-    setBusy(true)
-    try {
-      const res = await api.verifyOtp(phoneE164(), state.code.join(''))
-      const u = res.user as Record<string, unknown> | null
-      if (u) {
+  // PREFILL the flow with whatever the backend already knows, so onboarding
+  // always runs but is never a blank form for someone who has been here
+  // before, and mark the session signed in.
+  const applySignedIn = (user: unknown) => {
+    const u = user as Record<string, unknown> | null
+    if (u) {
         setState((s) => ({
           ...s,
           name: (u.name as string) || s.name,
@@ -262,12 +264,19 @@ export function useOnboarding() {
           proactivity: cap(u.proactiveness_level) || s.proactivity,
           tone: cap(u.tone) || s.tone,
         }))
-      }
-      // OTP verified + token stored → sign the session in (so the Gate doesn't
-      // fall back to "Welcome back"). We deliberately do NOT auto-skip onboarding
-      // for "already complete" users: the wizard always runs so the user sets
-      // their name/details and it saves cleanly. onboarded is set only on finish.
-      signIn()
+    }
+    // Verified + token stored → sign the session in (so the Gate doesn't fall
+    // back to "Welcome back"). We deliberately do NOT auto-skip onboarding for
+    // "already complete" users: the wizard always runs so the user sets their
+    // name/details and it saves cleanly. onboarded is set only on finish.
+    signIn()
+  }
+
+  const verifyCode = async (): Promise<string | null> => {
+    setBusy(true)
+    try {
+      const res = await api.verifyOtp(phoneE164(), state.code.join(''))
+      applySignedIn(res.user)
       return null
     } catch (e) {
       return e instanceof ApiError ? e.message : 'That code did not work.'
@@ -395,6 +404,7 @@ export function useOnboarding() {
     state, set, go, toggleSkill, toggleInterest, connect,
     fullPhone, phoneValid, codeComplete, nameValid, preview,
     busy, sendCode, verifyCode, finish, openConnect, refreshConnections, locateMe,
+    otpReq, phoneE164, applySignedIn,
   }
 }
 
@@ -404,6 +414,59 @@ export function useSplashAdvance(screen: Screen, go: (s: Screen) => void, ms: nu
     const t = window.setTimeout(() => go('intro'), ms)
     return () => clearTimeout(t)
   }, [screen, go, ms])
+}
+
+/**
+ * Sign-in by messaging Wingman. When the backend couldn't push the code
+ * (new number / outside WhatsApp's 24h window), the user opens a chat with
+ * Wingman pre-filled "WM-<ref>" and taps send. Wingman replies with the code,
+ * and meanwhile this polls the backend so the app signs in on its own.
+ */
+export function useWhatsAppSignIn(
+  req: OtpRequest | null,
+  phone: string,
+  onSignedIn: (user: unknown) => void,
+) {
+  const [opened, setOpened] = useState(false)
+  const done = useRef(false)
+  const secret = req?.poll_secret
+  useEffect(() => {
+    done.current = false
+    setOpened(false)
+  }, [secret])
+  useEffect(() => {
+    if (!secret) return
+    let stopped = false
+    let timer = 0
+    const started = Date.now()
+    const limit = Math.max(60, req?.expires_in ?? 600) * 1000
+    const tick = async () => {
+      if (stopped || done.current) return
+      try {
+        const r = await api.otpStatus(phone, secret)
+        if (r.status === 'confirmed') {
+          done.current = true
+          onSignedIn(r.user)
+          return
+        }
+        if (r.status === 'expired' || r.status === 'unknown') return
+      } catch {
+        /* network blip — keep trying */
+      }
+      if (!stopped && Date.now() - started < limit) timer = window.setTimeout(tick, 2500)
+    }
+    timer = window.setTimeout(tick, 2500)
+    return () => {
+      stopped = true
+      clearTimeout(timer)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [secret])
+  const open = () => {
+    if (req?.wa_link) window.open(req.wa_link, '_blank', 'noopener,noreferrer')
+    setOpened(true)
+  }
+  return { available: !!req?.wa_link, needed: !!req && !req.delivered, opened, open }
 }
 
 export function useResendTimer(active: boolean) {

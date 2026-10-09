@@ -155,6 +155,8 @@ router.get('/me', async (req, res) => {
     webmail_connected: !!u.webmail_address,
     webmail_address: u.webmail_address || null,
     wingman_number: config.wingmanNumber || null,
+    // Lets the app open signed connect links (/auth/google?phone=…&sig=…).
+    connect_sig: require('../utils/linkSig').connectSig(u.phone),
     whatsapp_connected: whatsappConnected,
     created_at: u.created_at || null,
     mock: false,
@@ -805,8 +807,7 @@ router.all('/admin/waitlist/send-thankyou', async (req, res) => {
 //   show up too. Safe to re-run — the Apps Script upserts by email. Guarded by
 //   ADMIN_PASSWORD: POST (or GET) /api/admin/waitlist/sync-sheet?key=<ADMIN_PASSWORD>
 router.all('/admin/waitlist/sync-sheet', async (req, res) => {
-  const admin = config.adminPassword;
-  if (admin && req.query.key !== admin) return res.status(403).json({ error: 'forbidden' });
+  if (!require('../utils/adminAuth').isAdmin(req)) return res.status(403).json({ error: 'forbidden' });
   try {
     const waitlistSheet = require('../services/waitlistSheet');
     if (!waitlistSheet.enabled()) {
@@ -936,7 +937,7 @@ router.get('/health/google', (req, res) => {
   res.json({
     connected: googleAuth.isHealthConnected(req.user),
     last_synced_at: req.user.google_health_synced_at || null,
-    connect_url: `${config.publicBaseUrl}/auth/google/health?phone=${encodeURIComponent(phone)}`,
+    connect_url: `${config.publicBaseUrl}/auth/google/health?${require('../utils/linkSig').connectQuery(phone)}`,
   });
 });
 

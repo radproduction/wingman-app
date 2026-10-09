@@ -35,7 +35,7 @@ function connectUrl(provider, phone) {
     client_id: clientId,
     redirect_uri: redirectUri(),
     scope: p.scopes.join(p.scopeSeparator || ' '),
-    state: `${phone || ''}:${p.id}`,
+    state: require('../utils/linkSig').signState(`${phone || ''}:${p.id}`),
   });
   return `${p.authUrl}?${params.toString()}`;
 }
@@ -191,7 +191,7 @@ function statusFor(user) {
       last_synced_at: acct ? acct.last_synced_at : null,
       last_error: acct ? acct.last_error : null,
       connect_url: registry.isConfigured(p)
-        ? `${config.publicBaseUrl}/auth/wearable/${p.id}?phone=${encodeURIComponent(phone)}`
+        ? `${config.publicBaseUrl}/auth/wearable/${p.id}?${require('../utils/linkSig').connectQuery(phone)}`
         : null,
     };
   });

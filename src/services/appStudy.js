@@ -443,11 +443,16 @@ function knowledgeBlock(user) {
   try {
     if (!user) return '';
     const rows = knowledge.listForUser(user.id);
+    // The profile card (services/userProfile) is the distilled picture of the
+    // whole person; fall back to the raw onboarding profile until it exists.
+    let cardText = '';
+    try { cardText = require('./userProfile').card(user); } catch (_) { /* optional */ }
     const profile = String((user.preferences && user.preferences.onboarding && user.preferences.onboarding.profile) || '').trim();
-    if (!rows.length && !profile) return '';
+    if (!rows.length && !profile && !cardText) return '';
 
     const parts = [];
-    if (profile) parts.push(`OVERALL (from their email, calendar and tasks):\n${profile.slice(0, 900)}`);
+    if (cardText) parts.push(`PROFILE CARD (who they are — your distilled picture):\n${cardText.slice(0, 2000)}`);
+    else if (profile) parts.push(`OVERALL (from their email, calendar and tasks):\n${profile.slice(0, 900)}`);
     for (const r of rows.slice(0, 10)) {
       parts.push(`${appName(r.app).toUpperCase()} — ${stage(r)}${r.note ? `\n${String(r.note).slice(0, 1600)}` : ''}`);
     }

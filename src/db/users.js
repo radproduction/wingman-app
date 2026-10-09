@@ -75,18 +75,41 @@ function getByWorkEmployeeRef(email) {
 function create({ phone, name = null } = {}) {
   const norm = normPhone(phone) || String(phone || '');
   const existing = getByPhone(norm);
-  if (existing) return existing;
+  if (existing) {
+    upgradePhone(existing, phone);
+    return getById(existing.id);
+  }
+  // STORE the full international number when we have it — it is what WhatsApp
+  // needs to deliver. (This used to store the 10-digit matching key, so users
+  // who signed up in the app got every proactive message sent to a number
+  // without its country code.) Matching still uses normPhone.
+  const digits = String(phone || '').replace(/\D/g, '');
+  const stored = phoneQuality(digits) === 2 ? digits : norm;
   const id = uuid();
   db.prepare(`
     INSERT INTO users (id, phone, name, preferences)
     VALUES (@id, @phone, @name, @preferences)
   `).run({
     id,
-    phone: norm,
+    phone: stored,
     name,
     preferences: JSON.stringify({}),
   });
   return getById(id);
+}
+
+/**
+ * If we only know a user's number without its country code and now see the
+ * full international form (e.g. from a WhatsApp webhook), store the full one.
+ * Returns true when it changed.
+ */
+function upgradePhone(user, phone) {
+  if (!user || !user.id) return false;
+  const digits = String(phone || '').replace(/\D/g, '');
+  if (phoneQuality(digits) !== 2 || phoneQuality(user.phone) === 2) return false;
+  if (normPhone(digits) !== normPhone(user.phone)) return false;
+  db.prepare('UPDATE users SET phone = ? WHERE id = ?').run(digits, user.id);
+  return true;
 }
 
 /**
@@ -241,7 +264,7 @@ const USER_CHILD_TABLES = [
   'travel', 'health_data', 'contacts', 'briefings', 'reminders', 'followups',
   'work_sessions', 'wearable_accounts', 'automations', 'meetings', 'user_memory',
   'google_accounts', 'goals', 'agent_actions', 'credentials',
-  'integration_actions', 'user_media', 'app_knowledge', 'user_rules',
+  'integration_actions', 'user_media', 'app_knowledge', 'user_rules', 'search_docs',
 ];
 
 /** Hard-delete a user and everything referencing them (children first). */
@@ -368,6 +391,7 @@ function toPublic(user) {
 }
 
 module.exports = {
+  upgradePhone,
   DEFAULT_SKILLS,
   getByPhone, getById, getByWorkEmployeeRef, create, update, hydrate, isOnboarded, hasSkill,
   listConnectedEmailUsers, listWebmailUsers, listAll, listOnboarded, updatePreferences,

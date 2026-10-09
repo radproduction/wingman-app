@@ -62,7 +62,8 @@ async function runDueUsers({ hour = 9, now = new Date() } = {}) {
     if (!gate.allows(u, 'deliveries')) continue;
     const tz = u.timezone || 'Asia/Karachi';
     if (t.hourInTz(tz, now) === hour) {
-      results.push({ phone: u.phone, ...(await returnWindowCheck(u.id, { now })) });
+      try { results.push({ phone: u.phone, ...(await returnWindowCheck(u.id, { now })) }); }
+      catch (e) { console.warn('[deliveryAlerts] failed for', u.id, e.message); }
     }
   }
   return results;

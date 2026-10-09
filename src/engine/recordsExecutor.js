@@ -37,6 +37,23 @@ async function executeRecordsTool(user, toolUse) {
     }
 
     switch (name) {
+      case 'search_user_data': {
+        const idx = require('../services/userIndex');
+        // Dates are stored both as 'YYYY-MM-DD HH:MM:SS' and ISO 'YYYY-MM-DDTHH:MM…';
+        // '~' sorts after both, so an end bound of 'YYYY-MM-DD~' includes that whole day.
+        const day = (d, end) => (d && /^\d{4}-\d{2}-\d{2}/.test(d) ? `${String(d).slice(0, 10)}${end ? '~' : ''}` : undefined);
+        const results = idx.search(user.id, input.query, {
+          sources: input.sources, since: day(input.since), until: day(input.until, true), limit: input.limit,
+        });
+        if (!results.length) {
+          return { results: [], indexed: idx.stats(user.id), note: 'Nothing matched. Try other keywords (names, company, topic in English) or a wider date range; for very recent items use the live tools.' };
+        }
+        return { results };
+      }
+      case 'open_user_record': {
+        const d = require('../services/userIndex').getDoc(user.id, input.source, input.ref_id);
+        return d || { error: 'NOT_FOUND' };
+      }
       case 'list_bills':
         return { text: billAlerts.buildBillsReply(user) };
       case 'mark_bill_paid':

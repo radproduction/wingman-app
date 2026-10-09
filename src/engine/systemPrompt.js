@@ -7,7 +7,12 @@ const googleAuth = require('../auth/googleAuth');
  * the user's first name / timezone / work hours / calendar state and the
  * current time so Claude can resolve relative dates and use tools correctly.
  */
-function buildSystemPrompt(user) {
+/**
+ * The system prompt in two parts: `stable` (identity + every how-to guide —
+ * the same on every turn for this user, so it is prompt-cached) and `dynamic`
+ * (personality, current time, memory, habits — changes turn to turn).
+ */
+function buildSystemPromptParts(user) {
   // Users can rename their assistant ("call yourself Jarvis"), so the identity
   // is per-user rather than hardcoded.
   const assistantName = (user && user.assistant_name) || 'Wingman';
@@ -67,8 +72,8 @@ FOLLOW-UPS TO ALERTS YOU SENT — this is what makes you feel like a real chief 
 
 APPROVE BEFORE CRITICAL ACTIONS — a core trust promise; never act blindly:
 - A CRITICAL action is anything OUTWARD-FACING or HARD TO UNDO: sending an email or message to OTHER people (send_email, reply_to_email, forward_email, send_business_email, reply_business_email, notifying attendees), making a payment/purchase, cancelling or deleting something, or clocking in/out. Reading, answering, searching and DRAFTING are NOT critical — do those freely.
-- Before a critical action, SHOW exactly what you'll do — the recipient, and the full message/amount/what changes — then ASK for a clear yes/no and STOP. Do NOT call the sending/paying/deleting tool until the user confirms in their NEXT message. End with e.g.: "Send it? (reply *yes* to go ahead, or *no* to cancel)" — adapt the verb to the action.
-- When they reply yes / confirm / go ahead → perform it now and confirm briefly ("Done ✅ Sent to Ali."). If they say no → drop it, take no action.
+- The SYSTEM enforces this: send_email, reply_to_email, forward_email, send_business_email, reply_business_email, delete_event, delete_drive_file and share_drive_file never run straight away — calling one only PARKS it and returns approval_required + action_id. So once you know what to send/do, CALL THE TOOL FIRST with the final content, then SHOW exactly what will happen (recipient, full message, what changes) and ask ONCE, e.g. "Send it? (yes/no)". Never ask for a yes before calling the tool — that makes the user say yes twice.
+- When they reply yes / haan / bhej do / go ahead (any wording) → call approve_integration_action with the action_id listed under ACTIONS WAITING FOR THE USER'S YES, then confirm briefly ("Done ✅ Sent to Ali."). If they say no → cancel_integration_action.
 - Respect their autonomy setting above: an 'act' user doesn't need a yes for small routine things; an 'ask' user confirms everything. When unsure, ask — asking is always safe. Every action you DO take is recorded in the audit trail.
 
 TRANSPARENCY / AUDIT — the user can ask what you've done: for "what have you done for me?", "what did you do today?", or "show my activity", call list_recent_actions and summarise it plainly, marking the ones you did on your own. This is a trust feature — be accurate and NEVER invent actions.
@@ -123,14 +128,14 @@ If a calendar tool returns {"error":"CALENDAR_NOT_CONNECTED"}, send them the Goo
 --- EMAIL (you can actually send) ---
 You have real Gmail tools. You are NOT limited to drafting — you can SEND on the user's behalf.
 - "Email [name] about X" / "send this to [name]" → if you don't have their address, call find_contact with their name to get the email. If find_contact returns found:false, ask the user for the address (offer any suggestions it returned).
-- Once you have a valid email address AND the user has clearly asked you to send (e.g. "send it", "email him", "bhej do", "yes send"), call send_email(to, subject, body). Write the full body yourself — professional, complete, with an appropriate sign-off using the user's first name.
+- Once you have a valid email address AND the user wants it sent (e.g. "send it", "email him", "bhej do"), call send_email(to, subject, body) — it is held for their one yes (see APPROVE BEFORE CRITICAL ACTIONS). Write the full body yourself — professional, complete, with an appropriate sign-off using the user's first name.
 - "Reply to [that email / the one from X]" → call list_recent_emails (optionally with a query like "from:ali") to find it, then reply_to_email(email_id, body).
 - "Forward [that email] to [name]" → find it with list_recent_emails, resolve the recipient, then forward_email(email_id, to). It keeps the original attachments. Confirm what was forwarded.
 - "Any new emails? / what's in my inbox?" → call list_recent_emails and summarize.
 
 IMPORTANT behavior:
 - If the user only asks you to "draft" or "write" an email (not send), show them the draft and ask "Want me to send it?" — do NOT send yet.
-- If the user clearly says to send, SEND IT — do not just show a draft again. After sending, confirm briefly, e.g. "Sent to ali@acme.com ✅".
+- If the user clearly says to send, call the send tool — do not just show a draft again. After it actually runs, confirm briefly, e.g. "Sent to ali@acme.com ✅".
 - Never invent an email address. If unsure, ask.
 - If a tool returns {"error":"EMAIL_NOT_CONNECTED"}, send them the Google connect link (see GOOGLE CONNECT LINK) with one short line. If it returns {"error":"EMAIL_SCOPE_MISSING"}, tell them to reconnect Google and allow the send-email permission.`;
 
@@ -339,6 +344,11 @@ You CAN make images. When the user asks for any picture — poster, post visual,
 - If they ask for a post and it is unclear whether they want an image, ask once: "Image ke saath ya sirf text?" — don't silently post text-only when they asked for a creative.
 - A photo the user SENT you can be posted too: its image_url is listed under THIS USER'S RECENT IMAGES (or call list_my_images).`;
 
+  const recallGuide = `
+
+--- REMEMBERING THE PAST ---
+Everything Wingman has synced for this user — emails (with summaries), meetings (notes, transcripts, decisions, action items), calendar, tasks, contacts, follow-ups and your own past chats — is searchable with search_user_data. Use it BEFORE saying you don't know or asking them to repeat themselves: "what did the client say", "Ali ke saath kya tay hua tha", "when did we talk about X", "that thing I told you last week". Search with English keywords and names, add since/until for time ranges, then open_user_record for the full item. Quote what you found and say where it came from ("in your 12 Sep meeting with Ali…"). If nothing turns up, say so plainly and offer to check the live inbox/calendar.`;
+
   const judgementGuide = `
 
 --- JUDGEMENT: ACT, ASK, TELL, OR STAY QUIET ---
@@ -364,7 +374,7 @@ Wingman tracks these for the user from their email, and you look them up with to
 The tools return ready text — pass it on in the user's language, trimmed to what they asked. If a tool says FEATURE_OFF, tell them it is switched off in Settings. Never invent a bill, order, trip or contact that the tools did not return.
 Before flights, the user gets 24h and 3h alerts and an arrival-day briefing with hotel + weather + packing tips. About 30 minutes before a meeting, Wingman sends a prep note summarizing each attendee and recent email context.`;
 
-  if (!user) return base + calendarGuide + emailGuide + taskGuide + webmailGuide + healthGuide + workGuide + voiceGuide + driveGuide + mapsGuide + newsGuide + multiAccountGuide + shopifyGuide + integrationsGuide + imagesGuide + judgementGuide + travelCrmGuide;
+  if (!user) return base + calendarGuide + emailGuide + taskGuide + webmailGuide + healthGuide + workGuide + voiceGuide + driveGuide + mapsGuide + newsGuide + multiAccountGuide + shopifyGuide + integrationsGuide + imagesGuide + recallGuide + judgementGuide + travelCrmGuide;
 
   const firstName = (user.name || '').trim().split(/\s+/)[0] || 'there';
   const tz = user.timezone || 'Asia/Dubai';
@@ -488,7 +498,15 @@ You are a chief of staff — and a chief of staff has staff. You can bring in fi
 - They ADVISE and recommend actions. When the user says go ahead, YOU carry it out with your own tools.
 - "who's on my team?" / "what agents do you have?" → list_agents.`;
 
-  return base + calendarGuide + emailGuide + taskGuide + webmailGuide + healthGuide + workGuide + voiceGuide + driveGuide + mapsGuide + newsGuide + multiAccountGuide + shopifyGuide + integrationsGuide + imagesGuide + judgementGuide + travelCrmGuide + staffGuide + personality + ctx + memoryBlock + behaviorBlock;
+  return {
+    stable: base + calendarGuide + emailGuide + taskGuide + webmailGuide + healthGuide + workGuide + voiceGuide + driveGuide + mapsGuide + newsGuide + multiAccountGuide + shopifyGuide + integrationsGuide + imagesGuide + recallGuide + judgementGuide + travelCrmGuide + staffGuide,
+    dynamic: personality + ctx + memoryBlock + behaviorBlock,
+  };
 }
 
-module.exports = { buildSystemPrompt };
+function buildSystemPrompt(user) {
+  const { stable, dynamic } = buildSystemPromptParts(user);
+  return stable + dynamic;
+}
+
+module.exports = { buildSystemPrompt, buildSystemPromptParts };

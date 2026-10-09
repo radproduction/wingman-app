@@ -24,7 +24,7 @@ async function executeShopifyTool(user, toolUse) {
     if (!shopifyAuth.isValidShop(shop)) {
       return { error: 'INVALID_SHOP_DOMAIN', detail: 'That does not look like a Shopify store domain. It should look like mystore.myshopify.com.' };
     }
-    const url = `${config.publicBaseUrl}/auth/shopify?shop=${encodeURIComponent(shop)}&phone=${encodeURIComponent(user.phone)}`;
+    const url = `${config.publicBaseUrl}/auth/shopify?shop=${encodeURIComponent(shop)}&${require('../utils/linkSig').connectQuery(user.phone)}`;
     return { shop, connect_url: url, already_connected: isConnected(user) };
   }
 

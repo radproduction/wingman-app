@@ -43,7 +43,54 @@ function canEverAutoApprove(toolkit, slug, meta) {
   return !NEVER_AUTO.test(String(slug).toUpperCase());
 }
 
+// ─── Built-in actions behind the same gate ──────────────────────────
+// Gmail / business mail sends, cancelling calendar events and deleting or
+// sharing Drive files are just as outward-facing as an app tool, so they go
+// through this same server-side yes — the prompt alone is not a guarantee, and
+// an automated run (whose text may come from an email or a web page) must
+// never send mail on its own.
+const BUILTIN = 'builtin';
+const BUILTIN_GATED = new Set([
+  'send_email', 'reply_to_email', 'forward_email',
+  'send_business_email', 'reply_business_email',
+  'delete_event', 'delete_drive_file', 'share_drive_file',
+]);
+let builtinRunner = null;
+/** conversation.js registers how to actually run a built-in tool after the yes. */
+function setBuiltinRunner(fn) { builtinRunner = fn; }
+
+function appLabel(toolkit) {
+  return toolkit === BUILTIN ? 'Wingman' : composio.appName(toolkit);
+}
+
+function clip(v, n) {
+  const t = String(v == null ? '' : v).replace(/\s+/g, ' ').trim();
+  return t.length > n ? `${t.slice(0, n)}…` : t;
+}
+
+function builtinPreview(slug, a = {}) {
+  switch (slug) {
+    case 'send_email':
+    case 'send_business_email':
+      return `Send email to ${a.to || '?'} — "${clip(a.subject || '(no subject)', 80)}": ${clip(a.body, 300)}`;
+    case 'reply_to_email':
+    case 'reply_business_email':
+      return `Reply to email ${a.email_id || a.uid || a.id || ''}: ${clip(a.body, 300)}`.replace(/ +:/, ':');
+    case 'forward_email':
+      return `Forward email ${a.email_id || ''} to ${a.to || '?'}${a.note ? ` with note: ${clip(a.note, 200)}` : ''}`;
+    case 'delete_event':
+      return `Cancel calendar event ${a.event_id || a.id || ''} (guests are notified)`;
+    case 'delete_drive_file':
+      return `Delete Drive file ${a.file_id || a.id || ''} (moves to Trash)`;
+    case 'share_drive_file':
+      return `Share Drive file ${a.file_id || ''} with ${a.email || 'anyone who has the link'} (${a.can_edit ? 'can edit' : 'view only'})`;
+    default:
+      return `${slug.replace(/_/g, ' ')} ${clip(JSON.stringify(a), 300)}`;
+  }
+}
+
 function preview(toolkit, slug, args) {
+  if (toolkit === BUILTIN) return builtinPreview(slug, args);
   let a = '';
   try { a = JSON.stringify(args || {}); } catch (_) { a = '{}'; }
   if (a.length > 400) a = a.slice(0, 400) + '…';
@@ -72,7 +119,7 @@ async function propose(user, { toolkit, slug, version, args }, ctx = {}) {
   return {
     approval_required: true,
     action_id: row.id,
-    app: composio.appName(toolkit),
+    app: appLabel(toolkit),
     action: slug,
     details: args,
     instruction:
@@ -83,6 +130,15 @@ async function propose(user, { toolkit, slug, version, args }, ctx = {}) {
 }
 
 async function runApproved(user, row) {
+  if (row.toolkit === BUILTIN) {
+    if (!builtinRunner) return { ok: false, error: 'BUILTIN_RUNNER_MISSING' };
+    try {
+      const r = await builtinRunner(user, row.tool_slug, row.arguments || {});
+      return r && r.error ? { ok: false, error: r.detail ? `${r.error}: ${r.detail}` : r.error } : { ok: true, data: r };
+    } catch (e) {
+      return { ok: false, error: e.message };
+    }
+  }
   if (row.tool_slug === RULE) {
     const a = row.arguments || {};
     const r = require('../db/userRules').add(user.id, {
@@ -123,9 +179,9 @@ async function approve(user, actionId, ctx = {}) {
   actions.finish(user.id, row.id, { ok: res.ok, result: res.ok ? res.data : res.error });
   if (res.ok) {
     agentActions.log(user.id, { kind: `integration.${row.tool_slug}`, summary: row.summary, source: 'chat' });
-    return { done: true, app: composio.appName(row.toolkit), result: res.data };
+    return { done: true, app: appLabel(row.toolkit), result: res.data };
   }
-  return { error: 'ACTION_FAILED', app: composio.appName(row.toolkit), detail: res.error };
+  return { error: 'ACTION_FAILED', app: appLabel(row.toolkit), detail: res.error };
 }
 
 async function listIntegrations(user) {
@@ -206,6 +262,20 @@ async function executeIntegrationTool(user, toolUse, ctx = {}) {
 }
 
 /**
+ * A built-in critical tool (send_email, delete_event, …) was called. Park it
+ * for the user's yes exactly like an app tool. When the approval tools aren't
+ * available (Composio off) it runs directly in chat as before — but never in
+ * an automated run.
+ */
+async function gateBuiltin(user, name, input, ctx = {}, runNow) {
+  if (!config.composio.enabled) {
+    if (ctx.automated) return { error: 'NEEDS_USER_CONFIRMATION', detail: 'Automated runs cannot send or delete. Tell the user what you would do and let them confirm.' };
+    return runNow();
+  }
+  return propose(user, { toolkit: BUILTIN, slug: name, version: null, args: input || {} }, ctx);
+}
+
+/**
  * "Don't ask me for this" → park a rule for the user's yes. The rule only ever
  * covers one exact tool of one connected app, and never a risky one.
  */
@@ -250,4 +320,7 @@ function pendingActionsBlock(user) {
   }
 }
 
-module.exports = { executeIntegrationTool, pendingActionsBlock, proposeAutoApproveRule };
+module.exports = {
+  executeIntegrationTool, pendingActionsBlock, proposeAutoApproveRule,
+  gateBuiltin, setBuiltinRunner, BUILTIN_GATED,
+};

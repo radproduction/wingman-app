@@ -93,7 +93,8 @@ async function runDueUsers({ hour = 9, now = new Date() } = {}) {
     if (!gate.allows(u, 'bills')) continue;
     const tz = u.timezone || 'Asia/Karachi';
     if (t.hourInTz(tz, now) === hour) {
-      results.push({ phone: u.phone, ...(await alertForUser(u.id, { now })) });
+      try { results.push({ phone: u.phone, ...(await alertForUser(u.id, { now })) }); }
+      catch (e) { console.warn('[billAlerts] failed for', u.id, e.message); }
     }
   }
   return results;

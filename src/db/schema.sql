@@ -111,6 +111,15 @@ CREATE TABLE IF NOT EXISTS otp_codes (
   expires_at TEXT NOT NULL,
   consumed INTEGER DEFAULT 0,
   attempts INTEGER DEFAULT 0,
+  -- Reply-to-verify: when the code can't be pushed to the user (new number,
+  -- outside the 24h window, no AUTHENTICATION template), the user messages
+  -- Wingman "WM-<ref>" from their WhatsApp. That proves they own the number:
+  -- confirmed = 1, the code is sent back, and the app (holding poll_secret)
+  -- can sign in without typing it.
+  ref TEXT,
+  poll_secret TEXT,
+  confirmed INTEGER DEFAULT 0,
+  ip TEXT,
   created_at TEXT DEFAULT (datetime('now'))
 );
 
@@ -571,3 +580,61 @@ CREATE TABLE IF NOT EXISTS user_rules (
 );
 CREATE INDEX IF NOT EXISTS idx_user_rules_user ON user_rules(user_id, kind);
 
+-- ─── Search index over everything Wingman has synced for a user ─────
+-- One row per searchable item (an email summary, a meeting, an event, a task,
+-- a contact, a follow-up, a chat message), kept in step with its source table by
+-- services/userIndex.js. search_fts is a full-text index over it (SQLite FTS5,
+-- built into better-sqlite3), so "what did the client say last month" is a local
+-- query, not a live API call.
+CREATE TABLE IF NOT EXISTS search_docs (
+  id INTEGER PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  source TEXT NOT NULL,          -- email | meeting | event | task | contact | followup | chat
+  ref_id TEXT NOT NULL,          -- id in the source table
+  at TEXT,                       -- when it happened (ISO / SQLite UTC)
+  title TEXT,
+  body TEXT,
+  UNIQUE (source, ref_id)
+);
+CREATE INDEX IF NOT EXISTS idx_search_docs_user ON search_docs(user_id, source, at);
+CREATE VIRTUAL TABLE IF NOT EXISTS search_fts USING fts5(
+  title, body, content='search_docs', content_rowid='id', tokenize='unicode61 remove_diacritics 2'
+);
+CREATE TRIGGER IF NOT EXISTS search_docs_ai AFTER INSERT ON search_docs BEGIN
+  INSERT INTO search_fts(rowid, title, body) VALUES (new.id, new.title, new.body);
+END;
+CREATE TRIGGER IF NOT EXISTS search_docs_ad AFTER DELETE ON search_docs BEGIN
+  INSERT INTO search_fts(search_fts, rowid, title, body) VALUES ('delete', old.id, old.title, old.body);
+END;
+CREATE TRIGGER IF NOT EXISTS search_docs_au AFTER UPDATE ON search_docs BEGIN
+  INSERT INTO search_fts(search_fts, rowid, title, body) VALUES ('delete', old.id, old.title, old.body);
+  INSERT INTO search_fts(rowid, title, body) VALUES (new.id, new.title, new.body);
+END;
+-- How far each source has been indexed (by rowid of the source table).
+CREATE TABLE IF NOT EXISTS search_state (
+  source TEXT PRIMARY KEY,
+  last_rowid INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT
+);
+
+
+-- ─── Messages held while the user is outside WhatsApp's 24h window ──
+-- A free-form message outside the window is accepted by Meta and then silently
+-- dropped. So a proactive message that can't go out as-is is held here (one
+-- short template tells the user something is waiting) and delivered in full,
+-- in order, the next time they message Wingman.
+CREATE TABLE IF NOT EXISTS held_messages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id TEXT NOT NULL,
+  text TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now')),
+  expires_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_held_messages_user ON held_messages(user_id, id);
+
+-- ─── Inbound WhatsApp message ids already processed ──────────────────
+-- Meta retries webhooks; without this a retried message runs the engine twice.
+CREATE TABLE IF NOT EXISTS inbound_seen (
+  wa_message_id TEXT PRIMARY KEY,
+  seen_at TEXT DEFAULT (datetime('now'))
+);

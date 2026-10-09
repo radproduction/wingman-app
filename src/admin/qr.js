@@ -19,8 +19,7 @@ const wa = require('../whatsapp/client');
 const router = express.Router();
 
 function authorized(req) {
-  const key = req.query.key || req.headers['x-admin-key'];
-  return key && String(key) === String(config.adminPassword);
+  return require('../utils/adminAuth').isAdmin(req);
 }
 
 // JSON status + QR data URL (polled by the page)

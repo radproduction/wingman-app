@@ -124,7 +124,8 @@ async function runDailyReminders({ hour = 9, now = new Date() } = {}) {
     if (!gate.allows(u, 'taskreminder')) continue;
     const tz = u.timezone || 'Asia/Karachi';
     if (t.hourInTz(tz, now) === hour) {
-      results.push({ phone: u.phone, ...(await sendDailyReminder(u.id, { now })) });
+      try { results.push({ phone: u.phone, ...(await sendDailyReminder(u.id, { now })) }); }
+      catch (e) { console.warn('[taskIntents] failed for', u.id, e.message); }
     }
   }
   return results;

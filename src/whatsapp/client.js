@@ -131,11 +131,29 @@ function parseSqliteUtc(value) {
   return new Date(String(value).replace(' ', 'T') + 'Z');
 }
 
-function lastInboundAtForUser(userId) {
-  if (!userId) return null;
-  const row = db.prepare(
-    "SELECT created_at FROM conversations WHERE user_id = ? AND role = 'user' ORDER BY created_at DESC, rowid DESC LIMIT 1"
-  ).get(userId);
+// Inbound rows that count for WhatsApp's 24h customer-service window: ONLY
+// messages that really arrived over WhatsApp. The in-app chat writes role='user'
+// rows too (source 'app'); counting those made Wingman think the window was open,
+// send free-form, and Meta silently dropped it (131047). Rows logged before the
+// user existed (e.g. the sign-in "WM-…" message) carry user_id NULL, so they are
+// matched by phone number.
+const WA_INBOUND_SQL = `
+  role = 'user'
+  AND COALESCE(CASE WHEN json_valid(metadata) THEN json_extract(metadata, '$.source') END, '') <> 'app'
+  AND COALESCE(CASE WHEN json_valid(metadata) THEN json_extract(metadata, '$.direction') END, 'inbound') = 'inbound'
+`;
+
+function lastInboundAtForUser(userOrId) {
+  const user = userOrId && typeof userOrId === 'object' ? userOrId : { id: userOrId };
+  if (!user.id && !user.phone) return null;
+  const phone = digitsOnly(user.phone);
+  const row = db.prepare(`
+    SELECT created_at FROM conversations
+    WHERE (user_id = @id OR (user_id IS NULL AND @phone <> '' AND
+           CASE WHEN json_valid(metadata) THEN json_extract(metadata, '$.phoneNumber') END = @phone))
+      AND ${WA_INBOUND_SQL}
+    ORDER BY created_at DESC, rowid DESC LIMIT 1
+  `).get({ id: user.id || '', phone });
   return row ? parseSqliteUtc(row.created_at) : null;
 }
 
@@ -184,10 +202,144 @@ function toTemplateParam(text) {
     : `${flat.slice(0, TEMPLATE_PARAM_MAX - 1).trimEnd()}…`;
 }
 
+// A little under 24h, so a message composed at 23h59m doesn't arrive after the
+// window has closed.
+const WINDOW_MS = 24 * 3600 * 1000 - 10 * 60 * 1000;
+
 function isWithinCustomerWindow(user, now = new Date()) {
-  const lastInboundAt = lastInboundAtForUser(user && user.id);
+  const lastInboundAt = lastInboundAtForUser(user);
   if (!lastInboundAt) return false;
-  return now.getTime() - lastInboundAt.getTime() < 24 * 3600 * 1000;
+  return now.getTime() - lastInboundAt.getTime() < WINDOW_MS;
+}
+
+// ─── Held messages (outside the 24h window) ─────────────────────────
+// ONE rule for every proactive sender (alerts, meeting notes, follow-ups…):
+// inside the window the message goes as-is; outside it, it can only go as a
+// template. The single generic template (PROACTIVE_TEMPLATE_NAME, 1 variable)
+// carries the message flattened; if that loses part of it (too long), the full
+// text is held and delivered the moment the user next messages Wingman. While
+// a template is unanswered, further messages are held without sending another
+// template, so a dormant user gets one ping, not ten.
+const HELD_TTL_HOURS = 72;
+const HELD_COALESCE_MS = 2 * 3600 * 1000;
+
+function holdMessage(userId, text) {
+  try {
+    db.prepare(`INSERT INTO held_messages (user_id, text, expires_at)
+                VALUES (?, ?, datetime('now', ?))`).run(userId, String(text), `+${HELD_TTL_HOURS} hours`);
+    return true;
+  } catch (e) {
+    console.warn('[whatsapp] could not hold message:', e.message);
+    return false;
+  }
+}
+
+/** Atomically take this user's unexpired held messages (oldest first). */
+function takeHeld(userId) {
+  try {
+    const tx = db.transaction(() => {
+      const rows = db.prepare(
+        "SELECT id, text FROM held_messages WHERE user_id = ? AND expires_at > datetime('now') ORDER BY id",
+      ).all(userId);
+      db.prepare('DELETE FROM held_messages WHERE user_id = ?').run(userId);
+      return rows.map((r) => r.text);
+    });
+    return tx();
+  } catch (_) { return []; }
+}
+
+/** Was a template sent to this user recently that they haven't answered yet? */
+function unansweredTemplateRecently(user, now = new Date()) {
+  try {
+    const row = db.prepare(`
+      SELECT created_at FROM conversations
+      WHERE user_id = ? AND role = 'assistant'
+        AND CASE WHEN json_valid(metadata) THEN json_extract(metadata, '$.mediaType') END = 'template'
+      ORDER BY created_at DESC, rowid DESC LIMIT 1
+    `).get(user.id);
+    if (!row) return false;
+    const at = parseSqliteUtc(row.created_at);
+    if (now.getTime() - at.getTime() > HELD_COALESCE_MS) return false;
+    const lastIn = lastInboundAtForUser(user);
+    return !lastIn || lastIn < at;
+  } catch (_) { return false; }
+}
+
+/** Split a long text into WhatsApp-sized pieces on paragraph boundaries. */
+function chunkText(text, max = 3800) {
+  const out = [];
+  let cur = '';
+  for (const para of String(text).split(/\n{2,}/)) {
+    const add = cur ? `${cur}\n\n${para}` : para;
+    if (add.length <= max) { cur = add; continue; }
+    if (cur) out.push(cur);
+    cur = para.length <= max ? para : para.slice(0, max);
+  }
+  if (cur) out.push(cur);
+  return out;
+}
+
+/**
+ * The user just messaged (window open): deliver everything that was held for
+ * them, oldest first. Returns how many messages were delivered.
+ */
+async function deliverHeld(user) {
+  if (!user || !user.id || !user.phone) return 0;
+  const texts = takeHeld(user.id);
+  if (!texts.length) return 0;
+  const digits = digitsOnly(user.phone);
+  const body = texts.length === 1
+    ? texts[0]
+    : `While you were away:\n\n${texts.join('\n\n— — —\n\n')}`;
+  for (const piece of chunkText(body)) {
+    const sent = cloudApi.ready()
+      ? await cloudApi.sendText(digits, piece)
+      : await sendRaw(digits, piece);
+    conversations.logOutbound({
+      userId: user.id,
+      waMessageId: sent && sent.messages && sent.messages[0] ? sent.messages[0].id : null,
+      chatId: `${digits}@c.us`,
+      phoneNumber: digits,
+      content: piece,
+      mediaType: 'text',
+    });
+  }
+  console.log(`[whatsapp] delivered ${texts.length} held message(s) to ${digits}`);
+  return texts.length;
+}
+
+/**
+ * Outside the window: send the generic template (or hold quietly if one is
+ * already waiting unanswered). Never free-form — Meta would drop it.
+ */
+async function sendOutsideWindow(user, text, { logLabel = 'message', urgent = false } = {}) {
+  const digits = digitsOnly(user.phone);
+  const flat = toTemplateParam(text);
+  const lossy = String(text).replace(/\s+/g, ' ').trim().length > TEMPLATE_PARAM_MAX;
+  const name = config.whatsappCloud.proactiveTemplate;
+
+  // Time-critical messages ("admit the notetaker now") always ping.
+  if (!name || (!urgent && unansweredTemplateRecently(user))) {
+    holdMessage(user.id, text);
+    console.log(`[whatsapp:cloud] ${logLabel} for ${digits} HELD (outside 24h window${name ? ', a template is already waiting' : ', no PROACTIVE_TEMPLATE_NAME'})`);
+    return { held: true };
+  }
+  if (lossy) holdMessage(user.id, text);
+  const lang = config.whatsappCloud.proactiveTemplateLang;
+  const sent = await cloudApi.sendTemplate(digits, name, lang, [
+    { type: 'body', parameters: [{ type: 'text', text: flat }] },
+  ]);
+  conversations.logOutbound({
+    userId: user.id,
+    waMessageId: sent && sent.messages && sent.messages[0] ? sent.messages[0].id : null,
+    chatId: `${digits}@c.us`,
+    phoneNumber: digits,
+    content: text,
+    mediaType: 'template',
+  });
+  console.log(`[whatsapp:cloud] >> ${logLabel} via template ${name} to ${digits}${lossy ? ' (full text held for their reply)' : ''}`);
+  if (sent && typeof sent === 'object') { sent.viaTemplate = name; sent.held = lossy; }
+  return sent;
 }
 
 /**
@@ -361,7 +513,7 @@ function initWhatsApp() {
  * @param {string} text         message body
  * @returns {Promise<Object>} the sent message
  */
-async function sendMessage(phoneNumber, text, { skipDedupe = false } = {}) {
+async function sendMessage(phoneNumber, text, { skipDedupe = false, windowChecked = false, urgent = false } = {}) {
   // Proactive alerts are de-duplicated; user-requested sends (e.g. a "View
   // Briefing" tap) pass skipDedupe so they always deliver, even if identical to
   // something recent.
@@ -389,14 +541,22 @@ async function sendMessage(phoneNumber, text, { skipDedupe = false } = {}) {
   // answer a follow-up like "reply to him" / "mark that paid". One place, every
   // source. (OTP to a brand-new number simply resolves to null — harmless.)
   let recipientId = null;
+  let recipient = null;
   try {
-    const recipient = users.getByPhone(digitsOnly(phoneNumber));
+    recipient = users.getByPhone(digitsOnly(phoneNumber));
     recipientId = recipient ? recipient.id : null;
   } catch (_) { /* never block a send on attribution */ }
 
   // Cloud API path (official Graph API) — used in production.
   if (cloudApi.ready()) {
     const digits = digitsOnly(phoneNumber);
+    // Every proactive sender comes through here. Outside the 24h window a
+    // free-form send is accepted by Meta and then silently dropped, so route it
+    // to the template/hold path instead. (Callers that already checked the
+    // window — sendProactiveMessage — pass windowChecked.)
+    if (!windowChecked && recipient && !isWithinCustomerWindow(recipient)) {
+      return sendOutsideWindow(recipient, text, { urgent });
+    }
     const sent = await cloudApi.sendText(digits, text);
     conversations.logOutbound({
       userId: recipientId,
@@ -430,25 +590,33 @@ async function sendMessage(phoneNumber, text, { skipDedupe = false } = {}) {
 }
 
 /**
- * Deliver a login OTP. Over the Cloud API a plain text message only reaches
- * users inside the 24h window, so brand-new users would never get their code.
- * We therefore send it through the approved AUTHENTICATION template (works for
- * any user, any time). Falls back to plain text when the Cloud API isn't used.
+ * Deliver a login OTP, if it can actually reach the user.
  *
- * @param {string} phoneNumber  recipient digits (E.164 without '+')
- * @param {string} code         the 6-digit OTP
- * @returns {Promise<boolean>}  true if the send was accepted
+ * Over the Cloud API a free-form text only reaches someone inside the 24h
+ * window — outside it Meta accepts the request and silently drops it, which is
+ * why new users "never got the code". So:
+ *   1. inside the window (they messaged Wingman recently) → plain text;
+ *   2. otherwise the AUTHENTICATION template, when configured and allowed;
+ *   3. otherwise return false — the caller offers reply-to-verify instead
+ *      (the user messages Wingman "WM-<ref>", which opens the window).
+ *
+ * @returns {Promise<'text'|'template'|false>}
  */
 async function sendOtp(phoneNumber, code) {
   const digits = digitsOnly(phoneNumber);
   const text =
     `${code} is your Wingman verification code. ` +
-    `It expires in 5 minutes. Do not share it with anyone.`;
+    `It expires in 10 minutes. Do not share it with anyone.`;
 
   if (cloudApi.ready()) {
-    // Primary: approved AUTHENTICATION template. With the app Live + billing
-    // configured it delivers to ANY user, in or out of the 24h window — the
-    // real new-user login case. Plain text (below) only reaches in-window users.
+    let known = null;
+    try { known = users.getByPhone(digits); } catch (_) { /* unknown number */ }
+    const probe = known || { id: null, phone: digits };
+    if (isWithinCustomerWindow(probe)) {
+      await cloudApi.sendText(digits, text);
+      console.log(`[whatsapp:cloud] >> OTP text to ${digits} (inside 24h window)`);
+      return 'text';
+    }
     if (config.whatsappCloud.otpUseTemplate) {
       try {
         const components = [
@@ -462,18 +630,16 @@ async function sendOtp(phoneNumber, code) {
           components,
         );
         console.log(`[whatsapp:cloud] >> OTP template to ${digits}`);
-        return true;
+        return 'template';
       } catch (e) {
-        console.warn(`[whatsapp:cloud] OTP template failed (${e.message}); falling back to text`);
+        console.warn(`[whatsapp:cloud] OTP template failed (${e.message}) — user will verify by messaging Wingman`);
       }
     }
-    await cloudApi.sendText(digits, text);
-    console.log(`[whatsapp:cloud] >> OTP text to ${digits}`);
-    return true;
+    return false;
   }
   // whatsapp-web.js path (dev): plain text is fine.
-  await sendMessage(digits, text);
-  return true;
+  await sendMessage(digits, text, { skipDedupe: true });
+  return 'text';
 }
 
 /**
@@ -519,7 +685,11 @@ async function sendProactiveMessage(user, text, {
 
   // Inside the 24h window a free-form message delivers (and is richer), so use it —
   // unless the caller asked for nudge-only.
-  if (!nudgeOnly && (isWithinCustomerWindow(user, now) || !useTemplate)) {
+  if (!nudgeOnly && isWithinCustomerWindow(user, now)) {
+    return sendMessage(digits, text, { windowChecked: true });
+  }
+  if (!nudgeOnly && !useTemplate) {
+    // Templates turned off: sendMessage will hold it for the user's next reply.
     return sendMessage(digits, text);
   }
 
@@ -580,10 +750,11 @@ async function sendProactiveMessage(user, text, {
   }
 
   if (!name) {
-    // Nothing configured at all — it genuinely cannot go out of the window.
-    // Say so loudly rather than silently dropping (this is what 131047 was).
-    console.warn(`[whatsapp:cloud] ${logLabel} to ${digits} DROPPED — outside the 24h window and NO template is configured (set PROACTIVE_TEMPLATE_NAME).`);
-    return null;
+    // Nothing configured at all — it cannot go out of the window. Hold it so it
+    // is delivered the next time the user messages Wingman, and say so loudly.
+    holdMessage(user.id, text);
+    console.warn(`[whatsapp:cloud] ${logLabel} to ${digits} HELD — outside the 24h window and NO template is configured (set PROACTIVE_TEMPLATE_NAME).`);
+    return { held: true };
   }
 
   const bodyOf = (vals) => [{ type: 'body', parameters: vals.map((v) => ({ type: 'text', text: v })) }];
@@ -681,6 +852,6 @@ function status() {
 
 module.exports = {
   initWhatsApp, sendMessage, sendRaw, sendOtp, sendProactiveMessage, getClient, ready, toChatId,
-  toTemplateParam, isWithinCustomerWindow,
+  toTemplateParam, isWithinCustomerWindow, deliverHeld, holdMessage,
   getLatestQr, status, requestPairingCode,
 };

@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { IconChevronL, IconShield } from './icons'
 import { WingGlyph } from '../onboarding/WingGlyph'
-import { COUNTRY_CODES, CC_FLAGS, useCodeBoxes, useResendTimer } from '../onboarding/shared'
+import { COUNTRY_CODES, CC_FLAGS, useCodeBoxes, useResendTimer, useWhatsAppSignIn } from '../onboarding/shared'
 import { useProfile, firstName } from '../data/store'
 import { signIn, signOut, startFresh } from '../data/session'
 import { resetProfile } from '../data/store'
 import { api, ApiError, setToken } from '../data/api'
+import type { OtpRequest } from '../data/api'
 import { clearOnboardingState } from '../onboarding/shared'
 import { confirmAction } from '../shell/confirm'
 import { t } from '../i18n'
@@ -152,11 +153,17 @@ export const SignIn = () => {
     return c + num
   }
 
+  const [otpReq, setOtpReq] = useState<OtpRequest | null>(null)
+  const waSignIn = useWhatsAppSignIn(otpReq, phoneE164(), () => {
+    signIn()
+    navigate('home')
+  })
+
   // Ask the backend to send the real WhatsApp OTP. Returns true on success.
   const send = async (): Promise<boolean> => {
     setBusy(true)
     try {
-      await api.requestOtp(phoneE164())
+      setOtpReq(await api.requestOtp(phoneE164()))
       return true
     } catch (e) {
       toast(e instanceof ApiError ? e.message : t('Could not send the code. Check the number.'))
@@ -184,13 +191,25 @@ export const SignIn = () => {
     return (
       <Step
         idx={1}
-        title="Enter your code"
-        body={t('Sent on WhatsApp to {phone}.', { phone: fullPhone })}
+        title={waSignIn.needed ? 'Get your code on WhatsApp' : 'Enter your code'}
+        body={
+          waSignIn.needed
+            ? t('Tap the button and send the message that opens to Wingman from {phone}. I\'ll sign you in as soon as it arrives.', { phone: fullPhone })
+            : t('Sent on WhatsApp to {phone}.', { phone: fullPhone })
+        }
         back={() => setStep('phone')}
         next={() => void verify()}
         nextLabel="Sign in"
         nextDisabled={!codeComplete || busy}
       >
+        {waSignIn.needed && waSignIn.available && (
+          <button className="wg-btn full wa" onClick={waSignIn.open}>
+            {waSignIn.opened ? t('Open WhatsApp again') : t('Get my code on WhatsApp')}
+          </button>
+        )}
+        {waSignIn.needed && waSignIn.opened && (
+          <p className="wg-note">{t('Waiting for your message… or type the code Wingman sends you.')}</p>
+        )}
         <div className="wg-code" onPaste={boxes.onPaste}>
           {code.map((d, i) => (
             <input
@@ -217,6 +236,13 @@ export const SignIn = () => {
             <>{t('Resend available in {seconds}s', { seconds: resend.left })}</>
           )}
         </p>
+        {!waSignIn.needed && waSignIn.available && (
+          <p className="wg-note">
+            <button className="wg-btn-text" onClick={waSignIn.open}>
+              {t("Didn't get it? Get it on WhatsApp")}
+            </button>
+          </p>
+        )}
       </Step>
     )
 
