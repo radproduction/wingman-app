@@ -44,23 +44,33 @@ function recentRequestCount({ phone = null, ip = null, minutes = 60 } = {}) {
   return 0;
 }
 
+/** Last-10-digit key, so 0300…, 92300… and +92 300… compare equal. */
+function phoneKey(p) {
+  const d = String(p || '').replace(/\D/g, '');
+  return d.length > 10 ? d.slice(-10) : d.replace(/^0+/, '');
+}
+
 /**
  * The user messaged Wingman "WM-<ref>" from WhatsApp number `fromPhone`.
- * Returns { ok, code } when it matches a live request for that SAME number
- * (sending from the number is the proof of ownership), or { ok:false, reason }.
+ * Sending from the number is the proof of ownership, so the request that gets
+ * confirmed is the NEWEST live one for that number — even if the user tapped
+ * "Resend" (which replaces the code) and then sent an older WM- message.
+ * Returns { ok, code } or { ok:false, reason }.
  */
 function confirmByRef(fromPhone, ref) {
   const r = String(ref || '').toUpperCase();
-  if (!r) return { ok: false, reason: 'no_ref' };
-  const row = db.prepare(`
-    SELECT * FROM otp_codes WHERE ref = ? AND consumed = 0
-    ORDER BY created_at DESC LIMIT 1
-  `).get(r);
-  if (!row) return { ok: false, reason: 'unknown' };
-  if (new Date(row.expires_at).getTime() < Date.now()) return { ok: false, reason: 'expired' };
-  if (String(row.phone) !== String(fromPhone)) return { ok: false, reason: 'other_number', phone: row.phone };
-  db.prepare('UPDATE otp_codes SET confirmed = 1 WHERE id = ?').run(row.id);
-  return { ok: true, code: row.code, phone: row.phone };
+  const key = phoneKey(fromPhone);
+  const live = db.prepare(`
+    SELECT * FROM otp_codes WHERE consumed = 0 ORDER BY created_at DESC, rowid DESC LIMIT 50
+  `).all().find((row) => phoneKey(row.phone) === key && new Date(row.expires_at).getTime() >= Date.now());
+  if (live) {
+    db.prepare('UPDATE otp_codes SET confirmed = 1 WHERE id = ?').run(live.id);
+    return { ok: true, code: live.code, phone: live.phone };
+  }
+  const byRef = r ? db.prepare('SELECT * FROM otp_codes WHERE ref = ? ORDER BY created_at DESC LIMIT 1').get(r) : null;
+  if (!byRef) return { ok: false, reason: 'unknown' };
+  if (phoneKey(byRef.phone) !== key) return { ok: false, reason: 'other_number', phone: byRef.phone };
+  return { ok: false, reason: 'expired' };
 }
 
 /**

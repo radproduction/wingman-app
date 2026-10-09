@@ -226,8 +226,8 @@ export function useOnboarding() {
   }
 
   // What the backend said about the last code request (was it delivered, or
-  // must the user message Wingman to get it?).
-  const [otpReq, setOtpReq] = useState<OtpRequest | null>(null)
+  // must the user message Wingman to get it?). Survives a reload.
+  const [otpReq, setOtpReq] = useOtpRequest()
 
   // Ask the backend to send the WhatsApp OTP. Returns an error message or null.
   const sendCode = async (): Promise<string | null> => {
@@ -416,6 +416,34 @@ export function useSplashAdvance(screen: Screen, go: (s: Screen) => void, ms: nu
   }, [screen, go, ms])
 }
 
+// Kept in localStorage: on a phone, switching to WhatsApp and back can reload
+// the app, and the "waiting for your message" state must survive that.
+const OTP_REQ_KEY = 'wingman.otpReq'
+
+export function useOtpRequest(): [OtpRequest | null, (r: OtpRequest | null) => void] {
+  const [req, setReq] = useState<OtpRequest | null>(() => {
+    try {
+      const raw = localStorage.getItem(OTP_REQ_KEY)
+      if (!raw) return null
+      const saved = JSON.parse(raw) as OtpRequest & { savedAt?: number }
+      const ttl = (saved.expires_in ?? 600) * 1000
+      return saved.savedAt && Date.now() - saved.savedAt < ttl ? saved : null
+    } catch {
+      return null
+    }
+  })
+  const set = (r: OtpRequest | null) => {
+    setReq(r)
+    try {
+      if (r) localStorage.setItem(OTP_REQ_KEY, JSON.stringify({ ...r, savedAt: Date.now() }))
+      else localStorage.removeItem(OTP_REQ_KEY)
+    } catch {
+      /* ignore */
+    }
+  }
+  return [req, set]
+}
+
 /**
  * Sign-in by messaging Wingman. When the backend couldn't push the code
  * (new number / outside WhatsApp's 24h window), the user opens a chat with
@@ -435,7 +463,7 @@ export function useWhatsAppSignIn(
     setOpened(false)
   }, [secret])
   useEffect(() => {
-    if (!secret) return
+    if (!secret || phone.replace(/\D/g, '').length < 8) return
     let stopped = false
     let timer = 0
     const started = Date.now()
@@ -446,6 +474,7 @@ export function useWhatsAppSignIn(
         const r = await api.otpStatus(phone, secret)
         if (r.status === 'confirmed') {
           done.current = true
+          try { localStorage.removeItem(OTP_REQ_KEY) } catch { /* ignore */ }
           onSignedIn(r.user)
           return
         }
@@ -461,7 +490,7 @@ export function useWhatsAppSignIn(
       clearTimeout(timer)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [secret])
+  }, [secret, phone])
   const open = () => {
     if (req?.wa_link) window.open(req.wa_link, '_blank', 'noopener,noreferrer')
     setOpened(true)

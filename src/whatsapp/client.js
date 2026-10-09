@@ -734,6 +734,11 @@ async function sendProactiveMessage(user, text, {
     }
   }
 
+  // No message-specific template (alerts, automations, study notes…): use the
+  // ONE generic path, which sends the notify template but holds further alerts
+  // while one is still unanswered — so a dormant user isn't pinged five times.
+  if (!templateName) return sendOutsideWindow(user, text, { logLabel });
+
   // Outside the window ONLY an approved template delivers (Meta 131047 otherwise).
   // Prefer the caller's specific template with its structured params; if that
   // isn't configured, fall back to the GENERIC one-variable template carrying the

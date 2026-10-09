@@ -91,6 +91,23 @@ const check = (name, ok, extra = '') => { console.log(`${ok ? 'PASS' : 'FAIL'}  
   check('…and only once', auth.takeConfirmed('923009998888', otp.pollSecret) !== 'confirmed');
   check('wrong poll secret gets nothing', auth.takeConfirmed('923009998888', 'nope') === 'unknown');
 
+  // 8b. "Resend" replaced the code, user then sends the OLD WM- message → still works.
+  const first = auth.createOtp('923001230000', { ttlSeconds: 600 });
+  const second = auth.createOtp('923001230000', { ttlSeconds: 600 });
+  const late = auth.confirmByRef('923001230000', first.ref);
+  check('old ref after a resend still signs in (newest code)', late.ok && late.code === second.code
+    && auth.takeConfirmed('923001230000', second.pollSecret) === 'confirmed');
+  const local = auth.createOtp('923001239999', { ttlSeconds: 600 });
+  check('number format differences are tolerated', auth.confirmByRef('+92 300 1239999', local.ref).ok);
+
+  // 8c. Alerts sent through sendProactiveMessage are coalesced too.
+  const w = users.create({ phone: '923004445555' });
+  users.update(w.id, { onboarding_complete: 1 });
+  sent.length = 0;
+  await wa.sendProactiveMessage(users.getById(w.id), 'New business email from A');
+  await wa.sendProactiveMessage(users.getById(w.id), 'New business email from B');
+  check('second proactive alert while template unanswered → held', sent.length === 1 && sent[0].kind === 'template');
+
   // 9. A sign-in message logged with no user yet still opens the window for that phone.
   conversations.logInbound({ userId: null, content: 'Sign me in: WM-ABCDEF', phoneNumber: '923007776666', waMessageId: 'w2' });
   const nu = users.create({ phone: '923007776666' });

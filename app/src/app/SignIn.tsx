@@ -1,12 +1,11 @@
 import { useState } from 'react'
 import { IconChevronL, IconShield } from './icons'
 import { WingGlyph } from '../onboarding/WingGlyph'
-import { COUNTRY_CODES, CC_FLAGS, useCodeBoxes, useResendTimer, useWhatsAppSignIn } from '../onboarding/shared'
+import { COUNTRY_CODES, CC_FLAGS, useCodeBoxes, useOtpRequest, useResendTimer, useWhatsAppSignIn } from '../onboarding/shared'
 import { useProfile, firstName } from '../data/store'
 import { signIn, signOut, startFresh } from '../data/session'
 import { resetProfile } from '../data/store'
 import { api, ApiError, setToken } from '../data/api'
-import type { OtpRequest } from '../data/api'
 import { clearOnboardingState } from '../onboarding/shared'
 import { confirmAction } from '../shell/confirm'
 import { t } from '../i18n'
@@ -153,7 +152,7 @@ export const SignIn = () => {
     return c + num
   }
 
-  const [otpReq, setOtpReq] = useState<OtpRequest | null>(null)
+  const [otpReq, setOtpReq] = useOtpRequest()
   const waSignIn = useWhatsAppSignIn(otpReq, phoneE164(), () => {
     signIn()
     navigate('home')
