@@ -142,13 +142,12 @@ webhook). Pass `{ urgent: true }` only for time-critical pings. Never call
 `cloudApi.sendText` for proactive messages — use `sendMessage` /
 `sendProactiveMessage`.
 
-**Sign-in without an AUTHENTICATION template:** `/api/auth/request-otp` returns
-`delivered:false` + `wa_link` + `poll_secret` when the code can't be pushed. The
-app's "Get my code on WhatsApp" button opens a chat pre-filled `WM-<ref>`; the
-webhook matches it (exact protocol token, `SIGNIN_REF_RE`), replies with the
-code, and the app's `/api/auth/otp-status` poll signs in. Users are stored with
-their full international number (`users.create`; old 10-digit rows self-heal
-from the webhook via `upgradePhone`).
+**Sign-in:** `/api/auth/request-otp` sends the code itself — plain text inside
+the 24h window, otherwise the AUTHENTICATION template `wingman_login_otp`
+(`OTP_USE_TEMPLATE=1`). If it can't be sent it returns 503 with a clear error;
+there is no "message us to get your code" flow in the app. Users are stored
+with their full international number (`users.create`; old 10-digit rows
+self-heal from the webhook via `upgradePhone`).
 
 ### Security rules
 

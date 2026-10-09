@@ -86,6 +86,15 @@ router.post('/request-otp', async (req, res) => {
     }
     const delivered = !!channel;
 
+    // The code must arrive on the user's WhatsApp by itself. If it couldn't be
+    // sent (template missing/rejected, WhatsApp down), say so — never leave
+    // the user waiting for a code that isn't coming.
+    if (!delivered && !config.auth.exposeOtpInDev) {
+      return res.status(503).json({
+        error: "We couldn't send the code to your WhatsApp right now. Please try again in a minute.",
+      });
+    }
+
     const payload = {
       sent: true,
       delivered,
