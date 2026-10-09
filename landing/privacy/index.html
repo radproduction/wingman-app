@@ -64,6 +64,7 @@
   table { width: 100%; border-collapse: collapse; font-size: .9375rem; }
   th, td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--rule); }
   th { font-weight: 600; background: var(--paper-2); }
+  code { font-size: .9em; background: var(--paper-2); padding: 1px 5px; border-radius: 5px; }
   .toc { columns: 2; column-gap: 32px; padding-left: 20px; font-size: .9375rem; }
   .toc li { break-inside: avoid; }
   footer { border-top: 1px solid var(--rule); max-width: 760px; margin: 0 auto; padding: 20px 20px 40px; color: var(--muted); font-size: .9375rem; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
@@ -143,8 +144,14 @@
   </ul>
   <p>The Wingman app does not use advertising identifiers, third-party analytics SDKs or tracking pixels.</p>
 
-  <h3>Our website</h3>
-  <p>Our marketing website, imyourwingman.ai, uses Google Analytics and the Meta Pixel, which set cookies to count visits and measure how our ads perform. They receive information such as the pages you view, your browser and approximate location. If you join the waitlist, we collect your first name and email address to tell you when Wingman opens. You can block these cookies in your browser settings or with an ad blocker. None of this applies to your conversations or connected accounts.</p>
+  <h3 id="cookies">Our website and cookies</h3>
+  <p>Our website, imyourwingman.ai, uses cookies only as follows:</p>
+  <ul>
+    <li><strong>Essential:</strong> we store your cookie choice (the <code>wm_consent</code> cookie, 12 months). Always on.</li>
+    <li><strong>Analytics, only if you allow it:</strong> Google Analytics counts visits and the pages viewed, so we can improve the site.</li>
+    <li><strong>Marketing, only if you allow it:</strong> the Meta Pixel measures how our ads perform.</li>
+  </ul>
+  <p>Analytics and marketing cookies are off until you choose "Accept all" or switch them on under "Manage" in the cookie banner. You can change your choice at any time with <a href="#cookie-settings" data-cookie-settings>Cookie settings</a> (also in the footer of every page). If you join the waitlist, we collect your first name and email address to tell you when Wingman opens. None of this applies to your conversations or connected accounts.</p>
 
   <h3>What Wingman works out from your data</h3>
   <p>To be useful, Wingman keeps short notes about you: facts you've shared, a profile summary (your work, key people, projects and preferences), patterns such as when you usually start work or pay bills, and notes about the apps you've connected. You can see and clear what Wingman remembers in the app under Settings → Permissions &amp; privacy → Memory.</p>
@@ -179,7 +186,7 @@
       <tr><td>Higgsfield</td><td>Creating images you ask for</td></tr>
       <tr><td>Browserbase</td><td>Opening websites when you ask Wingman to look something up or do something on a site</td></tr>
       <tr><td>Brevo</td><td>Sending service emails (for example the waitlist confirmation)</td></tr>
-      <tr><td>Google Analytics and Meta Pixel</td><td>Measuring visits and ads on our website only (not the app)</td></tr>
+      <tr><td>Google Analytics and Meta Pixel</td><td>Measuring visits and ads on our website only, and only with your consent (not the app)</td></tr>
       <tr><td>DigitalOcean</td><td>Hosting our servers and database</td></tr>
     </tbody>
   </table>
@@ -234,7 +241,8 @@
 
 <footer>
   <span>© 2026 Wingman</span>
-  <span><a href="/">imyourwingman.ai</a> · <a href="/privacy/">Privacy Policy</a></span>
+  <span><a href="/">imyourwingman.ai</a> · <a href="/privacy/">Privacy Policy</a> · <a href="#cookie-settings" data-cookie-settings>Cookie settings</a></span>
 </footer>
+<script src="/consent.js" defer></script>
 </body>
 </html>

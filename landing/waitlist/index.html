@@ -7,34 +7,11 @@
     <meta name="robots" content="noindex" />
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
 
-    <!-- Meta Pixel Code -->
-    <script>
-    !function(f,b,e,v,n,t,s)
-    {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-    n.callMethod.apply(n,arguments):n.queue.push(arguments)};
-    if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
-    n.queue=[];t=b.createElement(e);t.async=!0;
-    t.src=v;s=b.getElementsByTagName(e)[0];
-    s.parentNode.insertBefore(t,s)}(window, document,'script',
-    'https://connect.facebook.net/en_US/fbevents.js');
-    fbq('init', '1634177868286804');
-    fbq('track', 'PageView');
-    fbq('track', 'Lead');
-    </script>
-    <noscript><img height="1" width="1" style="display:none"
-    src="https://www.facebook.com/tr?id=1634177868286804&ev=PageView&noscript=1"
-    /></noscript>
-    <!-- End Meta Pixel Code -->
 
-    <!-- Google tag (gtag.js) -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-XMYP7WB2NB"></script>
-    <script>
-      window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
-      gtag('js', new Date());
-      gtag('config', 'G-XMYP7WB2NB');
-      gtag('event', 'waitlist_signup');
-    </script>
+
+    <!-- Analytics (Google) and Meta Pixel load ONLY after cookie consent — see /consent.js -->
+    <script>window.WM_TRACK = { fbq: [['track', 'Lead']], gtag: [['event', 'waitlist_signup']] };</script>
+    <script src="/consent.js" defer></script>
 
     <!-- Same body font the landing uses. -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
