@@ -96,4 +96,16 @@ function cleanup() {
   return n;
 }
 
-module.exports = { dir, save, read, recent, publicUrl, cleanup };
+/** Delete every stored image of one user (account deletion). */
+function removeAllFor(userId) {
+  const { db } = require('../db');
+  let rows = [];
+  try { rows = db.prepare('SELECT * FROM user_media WHERE user_id = ?').all(userId); } catch (_) { return 0; }
+  let n = 0;
+  for (const row of rows) {
+    try { require('fs').unlinkSync(filePath(row)); n += 1; } catch (_) { /* already gone */ }
+  }
+  return n;
+}
+
+module.exports = { dir, save, read, recent, publicUrl, cleanup, removeAllFor };

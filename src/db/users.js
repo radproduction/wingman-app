@@ -265,6 +265,7 @@ const USER_CHILD_TABLES = [
   'work_sessions', 'wearable_accounts', 'automations', 'meetings', 'user_memory',
   'google_accounts', 'goals', 'agent_actions', 'credentials',
   'integration_actions', 'user_media', 'app_knowledge', 'user_rules', 'search_docs',
+  'sessions', 'meeting_bots', 'pending_full_sends', 'held_messages',
 ];
 
 /** Hard-delete a user and everything referencing them (children first). */

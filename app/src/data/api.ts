@@ -181,6 +181,11 @@ export const api = {
     return res
   },
   authMe: () => get<{ user: unknown }>('/auth/me'),
+  // Permanently delete the account and everything stored for it.
+  deleteAccount: async () => {
+    await req<{ deleted: boolean }>('POST', '/account/delete', { confirm: 'DELETE' })
+    setToken(null)
+  },
   logout: async () => {
     try {
       await req('POST', '/auth/logout')

@@ -91,6 +91,9 @@ const config = {
 
   // Contact email shown on the public Privacy Policy page (/privacy).
   privacyContactEmail: process.env.PRIVACY_CONTACT_EMAIL || 'wehearyou.studio@gmail.com',
+  // The public privacy policy (landing/privacy/index.html on the website).
+  // /privacy on the app domain redirects here.
+  privacyPolicyUrl: process.env.PRIVACY_POLICY_URL || 'https://imyourwingman.ai/privacy/',
 
   // WhatsApp Business Cloud API (official Meta API). When token + phoneNumberId
   // are set, Wingman uses this instead of whatsapp-web.js (no Chromium, real

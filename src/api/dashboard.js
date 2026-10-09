@@ -832,6 +832,36 @@ const SETTINGS_FIELDS = [
   'news_topics', 'news_city', 'news_country', 'voice_replies', 'voice_name', 'assistant_name',
 ];
 
+// ── POST /api/account/delete  { confirm: 'DELETE' } ─────────────────
+//   In-app account deletion (App Store guideline 5.1.1(v)). Removes the user
+//   and everything stored for them: messages, memory, connected-account tokens,
+//   synced mail/calendar/tasks, meetings, images and sessions. Connected
+//   Composio apps are disconnected best-effort first.
+router.post('/account/delete', async (req, res) => {
+  if (!req.user) return res.status(401).json({ error: 'Authentication required.' });
+  if (String((req.body || {}).confirm || '') !== 'DELETE') {
+    return res.status(400).json({ error: 'Send { "confirm": "DELETE" } to delete the account.' });
+  }
+  const user = req.user;
+  try {
+    try {
+      const composio = require('../services/composio');
+      if (config.composio.enabled) {
+        const apps = await composio.listConnections(user, { fresh: true });
+        for (const a of apps) { try { await composio.disconnect(user, a.toolkit); } catch (_) { /* best-effort */ } }
+      }
+    } catch (e) { console.warn('[account/delete] composio disconnect skipped:', e.message); }
+    try { require('../services/mediaStore').removeAllFor(user.id); } catch (_) { /* best-effort */ }
+    try { require('../db').db.prepare('DELETE FROM otp_codes WHERE phone = ?').run(user.phone); } catch (_) { /* best-effort */ }
+    usersRepo.deleteUserCascade(user.id);
+    console.log(`[account/delete] deleted user ${user.id}`);
+    res.json({ deleted: true });
+  } catch (e) {
+    console.error('[account/delete] failed:', e.message);
+    res.status(500).json({ error: 'Could not delete the account. Please contact us.' });
+  }
+});
+
 router.patch(['/me', '/settings'], (req, res) => {
   if (!req.user) return res.status(401).json({ error: 'Authentication required.' });
   const body = req.body || {};

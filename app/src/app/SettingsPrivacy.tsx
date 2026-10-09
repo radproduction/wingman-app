@@ -8,7 +8,14 @@ import { confirmAction } from '../shell/confirm'
 import { toast } from '../shell/toast'
 import { tapQuiet } from '../shell/feedback'
 import { Switch } from '../shell/Switch'
+import { navigate } from '../shell/nav'
+import { api, ApiError } from '../data/api'
+import { startFresh } from '../data/session'
+import { resetProfile } from '../data/store'
+import { clearOnboardingState } from '../onboarding/shared'
 import './app.css'
+
+export const PRIVACY_POLICY_URL = 'https://imyourwingman.ai/privacy/'
 
 export const SettingsPrivacy = () => {
   const { access: on, autonomy } = useAgent()
@@ -34,6 +41,34 @@ export const SettingsPrivacy = () => {
     if (!ok) return
     forgetAll()
     toast(t("Cleared. I'll learn you again from here."), 'check')
+  }
+
+  const openPolicy = () => {
+    tapQuiet()
+    window.open(PRIVACY_POLICY_URL, '_blank', 'noopener,noreferrer')
+  }
+
+  const deleteAccount = async () => {
+    tapQuiet()
+    const ok = await confirmAction({
+      title: t('Delete your account?'),
+      body: t(
+        'This permanently deletes your Wingman account and everything stored for it: messages, what I remember, connected accounts, synced mail and calendar, meetings and images. It cannot be undone.',
+      ),
+      confirmLabel: t('Delete everything'),
+      destructive: true,
+    })
+    if (!ok) return
+    try {
+      await api.deleteAccount()
+      resetProfile()
+      clearOnboardingState()
+      startFresh()
+      toast(t('Your account has been deleted.'), 'check')
+      navigate('')
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : t('Could not delete the account. Please try again.'))
+    }
   }
 
   return (
@@ -97,8 +132,8 @@ export const SettingsPrivacy = () => {
       </div>
       <div className="wg-set-list wg-card-line">
         <SetRow icon="download" tone="blue" name="Download a copy" />
-        <SetRow icon="shield" tone="mint" name="Privacy policy" />
-        <SetRow icon="trash" tone="rose" name="Delete my account" warn />
+        <SetRow icon="shield" tone="mint" name="Privacy policy" onTap={openPolicy} inPlace />
+        <SetRow icon="trash" tone="rose" name="Delete my account" onTap={deleteAccount} inPlace warn />
       </div>
 
       <p className="wg-footnote">
