@@ -247,6 +247,7 @@ const config = {
     // "George" — warm British male, the closest stock voice to a JARVIS feel.
     voiceId: process.env.ELEVENLABS_VOICE_ID || 'JBFqnCBsd6RMkjVDRZzb',
     ttsModel: process.env.ELEVENLABS_TTS_MODEL || 'eleven_multilingual_v2',
+    sttModel: process.env.ELEVENLABS_STT_MODEL || 'scribe_v1',
     agentId: process.env.ELEVENLABS_AGENT_ID || '',
     callsEnabled: process.env.ELEVENLABS_CALLS === '1',
     // The WhatsApp number calls are placed from (must be non-US/Canada).

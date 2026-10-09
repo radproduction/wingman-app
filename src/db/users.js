@@ -384,7 +384,7 @@ function toPublic(user) {
     office_address: user.office_address || null,
     // Never expose the stored password — only whether webmail is linked.
     voice_replies: user.voice_replies || 'on_voice',
-    voice_name: user.voice_name || 'nova',
+    voice_name: user.voice_name || 'george',
     assistant_name: user.assistant_name || 'Wingman',
     webmail_connected: !!(user.webmail_address && user.webmail_password_enc),
     webmail_address: user.webmail_address || null,

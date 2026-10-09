@@ -13,6 +13,8 @@ const config = require('../src/config');
   console.log('plan:', sub.tier, '| characters used:', sub.character_count, '/', sub.character_limit);
   const { buffer, mimeType } = await el.speak("Good morning Aamir. You've got three meetings today, the first at ten with Sara. Two emails need a reply, and your K-Electric bill is due tomorrow.");
   console.log('voice note:', mimeType, Math.round(buffer.length / 1024), 'KB', mimeType === 'audio/ogg' ? '(WhatsApp voice note ✓)' : '(sent as audio file)');
+  const heard = await require('../src/services/voice').transcribe(buffer, { filename: 'voice.ogg' });
+  console.log('heard back (speech-to-text):', heard);
   if (config.elevenlabs.agentId) {
     const a = await el.call('GET', `/v1/convai/agents/${config.elevenlabs.agentId}`);
     console.log('agent:', a.name, '| calls on:', config.elevenlabs.callsReady);

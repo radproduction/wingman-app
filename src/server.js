@@ -861,8 +861,8 @@ app.post('/webhook', (req, res) => {
           const usersRepo = require('./db/users');
           const u = usersRepo.getByPhone(phoneNumber);
           if (voice.shouldSpeak(u, wasVoice)) {
-            const audio = await voice.speak(reply, { voice: voice.voiceFor(u) });
-            await cloudApi.sendAudio(phoneNumber, audio);
+            const { buffer, mimeType } = await voice.speak(reply, { user: u });
+            await cloudApi.sendAudio(phoneNumber, buffer, { mimeType });
             console.log(`[webhook] 🔊 (${phoneNumber}) voice reply sent`);
           }
         } catch (err) {

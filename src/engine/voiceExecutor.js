@@ -23,9 +23,12 @@ async function executeVoiceTool(user, toolUse) {
 
   if (input.voice) {
     const resolved = voice.resolveVoice(input.voice);
-    if (!resolved) return { error: 'INVALID_VOICE', detail: 'Choose male, female or neutral.' };
+    if (!resolved) {
+      return { error: 'INVALID_VOICE', detail: `Choose male, female or neutral, or one of: ${voice.VOICE_OPTIONS.map((v) => `${v.id} (${v.label})`).join(', ')}.` };
+    }
     patch.voice_name = resolved;
-    chosenVoice = input.voice;
+    const opt = voice.VOICE_OPTIONS.find((v) => v.id === resolved);
+    chosenVoice = opt ? `${opt.id} — ${opt.label}` : resolved;
   }
 
   if (input.replies) {

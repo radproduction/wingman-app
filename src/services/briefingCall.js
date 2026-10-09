@@ -267,7 +267,8 @@ async function sendVoiceNote(user, text) {
   const cloudApi = require('../whatsapp/cloudApi');
   if (!cloudApi.ready()) return false;
   try {
-    const { buffer, mimeType } = await el.speak(text);
+    const v = require('./voice').voiceFor(user);
+    const { buffer, mimeType } = await el.speak(text, v ? { voiceId: v.eleven } : {});
     await cloudApi.sendAudio(user.phone, buffer, { mimeType });
     console.log(`[briefingCall] voice note sent to ${user.id} (${Math.round(buffer.length / 1024)} KB)`);
     return true;

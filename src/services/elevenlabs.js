@@ -73,6 +73,32 @@ async function speak(text, { voiceId = config.elevenlabs.voiceId, maxChars = 250
 }
 
 /**
+ * Speech → text (ElevenLabs Scribe). Language is auto-detected, so English,
+ * Urdu and mixed speech all work.
+ * @returns {Promise<{text: string, language: string|null}>}
+ */
+async function transcribe(audio, { filename = 'voice.ogg', languageCode = null } = {}) {
+  const form = new FormData();
+  form.append('model_id', config.elevenlabs.sttModel);
+  form.append('file', new Blob([audio]), filename);
+  form.append('tag_audio_events', 'false');
+  if (languageCode) form.append('language_code', languageCode);
+  const res = await fetch(url('/v1/speech-to-text'), {
+    method: 'POST',
+    headers: { 'xi-api-key': key() },
+    body: form,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const detail = JSON.stringify(data).slice(0, 300);
+    if (res.status === 401) throw new Error('VOICE_BAD_KEY');
+    if (res.status === 402 || /quota|credit/i.test(detail)) throw new Error('VOICE_NO_CREDIT');
+    throw new Error(`ELEVENLABS_${res.status}: ${detail}`);
+  }
+  return { text: String(data.text || '').trim(), language: data.language_code || null };
+}
+
+/**
  * Ask the Wingman agent to call a user on WhatsApp. If the user hasn't given
  * call permission yet, ElevenLabs first sends the permission template and calls
  * as soon as they allow it.
@@ -108,4 +134,4 @@ async function getConversation(conversationId) {
   return call('GET', `/v1/convai/conversations/${encodeURIComponent(conversationId)}`);
 }
 
-module.exports = { speak, startWhatsAppCall, getConversation, forSpeech, call };
+module.exports = { speak, transcribe, startWhatsAppCall, getConversation, forSpeech, call };

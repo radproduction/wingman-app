@@ -16,8 +16,11 @@ const voiceTools = [
       properties: {
         voice: {
           type: 'string',
-          enum: ['male', 'female', 'neutral'],
-          description: 'Which voice to speak in.',
+          description:
+            "Which voice to speak in: 'male', 'female' or 'neutral', or a style the user asked for " +
+            "('british', 'deep', 'soft', 'formal', 'jarvis'), or a voice name: george (British male, default), " +
+            'daniel (British male, formal), brian (deep male), matilda (warm female), sarah (soft female), ' +
+            'alice (British female), river (neutral).',
         },
         replies: {
           type: 'string',

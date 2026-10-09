@@ -149,6 +149,16 @@ there is no "message us to get your code" flow in the app. Users are stored
 with their full international number (`users.create`; old 10-digit rows
 self-heal from the webhook via `upgradePhone`).
 
+### Voice notes in chat (ElevenLabs)
+
+`services/voice.js`: a WhatsApp voice note is transcribed by ElevenLabs Scribe
+(any Urdu-script transcript is rewritten to Roman Urdu by the cheap model), then
+handled exactly like typed text. Replies go back as a voice note too
+(`voice_replies`: `on_voice` default / `always` / `off`) in the user's chosen
+voice (`voice_name` — george, daniel, brian, matilda, sarah, alice, river; old
+OpenAI names map across). OpenAI is used only when there's no ElevenLabs key.
+`scripts/test-voice-chat.js` checks it offline.
+
 ### Voice briefings (ElevenLabs)
 
 `services/briefingCall.js` + `services/elevenlabs.js`. A user turns on "Voice
@@ -184,6 +194,7 @@ checks the key live.
 node scripts/test-whatsapp-window.js   # 24h window, held messages, sign-in by reply (offline)
 node scripts/test-engine-offline.js    # approval gate, loop end, tool memory, caching (scripted model)
 node scripts/test-briefing-call.js     # voice briefings: calls, fallbacks, voice notes (fake ElevenLabs)
+node scripts/test-voice-chat.js        # chat voice notes on ElevenLabs (fake fetch)
 docker exec wingman node scripts/eval-live.js   # real model, fake data, temp DB (~cents)
 ```
 
@@ -208,7 +219,8 @@ gracefully rather than crashing — preserve that behaviour.
 | Deep reasoning (proactive brain, goal planning) | `ANTHROPIC_MODEL_DEEP` | `claude-opus-5` |
 | Cheap/high-volume (email classify, behaviour learning) | `ANTHROPIC_MODEL_CHEAP` | `claude-haiku-4-5` |
 | Meeting transcription | `GEMINI_MODEL` | `gemini-2.5-flash` |
-| Voice STT/TTS fallback | `OPENAI_API_KEY` | Whisper / gpt-4o-mini-tts |
+| Voice notes in chat (STT + TTS) | `ELEVENLABS_API_KEY` | Scribe (`ELEVENLABS_STT_MODEL`) / `eleven_multilingual_v2` |
+| Voice fallback (only if no ElevenLabs key) | `OPENAI_API_KEY` | Whisper / gpt-4o-mini-tts |
 
 **`GEMINI_MODEL` is pinned to a GA version on purpose — never set it to a
 `*-latest` alias.** The alias silently moved to a "thinking" flash once and
